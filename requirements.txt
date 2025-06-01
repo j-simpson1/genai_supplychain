@@ -1,0 +1,53 @@
+MSc Computer Science Project
+Title: GenAI and Data - dynamic supply chain scenario modelling
+
+Requirements to clarify with the client:
+
+1) Scope of Supply Chains? Any particular industry (e.g. pharmaceuticals, electronics etc...) and
+Local or global supply chains?
+
+2) Scenarios? (e.g. tariffs, delays, demand spikes, supplier failure)
+
+3) Data Sources: do you have any requirements for the data used in the project?
+So far I've looked into using the following data sources:
+
+	•	UN Comtrade: Global trade data on imports and exports by country and product, sourced from national customs authorities.
+	•	World Bank WITS (World Integrated Trade Solution): Platform providing access to trade and tariff data, combining multiple sources including UN Comtrade, WTO, and TRAINS.
+	•	WTO Timeseries: Historical data on international trade flows, tariffs, and trade policy indicators compiled by the World Trade Organization.
+
+4) What role do you want GenAI to play (e.g. generate the scenarios, explain the outcomes)?
+Potential options:
+- scenario generator - could be used to generate a narrative or events which could be fed into the model
+e.g. the US imposes tariffs on China of 145%
+- data-to-narrative converter - GenAI could help provide insights to the output of a simualtion
+- parameter generation - could use GenAI to help create the input into a model
+e.g. {"cost_increase": 15, "delay_days": 30, "routes_affected": ["China->US", "China->EU"]}
+- augmented planner/assistant
+e.g. suggest suppliers less exposed to China
+- risk prioritisation and
+
+5) Do you have any requirements for the tech stack?
+
+GenAI / Scenario Generation: to research, used the OpenAI API but to check this is the most
+appropriate solution
+
+Data sources & integration:
+- python, Pandas, Numpy
+
+Simulation frameworks
+- to research, depends on what the aims of the project but had a quick look at SimPy
+
+Data visualisation
+- to research
+
+Storage / Data persistence
+- to research
+
+6) What do you envision you would like in terms of the front-end or output visualisation to look like?
+
+6) What are the top problems or questions you want this project to help answer?
+
+7) What update frequency do you need?
+
+8) Are there any integration needs?
+
