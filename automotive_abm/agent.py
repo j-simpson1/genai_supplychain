@@ -1,12 +1,21 @@
 from mesa import Agent
 
+
 class SupplierAgent(Agent):
-    def __init__(self, model, part_type):
-        super().__init__(model)
+    def __init__(self, unique_id, model, part_type, region):
+        super().__init__(unique_id, model)
         self.part_type = part_type
+        self.region = region
+
+    def get_cost(self):
+        base_price = self.model.base_prices[self.part_type][self.region]
+        tariff = self.model.tariffs.get(self.region, 0)
+        return base_price * ((1 + tariff) / 1)
 
     def step(self):
-        self.model.parts_inventory[self.part_type] += 1
+        # Increase inventory count for this region and part
+        current_stock = self.model.parts_inventory[self.part_type].get(self.region, 0)
+        self.model.parts_inventory[self.part_type][self.region] = current_stock + 1
 
 class ManufacturerAgent(Agent):
     def __init__(self, model, required_parts):
