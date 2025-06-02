@@ -2,9 +2,10 @@ from mesa import Agent
 
 
 class SupplierAgent(Agent):
-    def __init__(self, unique_id, model, part_type, region):
+    def __init__(self, unique_id, model, part_type, supplier_name, region):
         super().__init__(unique_id, model)
         self.part_type = part_type
+        self.supplier_name = supplier_name or f"Supplier-{unique_id}"
         self.region = region
 
     def get_cost(self):
@@ -18,23 +19,15 @@ class SupplierAgent(Agent):
         self.model.parts_inventory[self.part_type][self.region] = current_stock + 1
 
 class ManufacturerAgent(Agent):
-    def __init__(self, model, required_parts):
-        super().__init__(model)
+    def __init__(self, unique_id, model, required_parts, manufacturer_name):
+        super().__init__(unique_id, model)
         self.required_parts = required_parts
-        self.cars_built = 0
+        self.components_built = 0
+        self.manufacturer_name = manufacturer_name or f"Manufacturer-{unique_id}"
 
     def step(self):
-        if all(self.model.parts_inventory[part] > 0 for part in self.required_parts):
-            for part in self.required_parts:
-                self.model.parts_inventory[part] -= 1
-            self.cars_built += 1
-            print(f"Car built! Total: {self.cars_built}")
-
-class CustomerAgent(Agent):
-    def __init__(self, model):
-        super().__init__(model)
-
-    def step(self):
-        if self.model.manufacturer.cars_built > 0:
-            self.model.manufacturer.cars_built -= 1
-            print(f"Customer {self.unique_id} bought a car!")
+        if all(self.model.parts_inventory[pid] > 0 for pid in self.required_parts):
+            for pid in self.required_parts:
+                self.model.parts_inventory[pid] -= 1
+            self.components_built += 1
+            print(f"{self.manufacturer_name} built component #{self.components_built}")
