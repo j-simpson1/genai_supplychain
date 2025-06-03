@@ -57,5 +57,5 @@ cols = ["HS Code", "Product Description"] + [col for col in pivot_df.columns if
 pivot_df = pivot_df[cols]
 
 # Save
-pivot_df.to_csv("tariff_data_pivot.csv", index=False)
+pivot_df.to_csv("tariff_data/tariff_data_pivot.csv", index=False)
 print(pivot_df)
