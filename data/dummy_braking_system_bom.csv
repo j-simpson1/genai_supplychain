@@ -1,0 +1,21 @@
+Part Number,Component,Supplier No.,Country,Price (USD),Lead Time (days),Reliability
+BRK-001,Brake Pad (Front),SUP-1001,Germany,12,7,0.9
+BRK-001,Brake Pad (Front),SUP-1101,China,14.5,14,0.98
+BRK-002,Brake Pad (Rear),SUP-1001,Germany,10,10,0.88
+BRK-002,Brake Pad (Rear),SUP-1101,China,9.5,13,0.85
+BRK-003,Brake Disc (Front),SUP-1001,Germany,25,9,0.95
+BRK-003,Brake Disc (Front),SUP-1201,Mexico,23,12,0.9
+BRK-004,Brake Disc (Rear),SUP-1001,Germany,20,8,0.93
+BRK-004,Brake Disc (Rear),SUP-1101,China,19,14,0.87
+BRK-005,Brake Caliper,SUP-1001,Germany,45,9,0.97
+BRK-005,Brake Caliper,SUP-1101,China,47,7,0.99
+BRK-006,Brake Hose,SUP-1001,Germany,5,15,0.91
+BRK-006,Brake Hose,SUP-1101,China,4.8,16,0.89
+BRK-007,Master Cylinder,SUP-1001,Germany,30,10,0.96
+BRK-007,Master Cylinder,SUP-1201,Mexico,29,11,0.95
+BRK-008,ABS Sensor,SUP-1001,Germany,18,7,0.94
+BRK-008,ABS Sensor,SUP-1101,China,17.5,8,0.92
+BRK-009,Brake Fluid Res.,SUP-1001,Germany,7,10,0.93
+BRK-009,Brake Fluid Res.,SUP-1101,China,6.8,11,0.9
+BRK-010,Pad Wear Sensor,SUP-1001,Germany,3.5,9,0.92
+BRK-010,Pad Wear Sensor,SUP-1101,China,3.3,10,0.9
