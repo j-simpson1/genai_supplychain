@@ -39,10 +39,10 @@ def fetch_tariff_data(reporter_codes, partner_code="000", product_codes="All", y
     response = requests.get(url)
 
     if response.status_code == 200:
-        print("✅ Data retrieved successfully.")
+        print("Data retrieved successfully.")
         return response.json()
     else:
-        print(f"❌ Failed with status code: {response.status_code}")
+        print(f"Failed with status code: {response.status_code}")
         return None
 
 
@@ -51,7 +51,7 @@ def save_tariff_data(data, reporter_code, year, output_dir="tariff_data"):
     Save tariff data to a JSON file.
     """
     if data is None:
-        print("⚠️ No data to save.")
+        print("No data to save.")
         return
 
     os.makedirs(output_dir, exist_ok=True)
@@ -60,14 +60,18 @@ def save_tariff_data(data, reporter_code, year, output_dir="tariff_data"):
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-    print(f"📁 Data saved to {filename}")
+    print(f"Data saved to {filename}")
 
 
 # ---------------------
-# 🔧 Example usage – Combine all into one file:
+# Example usage – Combine all into one file:
 # ---------------------
 
-automotive_parts = ["870850"]
+automotive_parts = [
+    "870810", "870821", "870829", "870830", "870840", "870850",
+    "870860", "870870", "870880", "870891", "870892", "870893",
+    "870894", "870899"
+]
 reporter_codes = ["840", "156"]  # USA and China
 year = 2023
 
@@ -78,7 +82,7 @@ for reporter_code in reporter_codes:
     if data:
         combined_data[reporter_code] = data
     else:
-        print(f"⚠️ Skipping {reporter_code} due to fetch failure.")
+        print(f"Skipping {reporter_code} due to fetch failure.")
 
 # Save all data to one file
 output_dir = "tariff_data"
@@ -88,4 +92,4 @@ filename = os.path.join(output_dir, f"combined_tariffs_{year}.json")
 with open(filename, "w", encoding="utf-8") as f:
     json.dump(combined_data, f, indent=2)
 
-print(f"📁 All data saved to {filename}")
+print(f"All data saved to {filename}")
