@@ -1,13 +1,15 @@
 import mesa
+import random
 
 
 class SupplierAgent(mesa.Agent):
-    def __init__(self, model, supplier_name, part_type, country, lead_time=2):
+    def __init__(self, model, supplier_name, part_type, country, lead_time=2, reliability=1.0):
         super().__init__(model)  # Mesa 3.0+ handles unique_id automatically
         self.supplier_name = supplier_name
         self.part_type = part_type
         self.country = country
         self.lead_time = lead_time
+        self.reliability = reliability
 
     def get_cost(self):
         """Get cost including tariffs"""
@@ -18,15 +20,17 @@ class SupplierAgent(mesa.Agent):
     def step(self):
         key = f"{self.part_type}_{self.country}"
         expected_stock = self.model.get_expected_inventory(key)
+        MAX_INVENTORY = 100
 
-        MAX_INVENTORY = 100  # or any threshold you feel is appropriate
         if expected_stock < MAX_INVENTORY:
-            arrival_step = self.model.current_step + self.lead_time
-            shipment = (arrival_step, 10)
-
-            if key not in self.model.in_transit_inventory:
-                self.model.in_transit_inventory[key] = []
-            self.model.in_transit_inventory[key].append(shipment)
+            if random.random() < self.reliability:
+                # Successful production
+                arrival_step = self.model.current_step + self.lead_time
+                shipment = (arrival_step, 10)
+                self.model.in_transit_inventory.setdefault(key, []).append(shipment)
+            else:
+                # Production failed due to reliability
+                print(f"[Step {self.model.current_step}] PRODUCTION FAILURE: {self.supplier_name} ({key})")
         else:
             print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {expected_stock})")
 

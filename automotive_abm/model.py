@@ -38,12 +38,13 @@ class SupplyChainModel(mesa.Model):
             price = row["Price (USD)"]
             supplier_name = row["Supplier No."]
             lead_time = int(row["Lead Time (days)"])
+            reliability = float(row["Reliability"])
 
             # Store base price
             self.base_prices.setdefault(part_type, {})[country] = price
 
             # Create agent
-            supplier = SupplierAgent(self, supplier_name, part_type, country, lead_time)
+            supplier = SupplierAgent(self, supplier_name, part_type, country, lead_time, reliability)
             self.schedule_agents.append(supplier)
 
         # Define a manufacturer using some components (customize this as needed)
