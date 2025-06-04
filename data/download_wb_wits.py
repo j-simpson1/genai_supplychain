@@ -73,7 +73,7 @@ automotive_parts = [
     "870860", "870870", "870880", "870891", "870892", "870893",
     "870894", "870899"
 ]
-reporter_codes = ["840", "156"]  # USA, China
+reporter_codes = ["156", "276", "484"]  # China, Germany, Mexico
 
 # some of the key countries Mercedes-Benz manufactures in
 # reporter_codes = ["840", "156", "276", "484", "710", "076", "356", "764"]  # USA, China, Germany, Mexico, South Africa, Brazil, India, Thailand

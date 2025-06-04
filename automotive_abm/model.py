@@ -1,6 +1,8 @@
 import mesa
 from agent import SupplierAgent, ManufacturerAgent
 import pandas as pd
+import json
+
 
 class SupplyChainModel(mesa.Model):
     def __init__(self, supplier_csv_path="../data/dummy_braking_system_bom.csv", seed=None):
@@ -9,6 +11,13 @@ class SupplyChainModel(mesa.Model):
         self.base_prices = {}
         self.tariffs = {}
         self.parts_inventory = {}
+
+        # Load average tariff data from JSON
+        with open("../data/tariff_data/avg_tariff_dict.json", "r") as f:
+            avg_tariff_data = json.load(f)
+
+        # Convert % tariffs to decimal form
+        self.tariffs = {country: rate / 100 for country, rate in avg_tariff_data.items()}
 
         # Load dummy data
         df = pd.read_csv(supplier_csv_path)
