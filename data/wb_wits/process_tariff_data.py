@@ -2,7 +2,7 @@ import json
 import pandas as pd
 
 # Load JSON
-with open("tariff_data/combined_tariffs_2023.json", "r") as f:
+with open("../tariff_data/combined_tariffs_2023.json", "r") as f:
     data = json.load(f)
 
 reporter_map = {
@@ -59,7 +59,7 @@ cols = ["HS Code", "Product Description"] + [col for col in pivot_df.columns if
 pivot_df = pivot_df[cols]
 
 # Save
-pivot_df.to_csv("tariff_data/tariff_data_pivot.csv", index=False)
+pivot_df.to_csv("../tariff_data/tariff_data_pivot.csv", index=False)
 print(pivot_df)
 
 # Compute average MFN tariff per country (column-wise mean, skipping NaNs)
@@ -70,7 +70,7 @@ avg_tariff_dict = avg_tariffs.to_dict()
 print("Average tariffs by country:", avg_tariff_dict)
 
 # Save average tariffs dictionary to JSON
-with open("tariff_data/avg_tariff_dict.json", "w") as f:
+with open("../tariff_data/avg_tariff_dict.json", "w") as f:
     json.dump(avg_tariff_dict, f, indent=2)
 
 print("Saved average tariff dictionary to 'tariff_data/avg_tariff_dict.json'")

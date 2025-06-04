@@ -90,7 +90,7 @@ for reporter_code in reporter_codes:
         print(f"Skipping {reporter_code} due to fetch failure.")
 
 # Save all data to one file
-output_dir = "tariff_data"
+output_dir = "../tariff_data"
 os.makedirs(output_dir, exist_ok=True)
 filename = os.path.join(output_dir, f"combined_tariffs_{year}.json")
 
