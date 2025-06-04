@@ -7,7 +7,9 @@ with open("tariff_data/combined_tariffs_2023.json", "r") as f:
 
 reporter_map = {
     "840": "United States",
-    "156": "China"
+    "156": "China",
+    "276": "Germany",
+    "484": "Mexico"
 }
 
 product_map = {
@@ -59,3 +61,16 @@ pivot_df = pivot_df[cols]
 # Save
 pivot_df.to_csv("tariff_data/tariff_data_pivot.csv", index=False)
 print(pivot_df)
+
+# Compute average MFN tariff per country (column-wise mean, skipping NaNs)
+avg_tariffs = pivot_df.drop(columns=["HS Code", "Product Description"]).mean(numeric_only=True).round(3)
+
+# Convert to dictionary
+avg_tariff_dict = avg_tariffs.to_dict()
+print("Average tariffs by country:", avg_tariff_dict)
+
+# Save average tariffs dictionary to JSON
+with open("tariff_data/avg_tariff_dict.json", "w") as f:
+    json.dump(avg_tariff_dict, f, indent=2)
+
+print("Saved average tariff dictionary to 'tariff_data/avg_tariff_dict.json'")
