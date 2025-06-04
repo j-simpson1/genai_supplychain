@@ -1,40 +1,44 @@
 import mesa
 from agent import SupplierAgent, ManufacturerAgent
+import pandas as pd
 
 class SupplyChainModel(mesa.Model):
-    """Simple supply chain model compatible with Mesa 3.2.0"""
+    def __init__(self, supplier_csv_path="../data/dummy_braking_system_bom.csv", seed=None):
+        super().__init__(seed=seed)
 
-    def __init__(self, seed=None):
-        super().__init__(seed=seed)  # Required in Mesa 3.0+
-
-        # Model parameters
-        self.base_prices = {
-            'screws': {'Germany': 0.08, 'Mexico': 0.06, 'China': 0.04},
-            'seat_belts': {'Sweden': 35.00, 'China': 25.00, 'USA': 40.00}
-        }
+        self.base_prices = {}
         self.tariffs = {}
         self.parts_inventory = {}
 
-        # Create suppliers
-        suppliers_data = [
-            ("Bosch", "screws", "Germany"),
-            ("Bosch", "screws", "Mexico"),
-            ("Autoliv", "seat_belts", "Sweden"),
-            ("Autoliv", "seat_belts", "China")
-        ]
+        # Load dummy data
+        df = pd.read_csv(supplier_csv_path)
 
-        for supplier_name, part_type, country in suppliers_data:
+        # Build base_prices dictionary and create SupplierAgents
+        for _, row in df.iterrows():
+            part_type = row["Component"]
+            country = row["Country"]
+            price = row["Price (USD)"]
+            supplier_name = row["Supplier No."]
+
+            # Store base price
+            self.base_prices.setdefault(part_type, {})[country] = price
+
+            # Create agent
             supplier = SupplierAgent(self, supplier_name, part_type, country)
-            # Agents are automatically added to self.agents in Mesa 3.0+
 
-        # Create manufacturer
-        manufacturer = ManufacturerAgent(
+        # Define a manufacturer using some components (customize this as needed)
+        self.manufacturer = ManufacturerAgent(
             self,
-            required_parts={'screws': 4, 'seat_belts': 1},
+            required_parts={
+                "Brake Pad (Front)": 2,
+                "Brake Disc (Front)": 2,
+                "Brake Caliper": 2
+            },
             manufacturer_name="Ford",
             preferred_sources={
-                'screws': 'Bosch_Germany',
-                'seat_belts': 'Autoliv_China'
+                "Brake Pad (Front)": "SUP-1001_Germany",
+                "Brake Disc (Front)": "SUP-1201_Mexico",
+                "Brake Caliper": "SUP-1001_Germany"
             }
         )
 
