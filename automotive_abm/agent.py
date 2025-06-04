@@ -31,6 +31,8 @@ class SupplierAgent(mesa.Agent):
             else:
                 # Production failed due to reliability
                 print(f"[Step {self.model.current_step}] PRODUCTION FAILURE: {self.supplier_name} ({key})")
+
+                self.model.metrics.setdefault("production_failures", []).append((self.model.current_step, key))
         else:
             print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {expected_stock})")
 

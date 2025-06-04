@@ -16,6 +16,7 @@ class SupplyChainModel(mesa.Model):
             "components_built": [],
             "inventory_levels": [],
             "unused_inventory": [],
+            "production_failures": [],
         }
         self.schedule_agents = []
         self.in_transit_inventory = {}  # key: part_country -> list of (arrival_step, quantity)
