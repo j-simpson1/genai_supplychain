@@ -11,6 +11,13 @@ class SupplyChainModel(mesa.Model):
         self.base_prices = {}
         self.tariffs = {}
         self.parts_inventory = {}
+        self.metrics = {
+            "cost_history": [],
+            "components_built": [],
+            "inventory_levels": [],
+            "unused_inventory": [],
+        }
+        self.schedule_agents = []
 
         # Load average tariff data from JSON
         with open("../data/tariff_data/avg_tariff_dict.json", "r") as f:
@@ -34,6 +41,7 @@ class SupplyChainModel(mesa.Model):
 
             # Create agent
             supplier = SupplierAgent(self, supplier_name, part_type, country)
+            self.schedule_agents.append(supplier)
 
         # Define a manufacturer using some components (customize this as needed)
         self.manufacturer = ManufacturerAgent(
@@ -50,10 +58,22 @@ class SupplyChainModel(mesa.Model):
                 "Brake Caliper": "SUP-1001_Germany"
             }
         )
+        self.schedule_agents.append(self.manufacturer)
 
     def step(self):
         """Model step - activate all agents"""
-        # Mesa 3.0+ way: use AgentSet functionality instead of scheduler
-        self.agents.shuffle_do("step")
+        for agent in self.schedule_agents:
+            agent.step()
+
+        # Record metrics
+        self.metrics["cost_history"].append(self.manufacturer.get_component_cost())
+        self.metrics["components_built"].append(self.manufacturer.components_built)
+
+        # Inventory snapshot
+        self.metrics["inventory_levels"].append(self.parts_inventory.copy())
+
+        # Unused inventory: parts produced but not yet used
+        unused_total = sum(self.parts_inventory.values())
+        self.metrics["unused_inventory"].append(unused_total)
 
 

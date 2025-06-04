@@ -42,7 +42,7 @@ class ManufacturerAgent(mesa.Agent):
     def find_supplier(self, supplier_key):
         """Find supplier by 'name_country' key"""
         supplier_name, country = supplier_key.split('_')
-        for supplier in self.model.agents:
+        for supplier in self.model.schedule_agents:
             if (isinstance(supplier, SupplierAgent) and
                     supplier.supplier_name == supplier_name and
                     supplier.country == country):
@@ -52,7 +52,7 @@ class ManufacturerAgent(mesa.Agent):
     def find_alternatives(self, part_type):
         """Find all suppliers for a part type, sorted by cost"""
         alternatives = []
-        for supplier in self.model.agents:
+        for supplier in self.model.schedule_agents:
             if isinstance(supplier, SupplierAgent) and supplier.part_type == part_type:
                 alternatives.append({
                     'key': f"{supplier.supplier_name}_{supplier.country}",
