@@ -2,11 +2,12 @@ import mesa
 
 
 class SupplierAgent(mesa.Agent):
-    def __init__(self, model, supplier_name, part_type, country):
+    def __init__(self, model, supplier_name, part_type, country, lead_time=2):
         super().__init__(model)  # Mesa 3.0+ handles unique_id automatically
         self.supplier_name = supplier_name
         self.part_type = part_type
         self.country = country
+        self.lead_time = lead_time
 
     def get_cost(self):
         """Get cost including tariffs"""
@@ -15,10 +16,19 @@ class SupplierAgent(mesa.Agent):
         return base_price * (1 + tariff)
 
     def step(self):
-        """Produce parts"""
         key = f"{self.part_type}_{self.country}"
-        current = self.model.parts_inventory.get(key, 0)
-        self.model.parts_inventory[key] = current + 10
+        expected_stock = self.model.get_expected_inventory(key)
+
+        MAX_INVENTORY = 100  # or any threshold you feel is appropriate
+        if expected_stock < MAX_INVENTORY:
+            arrival_step = self.model.current_step + self.lead_time
+            shipment = (arrival_step, 10)
+
+            if key not in self.model.in_transit_inventory:
+                self.model.in_transit_inventory[key] = []
+            self.model.in_transit_inventory[key].append(shipment)
+        else:
+            print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {expected_stock})")
 
 
 class ManufacturerAgent(mesa.Agent):

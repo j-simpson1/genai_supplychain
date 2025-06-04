@@ -52,4 +52,4 @@ def run_simulation(steps=10):
 
 
 if __name__ == "__main__":
-    run_simulation(steps=12)
+    run_simulation(steps=24)

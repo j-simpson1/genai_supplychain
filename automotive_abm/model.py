@@ -18,6 +18,8 @@ class SupplyChainModel(mesa.Model):
             "unused_inventory": [],
         }
         self.schedule_agents = []
+        self.in_transit_inventory = {}  # key: part_country -> list of (arrival_step, quantity)
+        self.current_step = 0
 
         # Load average tariff data from JSON
         with open("../data/tariff_data/avg_tariff_dict.json", "r") as f:
@@ -35,12 +37,13 @@ class SupplyChainModel(mesa.Model):
             country = row["Country"]
             price = row["Price (USD)"]
             supplier_name = row["Supplier No."]
+            lead_time = int(row["Lead Time (days)"])
 
             # Store base price
             self.base_prices.setdefault(part_type, {})[country] = price
 
             # Create agent
-            supplier = SupplierAgent(self, supplier_name, part_type, country)
+            supplier = SupplierAgent(self, supplier_name, part_type, country, lead_time)
             self.schedule_agents.append(supplier)
 
         # Define a manufacturer using some components (customize this as needed)
@@ -62,8 +65,24 @@ class SupplyChainModel(mesa.Model):
 
     def step(self):
         """Model step - activate all agents"""
+
+        # Deliver arriving shipments
+        for key, queue in self.in_transit_inventory.items():
+            arrivals = [q for q in queue if q[0] <= self.current_step]
+            still_waiting = [q for q in queue if q[0] > self.current_step]
+
+            if arrivals:
+                total_arrived = sum(q[1] for q in arrivals)
+                self.parts_inventory[key] = self.parts_inventory.get(key, 0) + total_arrived
+                print(f"[Step {self.current_step}] Delivered {total_arrived} units of {key}")
+
+            self.in_transit_inventory[key] = still_waiting
+
         for agent in self.schedule_agents:
             agent.step()
+
+        # Advance time
+        self.current_step += 1
 
         # Record metrics
         self.metrics["cost_history"].append(self.manufacturer.get_component_cost())
@@ -75,5 +94,10 @@ class SupplyChainModel(mesa.Model):
         # Unused inventory: parts produced but not yet used
         unused_total = sum(self.parts_inventory.values())
         self.metrics["unused_inventory"].append(unused_total)
+
+    def get_expected_inventory(self, key):
+        current_stock = self.parts_inventory.get(key, 0)
+        in_transit = sum(qty for (step, qty) in self.in_transit_inventory.get(key, []))
+        return current_stock + in_transit
 
 
