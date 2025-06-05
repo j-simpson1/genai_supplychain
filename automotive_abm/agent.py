@@ -41,14 +41,15 @@ class SupplierAgent(mesa.Agent):
 
 class ManufacturerAgent(mesa.Agent):
     def __init__(self, model, required_parts, manufacturer_name, preferred_sources):
-        super().__init__(model)  # Mesa 3.0+ handles unique_id automatically
-        self.required_parts = required_parts  # {'screws': 4, 'seat_belts': 1}
+        super().__init__(model)  # Note Mesa 3.0+ handles unique_id automatically
         self.components_built = 0
         self.manufacturer_name = manufacturer_name
-        self.preferred_sources = preferred_sources  # {'screws': 'Bosch_Germany', 'seat_belts': 'Autoliv_Sweden'}
+        # required_parts and preferred_sources are set in the models file, currently using dummy data.
+        self.required_parts = required_parts  # e.g. {'screws': 4, 'seat_belts': 1}
+        self.preferred_sources = preferred_sources  # e.g. {'screws': 'Bosch_Germany', 'seat_belts': 'Autoliv_Sweden'}
 
     def get_component_cost(self):
-        """Calculate total component cost"""
+        """Calculate total component cost taking into account the preferred suppliers and the current tariff rates"""
         total_cost = 0
         for part, quantity in self.required_parts.items():
             supplier_key = self.preferred_sources[part]
@@ -58,7 +59,7 @@ class ManufacturerAgent(mesa.Agent):
         return total_cost
 
     def find_supplier(self, supplier_key):
-        """Find supplier by 'name_country' key"""
+        """Find supplierAgent object for a given 'name_country' key"""
         supplier_name, country = supplier_key.split('_')
         for supplier in self.model.schedule_agents:
             if (isinstance(supplier, SupplierAgent) and
@@ -68,7 +69,7 @@ class ManufacturerAgent(mesa.Agent):
         return None
 
     def find_alternatives(self, part_type):
-        """Find all suppliers for a part type, sorted by cost"""
+        """Returns a list of all available suppliers for a given part, ordered by cost (including tariffs)"""
         alternatives = []
         for supplier in self.model.schedule_agents:
             if isinstance(supplier, SupplierAgent) and supplier.part_type == part_type:
@@ -81,8 +82,7 @@ class ManufacturerAgent(mesa.Agent):
         return sorted(alternatives, key=lambda x: x['cost'])
 
     def analyze_tariff_impact(self, new_tariffs):
-        """Calculate tariff impact and find savings"""
-        # Save and apply new tariffs
+        """Calculate the impact of new tariff on production costs"""
         original_tariffs = self.model.tariffs.copy()
         self.model.tariffs.update(new_tariffs)
 
@@ -93,10 +93,11 @@ class ManufacturerAgent(mesa.Agent):
             current_key = self.preferred_sources[part_type]
             current_supplier = self.find_supplier(current_key)
 
+            # check if the current supplier is a newly tariffed country
             if current_supplier and current_supplier.country in new_tariffs:
                 alternatives = self.find_alternatives(part_type)
 
-                # Find cheapest alternative not in affected countries
+                # if yes find the cheapest alternative supplier not in a tariffed country
                 best_alt = None
                 for alt in alternatives:
                     if alt['key'] != current_key and alt['country'] not in new_tariffs:
@@ -104,6 +105,7 @@ class ManufacturerAgent(mesa.Agent):
                         break
 
                 if best_alt:
+                    # calculate and store potential cost savings by switching supplier
                     current_cost = current_supplier.get_cost() * self.required_parts[part_type]
                     alt_cost = best_alt['cost'] * self.required_parts[part_type]
                     savings = current_cost - alt_cost
@@ -122,16 +124,18 @@ class ManufacturerAgent(mesa.Agent):
         # Restore original tariffs
         self.model.tariffs = original_tariffs
 
+        # Return dictionary of effected parts with cost comparison, showing the potential savings from
+        # switching supplier
         return {
             'affected_parts': results,
             'total_potential_savings': total_savings
         }
 
     def step(self):
-        """Build components if parts available"""
+        """Each simulation step for the manufacturers - build the components if parts available"""
         can_build = True
 
-        # Check if all parts available
+        # Checks whether the current inventory holds enough of each required part to build the component
         for part, quantity in self.required_parts.items():
             supplier_key = self.preferred_sources[part]
             supplier = self.find_supplier(supplier_key)
@@ -146,13 +150,15 @@ class ManufacturerAgent(mesa.Agent):
                 break
 
         if can_build:
-            # Consume parts and build
+            # if sufficient parts in inventory then those parts are consumed
             for part, quantity in self.required_parts.items():
                 supplier_key = self.preferred_sources[part]
                 supplier = self.find_supplier(supplier_key)
                 inventory_key = f"{part}_{supplier.country}"
                 self.model.parts_inventory[inventory_key] -= quantity
 
+            # count of built components is incremented by 1
             self.components_built += 1
             cost = self.get_component_cost()
+            # cost of the component built is printed out to the terminal
             print(f"{self.manufacturer_name} built component #{self.components_built} - Cost: ${cost:.2f}")
