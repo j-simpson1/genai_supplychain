@@ -3,8 +3,9 @@ import random
 
 
 class SupplierAgent(mesa.Agent):
+    """Companies that produce specifics automotive parts such as screws and seat belts."""
     def __init__(self, model, supplier_name, part_type, country, lead_time=2, reliability=1.0):
-        super().__init__(model)  # Mesa 3.0+ handles unique_id automatically
+        super().__init__(model)  # Note Mesa 3.0+ handles unique_id automatically
         self.supplier_name = supplier_name
         self.part_type = part_type
         self.country = country
@@ -12,26 +13,27 @@ class SupplierAgent(mesa.Agent):
         self.reliability = reliability
 
     def get_cost(self):
-        """Get cost including tariffs"""
+        """Fetch the base price of the parts with country-specific tariffs applied"""
         base_price = self.model.base_prices[self.part_type][self.country]
         tariff = self.model.tariffs.get(self.country, 0)
         return base_price * (1 + tariff)
 
     def step(self):
+        """Each simulation step for the Supplier"""
         key = f"{self.part_type}_{self.country}"
         expected_stock = self.model.get_expected_inventory(key)
         MAX_INVENTORY = 100
 
+        # First checks the stock is below the set level of MAX_INVENTORY
         if expected_stock < MAX_INVENTORY:
+            # If it is then a shipment of 10 units is created with a probability in line with the suppliers reliability
+            # It is scheduled to arrive after lead_time steps
             if random.random() < self.reliability:
-                # Successful production
                 arrival_step = self.model.current_step + self.lead_time
                 shipment = (arrival_step, 10)
                 self.model.in_transit_inventory.setdefault(key, []).append(shipment)
             else:
-                # Production failed due to reliability
                 print(f"[Step {self.model.current_step}] PRODUCTION FAILURE: {self.supplier_name} ({key})")
-
                 self.model.metrics.setdefault("production_failures", []).append((self.model.current_step, key))
         else:
             print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {expected_stock})")
