@@ -1,5 +1,6 @@
 import mesa
 import random
+import heapq
 
 
 class SupplierAgent(mesa.Agent):
@@ -21,22 +22,28 @@ class SupplierAgent(mesa.Agent):
     def step(self):
         """Each simulation step for the Supplier"""
         key = f"{self.part_type}_{self.country}"
-        expected_stock = self.model.get_expected_inventory(key)
+        current_stock = self.model.parts_inventory.get(key, 0)
         MAX_INVENTORY = 100
 
         # First checks the stock is below the set level of MAX_INVENTORY
-        if expected_stock < MAX_INVENTORY:
+        if current_stock < MAX_INVENTORY:
             # If it is then a shipment of 10 units is created with a probability in line with the suppliers reliability
             # It is scheduled to arrive after lead_time steps
             if random.random() < self.reliability:
                 arrival_step = self.model.current_step + self.lead_time
-                shipment = (arrival_step, 10)
-                self.model.in_transit_inventory.setdefault(key, []).append(shipment)
+                self.model.event_counter += 1  # Increment unique event counter
+
+                heapq.heappush(self.model.event_queue, (
+                    arrival_step,  # Priority 1: delivery time
+                    self.model.event_counter,  # Priority 2: unique tiebreaker
+                    'delivery',  # Event type
+                    {'key': key, 'qty': 10}  # Event data
+                ))
             else:
                 print(f"[Step {self.model.current_step}] PRODUCTION FAILURE: {self.supplier_name} ({key})")
                 self.model.metrics.setdefault("production_failures", []).append((self.model.current_step, key))
         else:
-            print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {expected_stock})")
+            print(f"[Step {self.model.current_step}] Skipped production for {key} (inventory {current_stock})")
 
 
 class ManufacturerAgent(mesa.Agent):

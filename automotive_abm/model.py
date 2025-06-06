@@ -2,6 +2,7 @@ import mesa
 from agent import SupplierAgent, ManufacturerAgent
 import pandas as pd
 import json
+import heapq
 
 
 class SupplyChainModel(mesa.Model):
@@ -19,8 +20,9 @@ class SupplyChainModel(mesa.Model):
             "production_failures": [],
         }
         self.schedule_agents = []
-        self.in_transit_inventory = {}  # key: part_country -> list of (arrival_step, quantity)
         self.current_step = 0
+        self.event_queue = []
+        self.event_counter = 0
 
         # Load average tariff data from JSON
         with open("../data/tariff_data/avg_tariff_dict.json", "r") as f:
@@ -68,17 +70,7 @@ class SupplyChainModel(mesa.Model):
     def step(self):
         """Model step - activate all agents"""
 
-        # Deliver arriving shipments
-        for key, queue in self.in_transit_inventory.items():
-            arrivals = [q for q in queue if q[0] <= self.current_step]
-            still_waiting = [q for q in queue if q[0] > self.current_step]
-
-            if arrivals:
-                total_arrived = sum(q[1] for q in arrivals)
-                self.parts_inventory[key] = self.parts_inventory.get(key, 0) + total_arrived
-                print(f"[Step {self.current_step}] Delivered {total_arrived} units of {key}")
-
-            self.in_transit_inventory[key] = still_waiting
+        self.process_events()
 
         for agent in self.schedule_agents:
             agent.step()
@@ -97,9 +89,15 @@ class SupplyChainModel(mesa.Model):
         unused_total = sum(self.parts_inventory.values())
         self.metrics["unused_inventory"].append(unused_total)
 
-    def get_expected_inventory(self, key):
-        current_stock = self.parts_inventory.get(key, 0)
-        in_transit = sum(qty for (step, qty) in self.in_transit_inventory.get(key, []))
-        return current_stock + in_transit
+    def process_events(self):
+        """Process all scheduled events at the current time step."""
+        while self.event_queue and self.event_queue[0][0] <= self.current_step:
+            _, _, event_type, data = heapq.heappop(self.event_queue)
+
+            if event_type == 'delivery':
+                key = data['key']
+                qty = data['qty']
+                self.parts_inventory[key] = self.parts_inventory.get(key, 0) + qty
+                print(f"[Step {self.current_step}] Delivered {qty} units of {key}")
 
 
