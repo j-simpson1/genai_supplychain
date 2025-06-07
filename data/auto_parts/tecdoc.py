@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 # 5) Get Articles List
 # GET /articles/list/vehicle-id/{vehicleId}/product-group-id/{productGroupId}/manufacturer-id/{manufacturerId}/lang-id/{langId}/country-filter-id/{countryFilterId}/type-id/{typeId}
 
+# 6) Get Complete Details for Article Number
+# GET /articles/article-number-details/lang-id/{langId}/country-filter-id/{countryFilterId}/article-no/{articleNumber}
+
 
 # Example TOYOTA RAV 4 V
 langId = "4" # English (GB)
@@ -27,10 +30,11 @@ modelSeriesId = "39268" # RAV 4 V (_A5_, _H5_)
 typeId = "1" # Automobile
 countryFilterId = "91" # Great Britain
 vehicleId = "140099" # 2.5 Hybrid AWD (AXAH54)
-productGroupId = "100030"
+productGroupId = "100030" # Brake Pad
+articleNumber = "0 986 495 169" # Bosch
 
 
-url = f"https://tecdoc-catalog.p.rapidapi.com/articles/list/vehicle-id/{vehicleId}/product-group-id/{productGroupId}/manufacturer-id/{manufacturerId}/lang-id/{langId}/country-filter-id/{countryFilterId}/type-id/{typeId}"
+url = f"https://tecdoc-catalog.p.rapidapi.com/articles/article-number-details/lang-id/{langId}/country-filter-id/{countryFilterId}/article-no/{articleNumber}"
 
 load_dotenv()
 headers = {
