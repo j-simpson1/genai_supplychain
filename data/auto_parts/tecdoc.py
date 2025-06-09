@@ -32,17 +32,23 @@ countryFilterId = "91" # Great Britain
 vehicleId = "140099" # 2.5 Hybrid AWD (AXAH54)
 productGroupId = "100030" # Brake Pad
 articleNumber = "0 986 495 169" # Bosch
+supplierId = "30" # Bosch
 
 
-url = f"https://tecdoc-catalog.p.rapidapi.com/articles/article-number-details/lang-id/{langId}/country-filter-id/{countryFilterId}/article-no/{articleNumber}"
+url = "https://tecdoc-catalog.p.rapidapi.com/articles/quick-article-search"
 
-load_dotenv()
+payload = {
+	"langId": {langId},
+	"articleSearchNr": {articleNumber},
+	"supplierId": {supplierId}
+}
 headers = {
-	"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
-	"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	"x-rapidapi-key": "7a5c0b39f6mshcd108f4ff8b939bp18c8b0jsne35df86d171b",
+	"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com",
+	"Content-Type": "application/x-www-form-urlencoded"
 }
 
-response = requests.get(url, headers=headers)
+response = requests.post(url, data=payload, headers=headers)
 
 print(response.json())
 
@@ -99,3 +105,9 @@ print(response.json())
 # 		}
 # 	}
 # },
+
+
+# supId:"30"
+# supBrand:"BOSCH"
+# supMatchCode:"BOSCH"
+# supLogoName:"BOSCH.PNG"
