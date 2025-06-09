@@ -42,3 +42,78 @@ def load_into_neo4j(nodes, edges):
         print("Data loaded into Neo4j successfully.")
     except Exception as e:
         print(f"Error loading data into Neo4j: {e}")
+
+
+def insert_article_data_into_neo4j(driver, data):
+    try:
+        with driver.session() as session:
+            # Suppliers
+            for s in data['suppliers']:
+                session.run("""
+                    MERGE (sup:Supplier {supplierId: $supplierId})
+                    SET sup.name = $supplierName
+                """, s)
+
+            # Articles and Supplier relationship
+            for a in data['articles']:
+                session.run("""
+                    MERGE (a:Article {articleId: $articleId})
+                    SET a.articleNo = $articleNo,
+                        a.productName = $productName,
+                        a.image = $image
+                    WITH a
+                    MATCH (s:Supplier {supplierId: $supplierId})
+                    MERGE (a)-[:SUPPLIED_BY]->(s)
+                """, a)
+
+            # Specifications
+            for spec in data['specifications']:
+                session.run("""
+                    MERGE (s:Specification {specId: $specId})
+                    SET s.name = $name,
+                        s.value = $value
+                """, spec)
+
+            for rel in data['article_spec_rel']:
+                session.run("""
+                    MATCH (a:Article {articleId: $articleId})
+                    MATCH (s:Specification {specId: $specId})
+                    MERGE (a)-[:HAS_SPECIFICATION]->(s)
+                """, rel)
+
+            # OEMs
+            for oem in data['oems']:
+                session.run("""
+                    MERGE (o:OEM {oemId: $oemId})
+                    SET o.brand = $brand,
+                        o.displayNo = $displayNo
+                """, oem)
+
+            for rel in data['article_oem_rel']:
+                session.run("""
+                    MATCH (a:Article {articleId: $articleId})
+                    MATCH (o:OEM {oemId: $oemId})
+                    MERGE (a)-[:HAS_OEM]->(o)
+                """, rel)
+
+            # Vehicles
+            for v in data['vehicles']:
+                session.run("""
+                    MERGE (v:Vehicle {vehicleId: $vehicleId})
+                    SET v.modelId = $modelId,
+                        v.manufacturerName = $manufacturerName,
+                        v.modelName = $modelName,
+                        v.typeEngineName = $typeEngineName,
+                        v.start = $constructionIntervalStart,
+                        v.end = $constructionIntervalEnd
+                """, v)
+
+            for rel in data['article_vehicle_rel']:
+                session.run("""
+                    MATCH (a:Article {articleId: $articleId})
+                    MATCH (v:Vehicle {vehicleId: $vehicleId})
+                    MERGE (a)-[:COMPATIBLE_WITH]->(v)
+                """, rel)
+        print("Article data successfully loaded into Neo4j.")
+    except Exception as e:
+        print(f"Error loading article data into Neo4j: {e}")

@@ -34,15 +34,35 @@ productGroupId = "100030" # Brake Pad
 articleNumber = "0 986 495 169" # Bosch
 supplierId = "30" # Bosch
 
-load_dotenv()
-headers = {
-	"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
-	"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
-}
 
 def fetch_categories_data(vehicleId, manufacturerId, langId="4", countryFilterId="91", typeId="1"):
 	url = f"https://tecdoc-catalog.p.rapidapi.com/category/category-products-groups-variant-3/{vehicleId}/manufacturer-id/{manufacturerId}/lang-id/{langId}/country-filter-id/{countryFilterId}/type-id/{typeId}"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
 	response = requests.get(url, headers=headers)
+	return response.json()
+
+
+def get_articles_list(articleNumber, countryFilterId="91", langId="4"):
+	url = "https://tecdoc-catalog.p.rapidapi.com/articles/article-number-details-post"
+
+	payload = {
+		"langId": {langId},
+		"countryFilterId": {countryFilterId},
+		"articleNo": {articleNumber}
+	}
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com",
+		"Content-Type": "application/x-www-form-urlencoded"
+	}
+	response = requests.post(url, data=payload, headers=headers)
 	return response.json()
 
 
