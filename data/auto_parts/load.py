@@ -33,8 +33,12 @@ def create_edge(tx, from_id, to_id):
 
 # Load nodes and edges into Neo4j using write transactions
 def load_into_neo4j(nodes, edges):
-    with driver.session() as session:
-        for node in nodes:
-            session.execute_write(create_node, node['id'], node['text'])
-        for edge in edges:
-            session.execute_write(create_edge, edge['from'], edge['to'])
+    try:
+        with driver.session() as session:
+            for node in nodes:
+                session.execute_write(create_node, node['id'], node['text'])
+            for edge in edges:
+                session.execute_write(create_edge, edge['from'], edge['to'])
+        print("Data loaded into Neo4j successfully.")
+    except Exception as e:
+        print(f"Error loading data into Neo4j: {e}")

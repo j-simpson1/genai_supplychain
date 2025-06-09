@@ -7,8 +7,6 @@ from data.auto_parts.load import load_into_neo4j
 def main():
     data = fetch_categories_data("140099", "111")
     nodes, edges = parse_categories(data)
-    print(nodes)
-    print(edges)
     load_into_neo4j(nodes, edges)
 
 
