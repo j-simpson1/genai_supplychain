@@ -1,1 +1,6 @@
 ﻿Description,SKU,Buyer Legal Entity,Buyer LE Location,Current Seller Legal Entity,Current Seller LE Location,Unit Cost,Alternative Seller Legal Entity 1,Alternative Seller Legal Entity 2
+Brake Pad,BRK123,Toyota UK,Derby,Continental AG,Germany,15,Brembo,Akebono
+Air Filter,AF456,Nissan Europe,Barcelona,Bosch,Germany,8,Mahle,Denso
+Battery,BT789,Ford UK,Dagenham,Panasonic,Japan,120,Exide,Johnson Controls
+Tyre,TY101,BMW AG,Munich,Michelin,France,90,Bridgestone,Continental AG
+Headlamp,HL202,Audi AG,Ingolstadt,Hella,Germany,65,Stanley Electric,Koito
