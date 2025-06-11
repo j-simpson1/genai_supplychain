@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Paper,
@@ -49,20 +49,16 @@ const StyledButton = styled(Button)(({ theme }) => ({
   transition: 'all 0.2s ease',
 }));
 
-function VehicleForm() {
+interface VehicleFormProps {
+  vehicleBrands: string[];
+}
+
+function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [formData, setFormData] = useState({
     vehicle: '',
     model: '',
     type: ''
   });
-
-  const vehicleBrands = [
-    'Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW', 'Mercedes-Benz', 'Audi',
-    'Volkswagen', 'Nissan', 'Hyundai', 'Kia', 'Mazda', 'Subaru', 'Lexus',
-    'Acura', 'Infiniti', 'Cadillac', 'Lincoln', 'Buick', 'GMC', 'Jeep',
-    'Ram', 'Dodge', 'Chrysler', 'Volvo', 'Jaguar', 'Land Rover', 'Porsche',
-    'Tesla', 'Genesis', 'Alfa Romeo', 'Maserati', 'Ferrari', 'Lamborghini'
-  ];
 
   const modelsByBrand = {
     'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Prius', 'Tacoma', 'Tundra', '4Runner', 'Sienna', 'Avalon'],
@@ -180,8 +176,8 @@ function VehicleForm() {
                 label="Vehicle Brand"
                 onChange={handleInputChange}
               >
-                {vehicleBrands.map(brand => (
-                  <MenuItem key={brand} value={brand}>
+                {vehicleBrands.map((brand, index) => (
+                  <MenuItem key={`${brand}-${index}`} value={brand}>
                     {brand}
                   </MenuItem>
                 ))}

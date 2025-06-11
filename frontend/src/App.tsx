@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import VehicleForm from './VehicleForm';
@@ -35,12 +35,77 @@ const theme = createTheme({
   },
 });
 
+
+function GetManufacturers() {
+  const [manufacturers, setManufacturers] = useState([]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/manufacturers") // you can use localhost or 127.0.0.1
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Fetched data:", data); // for debugging
+        if (data.manufacturers) {
+          setManufacturers(data.manufacturers);
+        } else {
+          setError("Unexpected response format");
+        }
+      })
+      .catch((err) => {
+        console.error("Fetch error:", err);
+        setError("Error fetching manufacturers");
+      });
+  }, []);
+
+  if (error) return <p style={{ color: "red" }}>{error}</p>;
+  if (!manufacturers.length) return <p>Loading manufacturers...</p>;
+
+  return (
+    <div>
+      <h2>Top Manufacturers</h2>
+      <ul>
+        {manufacturers.slice(0, 10).map((m) => (
+          <li key={m.manufacturerId}>
+            {m.brand} (ID: {m.manufacturerId})
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+
 function App() {
+  const [brands, setBrands] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/manufacturers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.manufacturers) {
+          const brandNames = data.manufacturers.map((m: any) => m.brand);
+          setBrands(brandNames);
+        } else {
+          setError("Unexpected response format");
+        }
+      })
+      .catch((err) => {
+        console.error("Fetch error:", err);
+        setError("Error fetching manufacturers");
+      });
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
-      {/* CssBaseline provides consistent CSS baseline across browsers */}
       <CssBaseline />
-      <VehicleForm />
+      {error ? (
+        <p style={{ color: "red" }}>{error}</p>
+      ) : brands.length === 0 ? (
+        <p>Loading vehicle brands...</p>
+      ) : (
+        <VehicleForm vehicleBrands={brands} />
+      )}
     </ThemeProvider>
   );
 }

@@ -34,6 +34,17 @@ productGroupId = "100030" # Brake Pad
 articleNumber = "0 986 495 169" # Bosch
 supplierId = "30" # Bosch
 
+def fetch_manufacturers():
+	url = f"https://tecdoc-catalog.p.rapidapi.com/manufacturers/list/lang-id/4/country-filter-id/91/type-id/1"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
+	response = requests.get(url, headers=headers)
+	return response.json()
 
 def fetch_categories_data(vehicleId, manufacturerId, langId="4", countryFilterId="91", typeId="1"):
 	url = f"https://tecdoc-catalog.p.rapidapi.com/category/category-products-groups-variant-3/{vehicleId}/manufacturer-id/{manufacturerId}/lang-id/{langId}/country-filter-id/{countryFilterId}/type-id/{typeId}"

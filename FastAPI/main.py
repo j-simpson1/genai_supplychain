@@ -1,12 +1,14 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import os
-from FastAPI.data.auto_parts.tecdoc import get_articles_list
-from FastAPI.data.auto_parts.transform import transform_data_articles_list
-from FastAPI.data.auto_parts.load import insert_article_data_into_neo4j
+from data.auto_parts.tecdoc import get_articles_list
+from data.auto_parts.transform import transform_data_articles_list
+from data.auto_parts.load import insert_article_data_into_neo4j
+from data.auto_parts.tecdoc import fetch_manufacturers
 
 app = FastAPI()
 
@@ -16,10 +18,26 @@ class Item(BaseModel):
 
 items = []
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
 
+@app.get("/manufacturers")
+def retrieve_manufacturers():
+    return fetch_manufacturers()
 
 @app.post("/items")
 def create_item(item: Item):
