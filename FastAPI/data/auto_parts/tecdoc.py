@@ -46,9 +46,22 @@ def fetch_manufacturers():
 	response = requests.get(url, headers=headers)
 	return response.json()
 
-def fetch_models(id):
+def fetch_models(manufacturerId):
 
-	url = f"https://tecdoc-catalog.p.rapidapi.com/models/list/manufacturer-id/{id}/lang-id/4/country-filter-id/91/type-id/1"
+	url = f"https://tecdoc-catalog.p.rapidapi.com/models/list/manufacturer-id/{manufacturerId}/lang-id/4/country-filter-id/91/type-id/1"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
+	response = requests.get(url, headers=headers)
+	return response.json()
+
+def fetch_engine_types(manufacturerId, modelSeriesId):
+
+	url = f"https://tecdoc-catalog.p.rapidapi.com/types/list-vehicles-types/{modelSeriesId}/manufacturer-id/{manufacturerId}/lang-id/4/country-filter-id/91/type-id/1"
 
 	load_dotenv()
 	headers = {
