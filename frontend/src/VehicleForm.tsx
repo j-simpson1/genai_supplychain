@@ -56,7 +56,6 @@ interface VehicleFormProps {
 }
 
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
-
   const [formData, setFormData] = useState({
     vehicle: '',
     vehicleId: '',
@@ -64,42 +63,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     type: ''
   });
 
-  const modelsByBrand = {
-    'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Prius', 'Tacoma', 'Tundra', '4Runner', 'Sienna', 'Avalon'],
-    'Honda': ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V', 'Passport', 'Ridgeline', 'Insight', 'Odyssey', 'Fit'],
-    'Ford': ['F-150', 'Mustang', 'Explorer', 'Escape', 'Edge', 'Expedition', 'Ranger', 'Bronco', 'Focus', 'Fusion'],
-    'Chevrolet': ['Silverado', 'Equinox', 'Malibu', 'Traverse', 'Tahoe', 'Suburban', 'Colorado', 'Camaro', 'Corvette', 'Cruze'],
-    'BMW': ['3 Series', '5 Series', '7 Series', 'X1', 'X3', 'X5', 'X7', 'i3', 'i8', 'Z4'],
-    'Mercedes-Benz': ['C-Class', 'E-Class', 'S-Class', 'GLA', 'GLC', 'GLE', 'GLS', 'A-Class', 'CLA', 'SL'],
-    'Audi': ['A3', 'A4', 'A6', 'A8', 'Q3', 'Q5', 'Q7', 'Q8', 'TT', 'R8'],
-    'Volkswagen': ['Golf', 'Jetta', 'Passat', 'Tiguan', 'Atlas', 'Arteon', 'ID.4'],
-    'Nissan': ['Altima', 'Sentra', 'Rogue', 'Pathfinder', 'Murano', 'Frontier', 'Titan', 'Leaf'],
-    'Hyundai': ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Palisade', 'Kona', 'Ioniq'],
-    'Kia': ['Forte', 'Optima', 'Sorento', 'Sportage', 'Telluride', 'Soul', 'Stinger'],
-    'Mazda': ['Mazda3', 'Mazda6', 'CX-30', 'CX-5', 'CX-9', 'MX-5 Miata'],
-    'Subaru': ['Impreza', 'Legacy', 'Outback', 'Forester', 'Ascent', 'WRX', 'BRZ'],
-    'Lexus': ['ES', 'IS', 'GS', 'LS', 'NX', 'RX', 'GX', 'LX'],
-    'Acura': ['ILX', 'TLX', 'RDX', 'MDX', 'NSX'],
-    'Infiniti': ['Q50', 'Q60', 'QX50', 'QX60', 'QX80'],
-    'Cadillac': ['CT4', 'CT5', 'XT4', 'XT5', 'XT6', 'Escalade'],
-    'Lincoln': ['Corsair', 'Nautilus', 'Aviator', 'Navigator'],
-    'Buick': ['Encore', 'Envision', 'Enclave'],
-    'GMC': ['Terrain', 'Acadia', 'Yukon', 'Sierra'],
-    'Jeep': ['Compass', 'Cherokee', 'Grand Cherokee', 'Wrangler', 'Gladiator'],
-    'Ram': ['1500', '2500', '3500', 'ProMaster'],
-    'Dodge': ['Charger', 'Challenger', 'Durango'],
-    'Chrysler': ['300', 'Pacifica'],
-    'Volvo': ['S60', 'S90', 'XC40', 'XC60', 'XC90'],
-    'Jaguar': ['XE', 'XF', 'F-PACE', 'E-PACE', 'I-PACE'],
-    'Land Rover': ['Range Rover Evoque', 'Range Rover Velar', 'Range Rover Sport', 'Range Rover', 'Discovery'],
-    'Porsche': ['911', 'Cayenne', 'Macan', 'Panamera', 'Taycan'],
-    'Tesla': ['Model 3', 'Model Y', 'Model S', 'Model X', 'Cybertruck'],
-    'Genesis': ['G70', 'G80', 'G90', 'GV70', 'GV80'],
-    'Alfa Romeo': ['Giulia', 'Stelvio'],
-    'Maserati': ['Ghibli', 'Quattroporte', 'Levante'],
-    'Ferrari': ['488', 'F8', 'Roma', 'Portofino', 'SF90'],
-    'Lamborghini': ['Huracán', 'Aventador', 'Urus']
-  };
+  const [models, setModels] = useState<{ modelId: number, modelName: string }[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const vehicleTypes = [
     { value: 'sedan', label: 'Sedan' },
@@ -112,15 +78,34 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     { value: 'motorcycle', label: 'Motorcycle' }
   ];
 
-  const availableModels = formData.vehicle ? (modelsByBrand[formData.vehicle] || []) : [];
+  // Fetch models when vehicleId changes
+  useEffect(() => {
+    if (formData.vehicleId) {
+      setLoadingModels(true);
+      setModels([]);
+      setModelError(null);
+
+      fetch(`http://127.0.0.1:8000/manufacturers/models?id=${formData.vehicleId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.models) {
+            setModels(data.models);
+          } else {
+            setModelError("No models found.");
+          }
+        })
+        .catch(() => {
+          setModelError("Failed to load models.");
+        })
+        .finally(() => setLoadingModels(false));
+    }
+  }, [formData.vehicleId]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value,
-      // Reset model when vehicle brand changes
-      ...(name === 'vehicle' && { model: '' })
+      [name]: value
     }));
   };
 
@@ -133,70 +118,47 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const handleReset = () => {
     setFormData({
       vehicle: '',
+      vehicleId: '',
       model: '',
       type: ''
     });
+    setModels([]);
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#f8fafc',
-        padding: 2.5,
-        overflow: 'auto',
-        zIndex: 1000
-      }}
-    >
+    <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f8fafc', padding: 2.5, overflow: 'auto', zIndex: 1000 }}>
       <Container maxWidth="sm">
         <StyledPaper elevation={3}>
-          <Typography
-            variant="h4"
-            component="h2"
-            gutterBottom
-            sx={{
-              fontWeight: 700,
-              color: '#1f2937',
-              textAlign: 'center',
-              mb: 4,
-              letterSpacing: '-0.025em'
-            }}
-          >
+          <Typography variant="h4" component="h2" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4 }}>
             Select Vehicle
           </Typography>
 
           <Box component="form" onSubmit={handleSubmit}>
             <StyledFormControl fullWidth required>
-             <Autocomplete
-              options={vehicleBrands}
-              getOptionLabel={(option) => option.label}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              value={vehicleBrands.find(b => b.id === formData.vehicleId) || null}
-              onChange={(event, newValue) => {
-                setFormData(prev => ({
-                  ...prev,
-                  vehicleId: newValue?.id || '',
-                  vehicle: newValue?.rawBrand || '',
-                  model: ''
-                }));
-              }}
-              disableClearable // <-- This removes the clear "x"
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>
-                  {option.label}
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField {...params} label="Vehicle Brand" required />
-              )}
-            />
+              <Autocomplete
+                options={vehicleBrands}
+                getOptionLabel={(option) => option.label}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                value={vehicleBrands.find(b => b.id === formData.vehicleId) || null}
+                onChange={(event, newValue) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    vehicleId: newValue?.id || '',
+                    vehicle: newValue?.label || '',
+                    model: ''
+                  }));
+                }}
+                disableClearable
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>{option.label}</li>
+                )}
+                renderInput={(params) => (
+                  <TextField {...params} label="Vehicle Brand" required />
+                )}
+              />
             </StyledFormControl>
 
-            <StyledFormControl fullWidth required disabled={!formData.vehicle}>
+            <StyledFormControl fullWidth required disabled={!formData.vehicleId || loadingModels}>
               <InputLabel id="model-label">Model</InputLabel>
               <Select
                 labelId="model-label"
@@ -206,14 +168,16 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 label="Model"
                 onChange={handleInputChange}
               >
-                {!formData.vehicle ? (
-                  <MenuItem value="" disabled>
-                    Select a brand first
-                  </MenuItem>
+                {loadingModels ? (
+                  <MenuItem value="" disabled>Loading models...</MenuItem>
+                ) : modelError ? (
+                  <MenuItem value="" disabled>{modelError}</MenuItem>
+                ) : models.length === 0 ? (
+                  <MenuItem value="" disabled>Select a brand to load models</MenuItem>
                 ) : (
-                  availableModels.map(model => (
-                    <MenuItem key={model} value={model}>
-                      {model}
+                  models.map((model) => (
+                    <MenuItem key={model.modelId} value={model.modelName}>
+                      {model.modelName}
                     </MenuItem>
                   ))
                 )}
@@ -238,12 +202,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               </Select>
             </StyledFormControl>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center'}}>
-              <StyledButton
-                type="submit"
-                variant="contained"
-                size="medium"
-              >
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <StyledButton type="submit" variant="contained" size="medium">
                 Submit
               </StyledButton>
             </Box>

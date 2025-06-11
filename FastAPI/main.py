@@ -5,10 +5,9 @@ from pydantic import BaseModel
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import os
-from data.auto_parts.tecdoc import get_articles_list
 from data.auto_parts.transform import transform_data_articles_list
 from data.auto_parts.load import insert_article_data_into_neo4j
-from data.auto_parts.tecdoc import fetch_manufacturers
+from data.auto_parts.tecdoc import get_articles_list, fetch_manufacturers, fetch_models
 
 app = FastAPI()
 
@@ -31,29 +30,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+
 
 @app.get("/manufacturers")
 def retrieve_manufacturers():
     return fetch_manufacturers()
 
-@app.post("/items")
-def create_item(item: Item):
-    items.append(item)
-    return items
+@app.get("/manufacturers/models")
+def retrieve_model(id: int):
+    return fetch_models(id)
 
-@app.get("/items", response_model=list[Item])
-def list_items(limit: int = 10):
-    return items[0:limit]
+# Examples
 
-@app.get("/items/{item_id}", response_model=Item)
-def get_items(item_id: int) -> Item:
-    if item_id < len(items):
-        return items[item_id]
-    else:
-        raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+# @app.get("/")
+# async def root():
+#     return {"message": "Hello World"}
+#
+# @app.post("/items")
+# def create_item(item: Item):
+#     items.append(item)
+#     return items
+#
+# @app.get("/items", response_model=list[Item])
+# def list_items(limit: int = 10):
+#     return items[0:limit]
+#
+# @app.get("/items/{item_id}", response_model=Item)
+# def get_items(item_id: int) -> Item:
+#     if item_id < len(items):
+#         return items[item_id]
+#     else:
+#         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
 
 
 load_dotenv()
