@@ -9,7 +9,9 @@ import {
   MenuItem,
   Button,
   Container,
-  Grid
+  Grid,
+  Autocomplete,
+  TextField
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
@@ -50,12 +52,14 @@ const StyledButton = styled(Button)(({ theme }) => ({
 }));
 
 interface VehicleFormProps {
-  vehicleBrands: string[];
+  vehicleBrands: { label: string; id: number }[];
 }
 
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
+
   const [formData, setFormData] = useState({
     vehicle: '',
+    vehicleId: '',
     model: '',
     type: ''
   });
@@ -167,21 +171,29 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
           <Box component="form" onSubmit={handleSubmit}>
             <StyledFormControl fullWidth required>
-              <InputLabel id="vehicle-brand-label">Vehicle Brand</InputLabel>
-              <Select
-                labelId="vehicle-brand-label"
-                id="vehicle-brand-select"
-                name="vehicle"
-                value={formData.vehicle}
-                label="Vehicle Brand"
-                onChange={handleInputChange}
-              >
-                {vehicleBrands.map((brand, index) => (
-                  <MenuItem key={`${brand}-${index}`} value={brand}>
-                    {brand}
-                  </MenuItem>
-                ))}
-              </Select>
+             <Autocomplete
+              options={vehicleBrands}
+              getOptionLabel={(option) => option.label}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={vehicleBrands.find(b => b.id === formData.vehicleId) || null}
+              onChange={(event, newValue) => {
+                setFormData(prev => ({
+                  ...prev,
+                  vehicleId: newValue?.id || '',
+                  vehicle: newValue?.rawBrand || '',
+                  model: ''
+                }));
+              }}
+              disableClearable // <-- This removes the clear "x"
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  {option.label}
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} label="Vehicle Brand" required />
+              )}
+            />
             </StyledFormControl>
 
             <StyledFormControl fullWidth required disabled={!formData.vehicle}>

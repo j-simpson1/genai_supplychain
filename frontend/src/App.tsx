@@ -84,8 +84,10 @@ function App() {
       .then((res) => res.json())
       .then((data) => {
         if (data.manufacturers) {
-          const brandNames = data.manufacturers.map((m: any) => m.brand);
-          setBrands(brandNames);
+            setBrands(data.manufacturers.map((m: any) => ({
+              label: m.brand,
+              id: m.manufacturerId
+            })));
         } else {
           setError("Unexpected response format");
         }
