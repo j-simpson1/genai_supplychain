@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Toolbar, Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
-import VehicleForm from './VehicleForm';
-import Header from "./components/Header";
-import { MainLayout } from "./layouts/MainLayout"
+import VehicleForm from '../VehicleForm';
+import Header from "../components/Header";
+import { MainLayout } from "../layouts/MainLayout"
 
 // Create a custom theme (optional - you can customize colors, typography, etc.)
 const theme = createTheme({
