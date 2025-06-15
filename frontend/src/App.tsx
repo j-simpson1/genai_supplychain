@@ -4,6 +4,7 @@ import { Toolbar, Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import VehicleForm from './VehicleForm';
 import Header from "./components/Header";
+import { MainLayout } from "./layouts/MainLayout"
 
 // Create a custom theme (optional - you can customize colors, typography, etc.)
 const theme = createTheme({
@@ -103,9 +104,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Header />
-      <Toolbar />
-      <Box sx={{ px: 2 }}> {/* Add padding here */}
+      <MainLayout>
         {error ? (
           <p style={{ color: "red" }}>{error}</p>
         ) : brands.length === 0 ? (
@@ -113,7 +112,7 @@ function App() {
         ) : (
           <VehicleForm vehicleBrands={brands} />
         )}
-      </Box>
+      </MainLayout>
     </ThemeProvider>
   );
 }
