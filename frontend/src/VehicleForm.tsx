@@ -105,11 +105,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [engineError, setEngineError] = useState<string | null>(null);
 
   // Table state
-  const [vehicleData, setVehicleData] = useState<VehicleData[]>([]);
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [selectedVehicleDetails, setSelectedVehicleDetails] = useState<any>(null);
 
   const vehicleTypes = [
     { value: 'sedan', label: 'Sedan' },
@@ -179,7 +177,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     event.preventDefault();
 
     // Check if a vehicle has already been added
-    if (vehicleData.length >= 1) {
+    if (selectedVehicleDetails) {
       alert('Only one vehicle can be added. Please clear the existing vehicle first.');
       return;
     }
@@ -187,15 +185,19 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     setLoadingCategories(true);
 
     try {
-      // Find the selected engine details
+      // Find the selected engine details from the engineOptions
       const selectedEngine = engineOptions.find(engine => engine.typeEngineName === formData.type);
 
-      // Get vehicleId from the selected engine or model data
-      const vehicleId = selectedEngine?.vehicleId || formData.modelId; // Adjust based on your API structure
+      if (!selectedEngine) {
+        throw new Error('Selected engine details not found');
+      }
 
-      // Fetch category data
+      // Set the selected vehicle details from the engine data
+      setSelectedVehicleDetails(selectedEngine);
+
+      // Fetch category data using the vehicleId from the selected engine
       const categoryResponse = await fetch(
-        `http://127.0.0.1:8000/manufacturers/models/engine_type/category_v3?vehicleId=${vehicleId}&manufacturerId=${formData.vehicleId}`
+        `http://127.0.0.1:8000/manufacturers/models/engine_type/category_v3?vehicleId=${selectedEngine.vehicleId}&manufacturerId=${formData.vehicleId}`
       );
 
       if (!categoryResponse.ok) {
@@ -236,28 +238,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       const flatCategories = processCategories(categoryResult.categories || categoryResult);
       setCategoryData(flatCategories); // Replace instead of append
 
-      // Create new vehicle entry
-      const newVehicle: VehicleData = {
-        id: 1, // Always ID 1 since only one vehicle allowed
-        brand: formData.vehicle,
-        model: formData.model,
-        engineType: formData.type,
-        powerPs: selectedEngine?.powerPs || '',
-        fuelType: selectedEngine?.fuelType || '',
-        bodyType: selectedEngine?.bodyType || '',
-        dateAdded: new Date().toLocaleDateString()
-      };
-
-      // Set vehicle data (only one allowed)
-      setVehicleData([newVehicle]);
-
       console.log('Form submitted:', formData);
+      console.log('Vehicle details:', selectedEngine);
       console.log('Categories fetched:', flatCategories.length);
-      alert(`Vehicle added with ${flatCategories.length} bill of materials items: ${formData.vehicle} ${formData.model}`);
+      alert(`Vehicle added with ${flatCategories.length} bill of materials items`);
 
     } catch (error) {
-      console.error('Error fetching categories:', error);
-      alert('Failed to fetch bill of materials data. Please try again.');
+      console.error('Error fetching data:', error);
+      alert('Failed to fetch vehicle or bill of materials data. Please try again.');
     } finally {
       setLoadingCategories(false);
     }
@@ -276,9 +264,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   };
 
   const handleClearTable = () => {
-    setVehicleData([]);
+    setSelectedVehicleDetails(null);
     setCategoryData([]);
-    setPage(0);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -404,9 +391,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 type="submit"
                 variant="contained"
                 size="medium"
-                disabled={loadingCategories || vehicleData.length >= 1}
+                disabled={loadingCategories || selectedVehicleDetails !== null}
               >
-                {loadingCategories ? 'Loading Bill of Materials...' : vehicleData.length >= 1 ? 'Vehicle Already Added' : 'Add Vehicle'}
+                {loadingCategories ? 'Loading Bill of Materials...' : selectedVehicleDetails ? 'Vehicle Already Added' : 'Add Vehicle'}
               </StyledButton>
               <StyledButton onClick={handleReset} variant="outlined" size="medium">
                 Reset Form
@@ -415,134 +402,145 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           </Box>
         </StyledPaper>
 
-        {/* Vehicle Data Table */}
-        <StyledTablePaper elevation={3}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937' }}>
-              Selected Vehicle {vehicleData.length > 0 && `(1/1)`}
-            </Typography>
-            {vehicleData.length > 0 && (
-              <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
-                Clear Vehicle & Bill of Materials
-              </StyledButton>
-            )}
-          </Box>
-
-          {vehicleData.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body1" color="text.secondary">
-                No vehicle selected yet. Use the form above to add your vehicle.
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              <TableContainer>
-                <Table sx={{ minWidth: 650 }} aria-label="vehicle data table">
-                  <TableHead>
-                    <TableRow>
-                      <StyledTableCell>Brand</StyledTableCell>
-                      <StyledTableCell>Model</StyledTableCell>
-                      <StyledTableCell>Engine Type</StyledTableCell>
-                      <StyledTableCell>Power (PS)</StyledTableCell>
-                      <StyledTableCell>Fuel Type</StyledTableCell>
-                      <StyledTableCell>Body Type</StyledTableCell>
-                      <StyledTableCell>Date Added</StyledTableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {vehicleData.map((vehicle) => (
-                      <TableRow key={vehicle.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                        <TableCell sx={{ fontWeight: 600 }}>{vehicle.brand}</TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>{vehicle.model}</TableCell>
-                        <TableCell>{vehicle.engineType}</TableCell>
-                        <TableCell>{vehicle.powerPs}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={vehicle.fuelType}
-                            color={getFuelTypeColor(vehicle.fuelType)}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>{vehicle.bodyType}</TableCell>
-                        <TableCell>{vehicle.dateAdded}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </>
-          )}
-        </StyledTablePaper>
-
-        {/* Bill of Materials Table */}
-        {categoryData.length > 0 && (
+        {/* Bill of Materials - Combined Section */}
+        {selectedVehicleDetails && (
           <StyledTablePaper elevation={3}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937' }}>
-                Bill of Materials ({categoryData.length} items)
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 0.5 }}>
+                Bill of Materials
               </Typography>
+              <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
+                Clear Bill of Materials
+              </StyledButton>
             </Box>
 
-            <TableContainer>
-              <Table sx={{ minWidth: 650 }} aria-label="bill of materials table">
-                <TableHead>
-                  <TableRow>
-                    <StyledTableCell>Item ID</StyledTableCell>
-                    <StyledTableCell>Item Name</StyledTableCell>
-                    <StyledTableCell>Full Path</StyledTableCell>
-                    <StyledTableCell>Level</StyledTableCell>
-                    <StyledTableCell>Has Children</StyledTableCell>
-                    <StyledTableCell>Vehicle</StyledTableCell>
-                    <StyledTableCell>Engine Type</StyledTableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {categoryData
-                    .slice(0, 50) // Limit display to first 50 for performance
-                    .map((category) => (
-                      <TableRow key={category.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                        <TableCell component="th" scope="row" sx={{ fontWeight: 600 }}>
-                          {category.categoryId}
-                        </TableCell>
-                        <TableCell sx={{
-                          paddingLeft: `${category.level * 20 + 16}px`,
-                          fontWeight: category.level === 0 ? 600 : 400
-                        }}>
-                          {category.categoryName}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                          {category.fullPath}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={`Level ${category.level}`}
-                            color={category.level === 0 ? 'primary' : category.level === 1 ? 'secondary' : 'default'}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={category.hasChildren ? 'Yes' : 'No'}
-                            color={category.hasChildren ? 'success' : 'default'}
-                            size="small"
-                            variant="filled"
-                          />
-                        </TableCell>
-                        <TableCell>{category.vehicleBrand} {category.vehicleModel}</TableCell>
-                        <TableCell>{category.engineType}</TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            {/* Vehicle Information */}
+            <Box sx={{
+              backgroundColor: '#f8fafc',
+              borderRadius: 2,
+              p: 3,
+              mb: 3,
+              border: '1px solid #e2e8f0',
+              fontFamily: 'monospace',
+              fontSize: '14px',
+              lineHeight: 1.6
+            }}>
+              <Box sx={{ mb: 1 }}>
+                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                  Vehicle ID:
+                </Typography>
+                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                  {selectedVehicleDetails.vehicleId}
+                </Typography>
+              </Box>
 
-            {categoryData.length > 50 && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: 'info.light', borderRadius: 1 }}>
-                <Typography variant="body2" color="info.contrastText">
-                  Showing first 50 of {categoryData.length} bill of materials items.
-                  Consider implementing pagination for better performance.
+              <Box sx={{ mb: 1 }}>
+                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                  Manufacturer:
+                </Typography>
+                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                  {selectedVehicleDetails.manufacturerName}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                  Model:
+                </Typography>
+                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                  {selectedVehicleDetails.modelName}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 1 }}>
+                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                  Engine Type:
+                </Typography>
+                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                  {selectedVehicleDetails.typeEngineName}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 0 }}>
+                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                  Fuel Type:
+                </Typography>
+                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                  {selectedVehicleDetails.fuelType}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Bill of Materials Table */}
+            {categoryData.length > 0 ? (
+              <>
+                <Typography variant="h6" component="h4" sx={{ fontWeight: 600, color: '#374151', mb: 2 }}>
+                  Components ({categoryData.length} items)
+                </Typography>
+
+                <TableContainer>
+                  <Table sx={{ minWidth: 650 }} aria-label="bill of materials table">
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>Item ID</StyledTableCell>
+                        <StyledTableCell>Item Name</StyledTableCell>
+                        <StyledTableCell>Full Path</StyledTableCell>
+                        <StyledTableCell>Level</StyledTableCell>
+                        <StyledTableCell>Has Children</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {categoryData
+                        .slice(0, 50) // Limit display to first 50 for performance
+                        .map((category) => (
+                          <TableRow key={category.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                            <TableCell component="th" scope="row" sx={{ fontWeight: 600 }}>
+                              {category.categoryId}
+                            </TableCell>
+                            <TableCell sx={{
+                              paddingLeft: `${category.level * 20 + 16}px`,
+                              fontWeight: category.level === 0 ? 600 : 400
+                            }}>
+                              {category.categoryName}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                              {category.fullPath}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={`Level ${category.level}`}
+                                color={category.level === 0 ? 'primary' : category.level === 1 ? 'secondary' : 'default'}
+                                size="small"
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={category.hasChildren ? 'Yes' : 'No'}
+                                color={category.hasChildren ? 'success' : 'default'}
+                                size="small"
+                                variant="filled"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {categoryData.length > 50 && (
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: 'info.light', borderRadius: 1 }}>
+                    <Typography variant="body2" color="info.contrastText">
+                      Showing first 50 of {categoryData.length} bill of materials items.
+                      Consider implementing pagination for better performance.
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  Loading bill of materials components...
                 </Typography>
               </Box>
             )}
