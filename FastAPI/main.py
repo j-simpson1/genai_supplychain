@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 from data.auto_parts.transform import transform_data_articles_list
 from data.auto_parts.load import insert_article_data_into_neo4j
-from data.auto_parts.tecdoc import get_articles_list, fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data
+from data.auto_parts.tecdoc import get_articles_list, fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list
 
 app = FastAPI()
 
@@ -47,6 +47,10 @@ def retrieve_engine_types(manufacturerId: int, modelSeriesId: int):
 @app.get("/manufacturers/models/engine_type/category_v3")
 def retrieve_category_v3(vehicleId: int, manufacturerId: int):
     return fetch_categories_data(vehicleId, manufacturerId)
+
+@app.get("/manufacturers/models/engine_type/category_v3/article_list")
+def retrieve_article_list(manufacturerId: int, vehicleId: int, productGroupId: int):
+    return get_article_list(manufacturerId, vehicleId, productGroupId)
 
 # Examples
 

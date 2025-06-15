@@ -84,6 +84,19 @@ def fetch_categories_data(vehicleId, manufacturerId, langId="4", countryFilterId
 	response = requests.get(url, headers=headers)
 	return response.json()
 
+# to check on Rapid API
+def get_article_list(manufacturerId, vehicleId, productGroupId):
+
+	url = f"https://tecdoc-catalog.p.rapidapi.com/articles/list/vehicle-id/{vehicleId}/product-group-id/{productGroupId}/manufacturer-id/{manufacturerId}/lang-id/4/country-filter-id/91/type-id/1"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
+	response = requests.get(url, headers=headers)
+	return response.json()
 
 def get_articles_list(articleNumber, countryFilterId="91", langId="4"):
 	url = "https://tecdoc-catalog.p.rapidapi.com/articles/article-number-details-post"
