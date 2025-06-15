@@ -12,15 +12,10 @@ import {
   Grid,
   Autocomplete,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
   Chip
 } from '@mui/material';
+import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
+import { TreeItem } from '@mui/x-tree-view/TreeItem';
 import { styled } from '@mui/material/styles';
 
 // Custom styled components
@@ -66,10 +61,31 @@ const StyledButton = styled(Button)(({ theme }) => ({
   transition: 'all 0.2s ease',
 }));
 
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
-  fontWeight: 600,
-  backgroundColor: theme.palette.grey[50],
-  borderBottom: `2px solid ${theme.palette.divider}`,
+const StyledTreeView = styled(SimpleTreeView)(({ theme }) => ({
+  flexGrow: 1,
+  maxWidth: '100%',
+  padding: theme.spacing(1),
+}));
+
+const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
+  '& .MuiTreeItem-content': {
+    padding: theme.spacing(0.5, 1),
+    margin: theme.spacing(0.2, 0),
+    borderRadius: theme.spacing(1),
+    '&:hover': {
+      backgroundColor: theme.palette.action.hover,
+    },
+    '&.Mui-selected': {
+      backgroundColor: theme.palette.primary.light,
+      '&:hover': {
+        backgroundColor: theme.palette.primary.light,
+      },
+    },
+  },
+  '& .MuiTreeItem-label': {
+    fontSize: '0.875rem',
+    fontWeight: 500,
+  },
 }));
 
 interface VehicleData {
@@ -206,42 +222,40 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
       const categoryResult = await categoryResponse.json();
 
-      // Process the hierarchical category data into flat structure for table display
+      // Process the hierarchical category data for TreeView
       const processCategories = (categories, parentPath = '') => {
-        const flatCategories = [];
+        const treeData = [];
 
         Object.entries(categories).forEach(([id, category]: [string, any]) => {
           const currentPath = parentPath ? `${parentPath} > ${category.text}` : category.text;
+          const hasChildren = Object.keys(category.children || {}).length > 0;
 
-          // Add main category
-          flatCategories.push({
-            id: Date.now() + Math.random(), // Unique ID for table
+          const categoryItem = {
+            id: id,
             categoryId: id,
             categoryName: category.text,
             fullPath: currentPath,
             level: parentPath.split(' > ').length,
-            hasChildren: Object.keys(category.children || {}).length > 0,
+            hasChildren: hasChildren,
+            children: hasChildren ? processCategories(category.children, currentPath) : [],
             vehicleBrand: formData.vehicle,
             vehicleModel: formData.model,
             engineType: formData.type
-          });
+          };
 
-          // Recursively process children
-          if (category.children && Object.keys(category.children).length > 0) {
-            flatCategories.push(...processCategories(category.children, currentPath));
-          }
+          treeData.push(categoryItem);
         });
 
-        return flatCategories;
+        return treeData;
       };
 
-      const flatCategories = processCategories(categoryResult.categories || categoryResult);
-      setCategoryData(flatCategories); // Replace instead of append
+      const treeData = processCategories(categoryResult.categories || categoryResult);
+      setCategoryData(treeData);
 
       console.log('Form submitted:', formData);
       console.log('Vehicle details:', selectedEngine);
-      console.log('Categories fetched:', flatCategories.length);
-      alert(`Vehicle added with ${flatCategories.length} bill of materials items`);
+      console.log('Categories fetched:', treeData.length);
+      alert(`Vehicle added with bill of materials tree structure`);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -291,6 +305,56 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       default:
         return 'default';
     }
+  };
+
+  const renderTreeItems = (items: any[]) => {
+    return items.map((item) => (
+      <StyledTreeItem
+        key={item.categoryId}
+        itemId={item.categoryId}
+        label={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: item.hasChildren ? 600 : 400,
+                flexGrow: 1
+              }}
+            >
+              {item.categoryName}
+            </Typography>
+
+            <Chip
+              label={item.hasChildren ? 'Category' : 'Part'}
+              size="small"
+              variant="outlined"
+              color={item.hasChildren ? 'info' : 'success'}
+              sx={{ fontSize: '0.75rem', height: '24px' }}
+            />
+
+            <Chip
+              label={item.categoryId}
+              size="small"
+              variant="filled"
+              color="default"
+              sx={{ fontSize: '0.7rem', height: '20px' }}
+            />
+          </Box>
+        }
+      >
+        {item.children && item.children.length > 0 && renderTreeItems(item.children)}
+      </StyledTreeItem>
+    ));
+  };
+
+  const getTotalItemCount = (items: any[]): number => {
+    let count = items.length;
+    items.forEach(item => {
+      if (item.children && item.children.length > 0) {
+        count += getTotalItemCount(item.children);
+      }
+    });
+    return count;
   };
 
   return (
@@ -471,71 +535,26 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               </Box>
             </Box>
 
-            {/* Bill of Materials Table */}
+            {/* Bill of Materials TreeView */}
             {categoryData.length > 0 ? (
               <>
                 <Typography variant="h6" component="h4" sx={{ fontWeight: 600, color: '#374151', mb: 2 }}>
-                  Categories & Parts ({categoryData.length} items)
+                  Categories & Parts ({getTotalItemCount(categoryData)} items)
                 </Typography>
 
-                <TableContainer>
-                  <Table sx={{ minWidth: 650 }} aria-label="bill of materials table">
-                    <TableHead>
-                      <TableRow>
-                        <StyledTableCell>Item ID</StyledTableCell>
-                        <StyledTableCell>Item Name</StyledTableCell>
-                        <StyledTableCell>Full Path</StyledTableCell>
-                        <StyledTableCell>Level</StyledTableCell>
-                        <StyledTableCell>Type</StyledTableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {categoryData
-                        .slice(0, 50) // Limit display to first 50 for performance
-                        .map((category) => (
-                          <TableRow key={category.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                            <TableCell component="th" scope="row" sx={{ fontWeight: 600 }}>
-                              {category.categoryId}
-                            </TableCell>
-                            <TableCell sx={{
-                              paddingLeft: `${category.level * 20 + 16}px`,
-                              fontWeight: category.level === 0 ? 600 : 400
-                            }}>
-                              {category.categoryName}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                              {category.fullPath}
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={`Level ${category.level}`}
-                                color={category.level === 0 ? 'primary' : category.level === 1 ? 'secondary' : 'default'}
-                                size="small"
-                                variant="outlined"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={category.hasChildren ? 'Category' : 'Part'}
-                                color={category.hasChildren ? 'info' : 'success'}
-                                size="small"
-                                variant="filled"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-
-                {categoryData.length > 50 && (
-                  <Box sx={{ mt: 2, p: 2, backgroundColor: 'info.light', borderRadius: 1 }}>
-                    <Typography variant="body2" color="info.contrastText">
-                      Showing first 50 of {categoryData.length} bill of materials items.
-                      Consider implementing pagination for better performance.
-                    </Typography>
-                  </Box>
-                )}
+                <Box sx={{
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 2,
+                  backgroundColor: '#fafafa',
+                  maxHeight: '600px',
+                  overflow: 'auto'
+                }}>
+                  <StyledTreeView
+                    defaultExpandedItems={categoryData.slice(0, 3).map(item => item.categoryId)}
+                  >
+                    {renderTreeItems(categoryData)}
+                  </StyledTreeView>
+                </Box>
               </>
             ) : (
               <Box sx={{ textAlign: 'center', py: 4 }}>
