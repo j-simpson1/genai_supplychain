@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Toolbar, Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import VehicleForm from './VehicleForm';
+import Header from "./components/Header";
 
 // Create a custom theme (optional - you can customize colors, typography, etc.)
 const theme = createTheme({
@@ -101,13 +103,17 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {error ? (
-        <p style={{ color: "red" }}>{error}</p>
-      ) : brands.length === 0 ? (
-        <p>Loading vehicle brands...</p>
-      ) : (
-        <VehicleForm vehicleBrands={brands} />
-      )}
+      <Header />
+      <Toolbar />
+      <Box sx={{ px: 2 }}> {/* Add padding here */}
+        {error ? (
+          <p style={{ color: "red" }}>{error}</p>
+        ) : brands.length === 0 ? (
+          <p>Loading vehicle brands...</p>
+        ) : (
+          <VehicleForm vehicleBrands={brands} />
+        )}
+      </Box>
     </ThemeProvider>
   );
 }

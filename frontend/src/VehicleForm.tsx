@@ -30,14 +30,20 @@ import { styled } from '@mui/material/styles';
 // Custom styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(6, 5),
-  margin: '40px auto',
+  marginTop: theme.spacing(0),
+  marginBottom: theme.spacing(3),
+  marginLeft: 'auto',
+  marginRight: 'auto',
   borderRadius: 16,
   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 }));
 
 const StyledTablePaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
-  margin: '40px auto',
+  marginTop: theme.spacing(2),
+  marginBottom: theme.spacing(3),
+  marginLeft: 'auto',
+  marginRight: 'auto',
   borderRadius: 16,
   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
 }));
@@ -429,281 +435,279 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const paginatedParts = partsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
-    <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f8fafc', padding: 2.5, overflow: 'auto', zIndex: 1000 }}>
-      <Container maxWidth="lg">
-        {/* Vehicle Selection Form */}
-        <StyledPaper elevation={3}>
-          <Typography variant="h5" component="h3" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4, fontSize: '1.75rem' }}>
-            Select Vehicle
-          </Typography>
+    <Container maxWidth="lg">
+      {/* Vehicle Selection Form */}
+      <StyledPaper elevation={3}>
+        <Typography variant="h5" component="h3" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4, fontSize: '1.75rem' }}>
+          Select Vehicle
+        </Typography>
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 400, mx: 'auto' }}>
-            <StyledFormControl fullWidth required>
-              <Autocomplete
-                options={vehicleBrands}
-                getOptionLabel={(option) => option.label}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                value={vehicleBrands.find(b => b.id === formData.vehicleId) || null}
-                onChange={(event, newValue) => {
+        <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 400, mx: 'auto' }}>
+          <StyledFormControl fullWidth required>
+            <Autocomplete
+              options={vehicleBrands}
+              getOptionLabel={(option) => option.label}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={vehicleBrands.find(b => b.id === formData.vehicleId) || null}
+              onChange={(event, newValue) => {
+                setFormData(prev => ({
+                  ...prev,
+                  vehicleId: newValue?.id || '',
+                  vehicle: newValue?.label || '',
+                  model: ''
+                }));
+              }}
+              disableClearable
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>{option.label}</li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} label="Vehicle Brand" required />
+              )}
+            />
+          </StyledFormControl>
+
+          <StyledFormControl fullWidth required disabled={!formData.vehicleId || loadingModels}>
+            <InputLabel id="model-label">Model</InputLabel>
+              <Select
+                labelId="model-label"
+                id="model-select"
+                name="model"
+                value={formData.model}
+                label="Model"
+                onChange={(e) => {
+                  const selectedModel = models.find((m) => m.modelName === e.target.value);
                   setFormData(prev => ({
                     ...prev,
-                    vehicleId: newValue?.id || '',
-                    vehicle: newValue?.label || '',
-                    model: ''
+                    model: selectedModel?.modelName || '',
+                    modelId: selectedModel?.modelId || ''
                   }));
                 }}
-                disableClearable
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>{option.label}</li>
-                )}
-                renderInput={(params) => (
-                  <TextField {...params} label="Vehicle Brand" required />
-                )}
-              />
-            </StyledFormControl>
-
-            <StyledFormControl fullWidth required disabled={!formData.vehicleId || loadingModels}>
-              <InputLabel id="model-label">Model</InputLabel>
-                <Select
-                  labelId="model-label"
-                  id="model-select"
-                  name="model"
-                  value={formData.model}
-                  label="Model"
-                  onChange={(e) => {
-                    const selectedModel = models.find((m) => m.modelName === e.target.value);
-                    setFormData(prev => ({
-                      ...prev,
-                      model: selectedModel?.modelName || '',
-                      modelId: selectedModel?.modelId || ''
-                    }));
-                  }}
-                >
-                  {loadingModels ? (
-                    <MenuItem value="" disabled>Loading models...</MenuItem>
-                  ) : modelError ? (
-                    <MenuItem value="" disabled>{modelError}</MenuItem>
-                  ) : models.length === 0 ? (
-                    <MenuItem value="" disabled>Select a brand to load models</MenuItem>
-                  ) : (
-                    models.map((model) => (
-                      <MenuItem key={model.modelId} value={model.modelName}>
-                        {model.modelName}
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-            </StyledFormControl>
-
-            <StyledFormControl fullWidth required disabled={!formData.modelId || loadingEngines}>
-              <InputLabel id="engine-type-label">Engine Type</InputLabel>
-              <Select
-                labelId="engine-type-label"
-                id="engine-type-select"
-                name="type"
-                value={formData.type}
-                label="Engine Type"
-                onChange={handleInputChange}
               >
-                {loadingEngines ? (
-                  <MenuItem value="" disabled>Loading engine types...</MenuItem>
-                ) : engineError ? (
-                  <MenuItem value="" disabled>{engineError}</MenuItem>
-                ) : engineOptions.length === 0 ? (
-                  <MenuItem value="" disabled>Select a model to load engine types</MenuItem>
+                {loadingModels ? (
+                  <MenuItem value="" disabled>Loading models...</MenuItem>
+                ) : modelError ? (
+                  <MenuItem value="" disabled>{modelError}</MenuItem>
+                ) : models.length === 0 ? (
+                  <MenuItem value="" disabled>Select a brand to load models</MenuItem>
                 ) : (
-                  engineOptions.map((engine, index) => (
-                    <MenuItem key={index} value={engine.typeEngineName}>
-                      {engine.typeEngineName} — {engine.powerPs} PS, {engine.fuelType}, {engine.bodyType}
+                  models.map((model) => (
+                    <MenuItem key={model.modelId} value={model.modelName}>
+                      {model.modelName}
                     </MenuItem>
                   ))
                 )}
               </Select>
-            </StyledFormControl>
+          </StyledFormControl>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
-              <StyledButton
-                type="submit"
-                variant="contained"
-                size="medium"
-                disabled={loadingCategories || selectedVehicleDetails !== null}
-              >
-                {loadingCategories ? 'Loading Bill of Materials...' : selectedVehicleDetails ? 'Vehicle Already Added' : 'Add Vehicle'}
-              </StyledButton>
-              <StyledButton onClick={handleReset} variant="outlined" size="medium">
-                Reset Form
-              </StyledButton>
+          <StyledFormControl fullWidth required disabled={!formData.modelId || loadingEngines}>
+            <InputLabel id="engine-type-label">Engine Type</InputLabel>
+            <Select
+              labelId="engine-type-label"
+              id="engine-type-select"
+              name="type"
+              value={formData.type}
+              label="Engine Type"
+              onChange={handleInputChange}
+            >
+              {loadingEngines ? (
+                <MenuItem value="" disabled>Loading engine types...</MenuItem>
+              ) : engineError ? (
+                <MenuItem value="" disabled>{engineError}</MenuItem>
+              ) : engineOptions.length === 0 ? (
+                <MenuItem value="" disabled>Select a model to load engine types</MenuItem>
+              ) : (
+                engineOptions.map((engine, index) => (
+                  <MenuItem key={index} value={engine.typeEngineName}>
+                    {engine.typeEngineName} — {engine.powerPs} PS, {engine.fuelType}, {engine.bodyType}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </StyledFormControl>
+
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+            <StyledButton
+              type="submit"
+              variant="contained"
+              size="medium"
+              disabled={loadingCategories || selectedVehicleDetails !== null}
+            >
+              {loadingCategories ? 'Loading Bill of Materials...' : selectedVehicleDetails ? 'Vehicle Already Added' : 'Add Vehicle'}
+            </StyledButton>
+            <StyledButton onClick={handleReset} variant="outlined" size="medium">
+              Reset Form
+            </StyledButton>
+          </Box>
+        </Box>
+      </StyledPaper>
+
+      {/* Bill of Materials - Combined Section */}
+      {selectedVehicleDetails && (
+        <StyledTablePaper elevation={3}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+            <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
+              Bill of Materials
+            </Typography>
+            <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
+              Clear Bill of Materials
+            </StyledButton>
+          </Box>
+
+          {/* Vehicle Information */}
+          <Box sx={{
+            backgroundColor: '#f8fafc',
+            borderRadius: 2,
+            p: 3,
+            mb: 3,
+            border: '1px solid #e2e8f0',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: 1.6
+          }}>
+            <Box sx={{ mb: 1 }}>
+              <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                Vehicle ID:
+              </Typography>
+              <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                {selectedVehicleDetails.vehicleId}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 1 }}>
+              <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                Manufacturer:
+              </Typography>
+              <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                {selectedVehicleDetails.manufacturerName}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 1 }}>
+              <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                Model:
+              </Typography>
+              <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                {selectedVehicleDetails.modelName}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 1 }}>
+              <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                Engine Type:
+              </Typography>
+              <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                {selectedVehicleDetails.typeEngineName}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 0 }}>
+              <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
+                Fuel Type:
+              </Typography>
+              <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
+                {selectedVehicleDetails.fuelType}
+              </Typography>
             </Box>
           </Box>
-        </StyledPaper>
 
-        {/* Bill of Materials - Combined Section */}
-        {selectedVehicleDetails && (
-          <StyledTablePaper elevation={3}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
-                Bill of Materials
-              </Typography>
-              <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
-                Clear Bill of Materials
-              </StyledButton>
-            </Box>
+          {/* Tabs for Parts Table and Tree View */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={tabValue} onChange={handleTabChange} aria-label="bill of materials view">
+              <Tab label={`Parts Table (${partsData.length} parts)`} />
+              <Tab label={`Tree View (${getTotalItemCount(categoryData)} total items)`} />
+            </Tabs>
+          </Box>
 
-            {/* Vehicle Information */}
-            <Box sx={{
-              backgroundColor: '#f8fafc',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-              border: '1px solid #e2e8f0',
-              fontFamily: 'monospace',
-              fontSize: '14px',
-              lineHeight: 1.6
-            }}>
-              <Box sx={{ mb: 1 }}>
-                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
-                  Vehicle ID:
-                </Typography>
-                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
-                  {selectedVehicleDetails.vehicleId}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 1 }}>
-                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
-                  Manufacturer:
-                </Typography>
-                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
-                  {selectedVehicleDetails.manufacturerName}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 1 }}>
-                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
-                  Model:
-                </Typography>
-                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
-                  {selectedVehicleDetails.modelName}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 1 }}>
-                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
-                  Engine Type:
-                </Typography>
-                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
-                  {selectedVehicleDetails.typeEngineName}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 0 }}>
-                <Typography component="span" sx={{ fontWeight: 600, color: '#374151' }}>
-                  Fuel Type:
-                </Typography>
-                <Typography component="span" sx={{ ml: 1, color: '#1f2937' }}>
-                  {selectedVehicleDetails.fuelType}
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* Tabs for Parts Table and Tree View */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-              <Tabs value={tabValue} onChange={handleTabChange} aria-label="bill of materials view">
-                <Tab label={`Parts Table (${partsData.length} parts)`} />
-                <Tab label={`Tree View (${getTotalItemCount(categoryData)} total items)`} />
-              </Tabs>
-            </Box>
-
-            {/* Tab Content */}
-            {tabValue === 0 && (
-              // Parts Table
-              partsData.length > 0 ? (
-                <>
-                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
-                    <Table stickyHeader>
-                      <StyledTableHead>
-                        <TableRow>
-                          <TableCell>Part ID</TableCell>
-                          <TableCell>Part Name</TableCell>
-                          <TableCell>Category</TableCell>
+          {/* Tab Content */}
+          {tabValue === 0 && (
+            // Parts Table
+            partsData.length > 0 ? (
+              <>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+                  <Table stickyHeader>
+                    <StyledTableHead>
+                      <TableRow>
+                        <TableCell>Part ID</TableCell>
+                        <TableCell>Part Name</TableCell>
+                        <TableCell>Category</TableCell>
+                      </TableRow>
+                    </StyledTableHead>
+                    <TableBody>
+                      {paginatedParts.map((part) => (
+                        <TableRow key={part.categoryId} hover>
+                          <TableCell>
+                            <Chip
+                              label={part.categoryId}
+                              size="small"
+                              variant="filled"
+                              color="default"
+                              sx={{ fontSize: '0.75rem' }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {part.categoryName}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                              {part.fullPath}
+                            </Typography>
+                          </TableCell>
                         </TableRow>
-                      </StyledTableHead>
-                      <TableBody>
-                        {paginatedParts.map((part) => (
-                          <TableRow key={part.categoryId} hover>
-                            <TableCell>
-                              <Chip
-                                label={part.categoryId}
-                                size="small"
-                                variant="filled"
-                                color="default"
-                                sx={{ fontSize: '0.75rem' }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {part.categoryName}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                {part.fullPath}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-                  <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    component="div"
-                    count={partsData.length}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={handleChangePage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                    sx={{ mt: 2 }}
-                  />
-                </>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    Loading parts data...
-                  </Typography>
-                </Box>
-              )
-            )}
+                <TablePagination
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  component="div"
+                  count={partsData.length}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  onPageChange={handleChangePage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  sx={{ mt: 2 }}
+                />
+              </>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  Loading parts data...
+                </Typography>
+              </Box>
+            )
+          )}
 
-            {tabValue === 1 && (
-              // Tree View
-              categoryData.length > 0 ? (
-                <Box sx={{
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 2,
-                  backgroundColor: '#fafafa',
-                  maxHeight: '600px',
-                  overflow: 'auto'
-                }}>
-                  <StyledTreeView
-                    defaultExpandedItems={categoryData.slice(0, 3).map(item => item.categoryId)}
-                  >
-                    {renderTreeItems(categoryData)}
-                  </StyledTreeView>
-                </Box>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    Loading bill of materials components...
-                  </Typography>
-                </Box>
-              )
-            )}
-          </StyledTablePaper>
-        )}
-      </Container>
-    </Box>
+          {tabValue === 1 && (
+            // Tree View
+            categoryData.length > 0 ? (
+              <Box sx={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 2,
+                backgroundColor: '#fafafa',
+                maxHeight: '600px',
+                overflow: 'auto'
+              }}>
+                <StyledTreeView
+                  defaultExpandedItems={categoryData.slice(0, 3).map(item => item.categoryId)}
+                >
+                  {renderTreeItems(categoryData)}
+                </StyledTreeView>
+              </Box>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  Loading bill of materials components...
+                </Typography>
+              </Box>
+            )
+          )}
+        </StyledTablePaper>
+      )}
+    </Container>
   );
 }
 
