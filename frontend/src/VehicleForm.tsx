@@ -12,7 +12,16 @@ import {
   Grid,
   Autocomplete,
   TextField,
-  Chip
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem } from '@mui/x-tree-view/TreeItem';
@@ -20,8 +29,7 @@ import { styled } from '@mui/material/styles';
 
 // Custom styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(5),
-  maxWidth: 450,
+  padding: theme.spacing(7, 5),
   margin: '40px auto',
   borderRadius: 16,
   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
@@ -88,6 +96,15 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   },
 }));
 
+const StyledTableHead = styled(TableHead)(({ theme }) => ({
+  '& .MuiTableCell-head': {
+    backgroundColor: theme.palette.grey[50],
+    fontWeight: 600,
+    fontSize: '0.875rem',
+    borderBottom: `2px solid ${theme.palette.divider}`,
+  },
+}));
+
 interface VehicleData {
   id: number;
   brand: string;
@@ -101,6 +118,13 @@ interface VehicleData {
 
 interface VehicleFormProps {
   vehicleBrands: { label: string; id: number }[];
+}
+
+interface PartItem {
+  categoryId: string;
+  categoryName: string;
+  fullPath: string;
+  level: number;
 }
 
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
@@ -122,8 +146,16 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
   // Table state
   const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [partsData, setPartsData] = useState<PartItem[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [selectedVehicleDetails, setSelectedVehicleDetails] = useState<any>(null);
+
+  // Table pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Tab state
+  const [tabValue, setTabValue] = useState(0);
 
   const vehicleTypes = [
     { value: 'sedan', label: 'Sedan' },
@@ -189,6 +221,31 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }));
   };
 
+  // Extract parts (leaf nodes) from hierarchical data
+  const extractParts = (categories, parentPath = '') => {
+    const parts = [];
+
+    Object.entries(categories).forEach(([id, category]: [string, any]) => {
+      const currentPath = parentPath ? `${parentPath} > ${category.text}` : category.text;
+      const hasChildren = Object.keys(category.children || {}).length > 0;
+
+      if (!hasChildren) {
+        // This is a leaf node (part)
+        parts.push({
+          categoryId: id,
+          categoryName: category.text,
+          fullPath: currentPath,
+          level: parentPath.split(' > ').filter(Boolean).length
+        });
+      } else {
+        // Recursively process children
+        parts.push(...extractParts(category.children, currentPath));
+      }
+    });
+
+    return parts;
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -252,9 +309,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       const treeData = processCategories(categoryResult.categories || categoryResult);
       setCategoryData(treeData);
 
+      // Extract parts for the table
+      const parts = extractParts(categoryResult.categories || categoryResult);
+      setPartsData(parts);
+
       console.log('Form submitted:', formData);
       console.log('Vehicle details:', selectedEngine);
       console.log('Categories fetched:', treeData.length);
+      console.log('Parts extracted:', parts.length);
       alert(`Vehicle added with bill of materials tree structure`);
 
     } catch (error) {
@@ -280,6 +342,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const handleClearTable = () => {
     setSelectedVehicleDetails(null);
     setCategoryData([]);
+    setPartsData([]);
+    setPage(0);
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -289,6 +353,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
   };
 
   const getFuelTypeColor = (fuelType: string) => {
@@ -357,6 +425,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     return count;
   };
 
+  // Get paginated parts data
+  const paginatedParts = partsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
   return (
     <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f8fafc', padding: 2.5, overflow: 'auto', zIndex: 1000 }}>
       <Container maxWidth="lg">
@@ -366,7 +437,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             Select Vehicle
           </Typography>
 
-          <Box component="form" onSubmit={handleSubmit}>
+          <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 400, mx: 'auto' }}>
             <StyledFormControl fullWidth required>
               <Autocomplete
                 options={vehicleBrands}
@@ -470,7 +541,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         {selectedVehicleDetails && (
           <StyledTablePaper elevation={3}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 0.5 }}>
+              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.0 }}>
                 Bill of Materials
               </Typography>
               <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
@@ -535,13 +606,79 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               </Box>
             </Box>
 
-            {/* Bill of Materials TreeView */}
-            {categoryData.length > 0 ? (
-              <>
-                <Typography variant="h6" component="h4" sx={{ fontWeight: 600, color: '#374151', mb: 2 }}>
-                  Categories & Parts ({getTotalItemCount(categoryData)} items)
-                </Typography>
+            {/* Tabs for Parts Table and Tree View */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs value={tabValue} onChange={handleTabChange} aria-label="bill of materials view">
+                <Tab label={`Parts Table (${partsData.length} parts)`} />
+                <Tab label={`Tree View (${getTotalItemCount(categoryData)} total items)`} />
+              </Tabs>
+            </Box>
 
+            {/* Tab Content */}
+            {tabValue === 0 && (
+              // Parts Table
+              partsData.length > 0 ? (
+                <>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+                    <Table stickyHeader>
+                      <StyledTableHead>
+                        <TableRow>
+                          <TableCell>Part ID</TableCell>
+                          <TableCell>Part Name</TableCell>
+                          <TableCell>Category</TableCell>
+                        </TableRow>
+                      </StyledTableHead>
+                      <TableBody>
+                        {paginatedParts.map((part) => (
+                          <TableRow key={part.categoryId} hover>
+                            <TableCell>
+                              <Chip
+                                label={part.categoryId}
+                                size="small"
+                                variant="filled"
+                                color="default"
+                                sx={{ fontSize: '0.75rem' }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {part.categoryName}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                                {part.fullPath}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={partsData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    sx={{ mt: 2 }}
+                  />
+                </>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Loading parts data...
+                  </Typography>
+                </Box>
+              )
+            )}
+
+            {tabValue === 1 && (
+              // Tree View
+              categoryData.length > 0 ? (
                 <Box sx={{
                   border: '1px solid #e2e8f0',
                   borderRadius: 2,
@@ -555,13 +692,13 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                     {renderTreeItems(categoryData)}
                   </StyledTreeView>
                 </Box>
-              </>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Loading bill of materials components...
-                </Typography>
-              </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Loading bill of materials components...
+                  </Typography>
+                </Box>
+              )
             )}
           </StyledTablePaper>
         )}
