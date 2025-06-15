@@ -111,6 +111,13 @@ const StyledTableHead = styled(TableHead)(({ theme }) => ({
   },
 }));
 
+const NextButtonContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'center',
+  paddingTop: theme.spacing(4),
+  paddingBottom: theme.spacing(4),
+}));
+
 interface VehicleData {
   id: number;
   brand: string;
@@ -352,6 +359,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     setPage(0);
   };
 
+  const handleNext = () => {
+    // Add your next step logic here
+    console.log('Next button clicked');
+    console.log('Vehicle details:', selectedVehicleDetails);
+    console.log('Parts data:', partsData);
+    alert('Proceeding to next step...');
+  };
+
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -433,6 +448,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
   // Get paginated parts data
   const paginatedParts = partsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  // Check if Bill of Materials data is populated
+  const isBillOfMaterialsPopulated = selectedVehicleDetails && (categoryData.length > 0 || partsData.length > 0);
 
   return (
     <Container maxWidth="lg">
@@ -707,6 +725,25 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           )}
         </StyledTablePaper>
       )}
+
+          {/* Next Button - Bottom right of Bill of Materials card */}
+          {isBillOfMaterialsPopulated && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, pr: 4 }}>
+              <StyledButton
+                variant="contained"
+                size="large"
+                onClick={handleNext}
+                sx={{
+                  minWidth: 120,
+                  fontSize: '18px',
+                  py: 1.5,
+                  px: 4,
+                }}
+              >
+                Next
+              </StyledButton>
+            </Box>
+          )}
     </Container>
   );
 }
