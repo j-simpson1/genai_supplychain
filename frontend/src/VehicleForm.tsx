@@ -29,7 +29,7 @@ import { styled } from '@mui/material/styles';
 
 // Custom styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(7, 5),
+  padding: theme.spacing(6, 5),
   margin: '40px auto',
   borderRadius: 16,
   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
@@ -433,7 +433,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       <Container maxWidth="lg">
         {/* Vehicle Selection Form */}
         <StyledPaper elevation={3}>
-          <Typography variant="h4" component="h2" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4 }}>
+          <Typography variant="h5" component="h3" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4, fontSize: '1.75rem' }}>
             Select Vehicle
           </Typography>
 
@@ -541,7 +541,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         {selectedVehicleDetails && (
           <StyledTablePaper elevation={3}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.0 }}>
+              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
                 Bill of Materials
               </Typography>
               <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
