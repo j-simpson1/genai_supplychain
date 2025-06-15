@@ -475,7 +475,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             {categoryData.length > 0 ? (
               <>
                 <Typography variant="h6" component="h4" sx={{ fontWeight: 600, color: '#374151', mb: 2 }}>
-                  Components ({categoryData.length} items)
+                  Categories & Parts ({categoryData.length} items)
                 </Typography>
 
                 <TableContainer>
@@ -486,7 +486,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                         <StyledTableCell>Item Name</StyledTableCell>
                         <StyledTableCell>Full Path</StyledTableCell>
                         <StyledTableCell>Level</StyledTableCell>
-                        <StyledTableCell>Has Children</StyledTableCell>
+                        <StyledTableCell>Type</StyledTableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -516,8 +516,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                             </TableCell>
                             <TableCell>
                               <Chip
-                                label={category.hasChildren ? 'Yes' : 'No'}
-                                color={category.hasChildren ? 'success' : 'default'}
+                                label={category.hasChildren ? 'Category' : 'Part'}
+                                color={category.hasChildren ? 'info' : 'success'}
                                 size="small"
                                 variant="filled"
                               />
