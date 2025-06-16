@@ -28,7 +28,8 @@ import {
   EmojiEmotions as EmojiIcon,
   Menu as MenuIcon,
   MoreVert as MoreVertIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import Header from "../components/Header";
 
@@ -259,7 +260,7 @@ const MessageInput = ({ onSendMessage }) => {
 };
 
 // User List Sidebar Component
-const ConversationList = ({ conversations, selectedConversationId, onConversationSelect }) => {
+const ConversationList = ({ conversations, selectedConversationId, onConversationSelect, onNewChat }) => {
   const formatTimestamp = (timestamp) => {
     const now = new Date();
     const diff = now - timestamp;
@@ -285,7 +286,24 @@ const ConversationList = ({ conversations, selectedConversationId, onConversatio
   return (
     <Box sx={{ width: 280, height: '100%' }}>
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="h6">History</Typography>
+        <IconButton
+          onClick={onNewChat}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            width: '100%',
+            justifyContent: 'flex-start',
+            p: 1,
+            borderRadius: 2,
+            '&:hover': {
+              backgroundColor: 'action.hover'
+            }
+          }}
+        >
+          <AddIcon />
+          <Typography variant="h6">New Chat</Typography>
+        </IconButton>
       </Box>
       <List>
         {conversations.map((conversation) => (
@@ -352,6 +370,13 @@ const ChatSystem = () => {
     setMessages([...messages, newMessage]);
   };
 
+  const handleNewChat = () => {
+    // Clear current messages and start a new conversation
+    setMessages([]);
+    setSelectedConversationId(null);
+    console.log('Starting new chat...');
+  };
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
@@ -383,6 +408,7 @@ const ChatSystem = () => {
             conversations={mockConversations}
             selectedConversationId={selectedConversationId}
             onConversationSelect={setSelectedConversationId}
+            onNewChat={handleNewChat}
           />
         </Drawer>
 
