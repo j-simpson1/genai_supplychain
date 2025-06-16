@@ -3,7 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
-import BillOfMaterials from './pages/Bill_of_Materials.tsx';
+import BillOfMaterials from './pages/bill_of_materials.tsx';
 import ModelConfiguration from './pages/model_configuration.tsx';
 
 createRoot(document.getElementById('root')!).render(
