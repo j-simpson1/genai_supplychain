@@ -10,7 +10,8 @@ interface NavItem {
 
 // Navigation configuration
 const NAV_LINKS: readonly NavItem[] = [
-  // Add your navigation items here
+  { label: "Chat", path: "/chat" },
+  { label: "Custom Setup", path: "/custom-setup" },
 ] as const;
 
 // Styles
@@ -106,7 +107,8 @@ const Header = memo(() => {
                 sx={{
                   ...headerStyles.navButton,
                   color: isActive ? "primary.main" : "text.primary",
-                  fontWeight: isActive ? 600 : 400,
+                  fontWeight: 600,
+                  fontSize: "1.00rem",
                 }}
                 aria-current={isActive ? "page" : undefined}
               >
