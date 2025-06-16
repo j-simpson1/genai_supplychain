@@ -75,8 +75,10 @@ const ModelConfiguration = () => {
   const [manufacturerLocation, setManufacturerLocation] = useState('');
   const [inflationRate, setInflationRate] = useState('');
   const [dispatchCost, setDispatchCost] = useState('');
+  const [alternativeSupplier1, setAlternativeSupplier1] = useState('');
+  const [alternativeSupplier1Country, setAlternativeSupplier1Country] = useState('');
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
@@ -101,6 +103,34 @@ const ModelConfiguration = () => {
     if (/^\d*\.?\d*$/.test(value) || value === '') {
       setTariffRate(value);
     }
+  };
+
+  const handleManufacturerLocationChange = (event) => {
+    setManufacturerLocation(event.target.value);
+  };
+
+  const handleInflationRateChange = (event) => {
+    const value = event.target.value;
+    // Only allow numbers and decimal point
+    if (/^\d*\.?\d*$/.test(value) || value === '') {
+      setInflationRate(value);
+    }
+  };
+
+  const handleDispatchCostChange = (event) => {
+    const value = event.target.value;
+    // Only allow numbers and decimal point
+    if (/^\d*\.?\d*$/.test(value) || value === '') {
+      setDispatchCost(value);
+    }
+  };
+
+  const handleAlternativeSupplier1Change = (event) => {
+    setAlternativeSupplier1(event.target.value);
+  };
+
+  const handleAlternativeSupplier1CountryChange = (event) => {
+    setAlternativeSupplier1Country(event.target.value);
   };
 
   const handleBack = () => {
@@ -179,7 +209,7 @@ const ModelConfiguration = () => {
             </Grid>
 
             <Grid item xs={12} sm={6} md={4}>
-              <Typography variant="body2" color="textSecondary">Fuel Type</Typography>
+              <Typography variant="body2" color="textSecondary">Body Type</Typography>
               <Typography variant="body1" fontWeight="medium">{vehicleDetails.bodyType}</Typography>
             </Grid>
           </Grid>
@@ -244,7 +274,6 @@ const ModelConfiguration = () => {
                 </Box>
               </Box>
             )}
-
           </Box>
         </StyledPaper>
 
@@ -310,7 +339,6 @@ const ModelConfiguration = () => {
               </Box>
             </>
           )}
-
         </StyledPaper>
 
         {/* Model Parameter Card */}
@@ -328,22 +356,24 @@ const ModelConfiguration = () => {
                 id="manufacturer-location-select"
                 value={manufacturerLocation}
                 label="Manufacturer Location"
-                onChange={handleScenarioTypeChange}
+                onChange={handleManufacturerLocationChange}
               >
-                <MenuItem value="tariff_adjustment">Tariff Adjustment</MenuItem>
-                <MenuItem value="high_inflation">High Inflation</MenuItem>
-                <MenuItem value="recession">Recession</MenuItem>
+                <MenuItem value="usa">United States</MenuItem>
+                <MenuItem value="uk">United Kingdom</MenuItem>
+                <MenuItem value="germany">Germany</MenuItem>
+                <MenuItem value="japan">Japan</MenuItem>
+                <MenuItem value="china">China</MenuItem>
               </Select>
             </StyledFormControl>
           </Box>
 
-          {/* Tariff Rate Text Field */}
+          {/* Global Inflation Rate Text Field */}
           <Box sx={{ mb: 0 }}>
             <StyledTextField
               id="global-inflation-rate"
               label="Global Inflation Rate (%)"
               value={inflationRate}
-              onChange={handleTariffRateChange}
+              onChange={handleInflationRateChange}
               sx={{ width: 350 }}
               placeholder="Enter global inflation rate"
               inputProps={{
@@ -353,13 +383,13 @@ const ModelConfiguration = () => {
             />
           </Box>
 
-          {/* Tariff Rate Text Field */}
+          {/* Dispatch Cost Text Field */}
           <Box sx={{ mb: 0 }}>
             <StyledTextField
               id="dispatch-cost"
               label="Dispatch Cost (optional)"
               value={dispatchCost}
-              onChange={handleTariffRateChange}
+              onChange={handleDispatchCostChange}
               sx={{ width: 350 }}
               placeholder="Enter dispatch cost"
               inputProps={{
@@ -368,7 +398,54 @@ const ModelConfiguration = () => {
               }}
             />
           </Box>
+        </StyledPaper>
 
+        {/* Alternative Suppliers Card */}
+        <StyledPaper>
+          <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ mb: 3 }}>
+            Alternative Suppliers
+          </Typography>
+
+          {/* Alternative Supplier 1 Dropdown */}
+          <Box sx={{ mb: 0 }}>
+            <StyledFormControl sx={{ width: 350 }}>
+              <InputLabel id="alternative-supplier-1-label">Alternative Supplier 1</InputLabel>
+              <Select
+                labelId="alternative-supplier-1-label"
+                id="alternative-supplier-1-select"
+                value={alternativeSupplier1}
+                label="Alternative Supplier 1"
+                onChange={handleAlternativeSupplier1Change}
+              >
+                <MenuItem value="bosch">Bosch</MenuItem>
+                <MenuItem value="denso">Denso</MenuItem>
+                <MenuItem value="zf_friedrichshafen">ZF Friedrichshafen</MenuItem>
+                <MenuItem value="continental">Continental</MenuItem>
+                <MenuItem value="magna">Magna International</MenuItem>
+              </Select>
+            </StyledFormControl>
+          </Box>
+
+          {/* Alternative Supplier 1 Country Dropdown */}
+          <Box sx={{ mb: 0 }}>
+            <StyledFormControl sx={{ width: 350 }}>
+              <InputLabel id="alternative-supplier-1-country-label">Alternative Supplier 1 Country</InputLabel>
+              <Select
+                labelId="alternative-supplier-1-country-label"
+                id="alternative-supplier-1-country-select"
+                value={alternativeSupplier1Country}
+                label="Alternative Supplier 1 Country"
+                onChange={handleAlternativeSupplier1CountryChange}
+              >
+                <MenuItem value="uk">United Kingdom</MenuItem>
+                <MenuItem value="usa">United States</MenuItem>
+                <MenuItem value="france">France</MenuItem>
+                <MenuItem value="germany">Germany</MenuItem>
+                <MenuItem value="japan">Japan</MenuItem>
+                <MenuItem value="china">China</MenuItem>
+              </Select>
+            </StyledFormControl>
+          </Box>
         </StyledPaper>
 
         {/* Next/Back Buttons */}
