@@ -263,7 +263,7 @@ const OutputPage = () => {
         {/* Back Button */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4 }}>
           <StyledButton variant="contained" onClick={handleBack}>
-            Back to Configuration
+            Back to Model Configuration
           </StyledButton>
         </Box>
       </Container>
