@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -141,6 +142,7 @@ interface PartItem {
 }
 
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     vehicle: '',
     vehicleId: '',
@@ -360,11 +362,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   };
 
   const handleNext = () => {
-    // Add your next step logic here
-    console.log('Next button clicked');
-    console.log('Vehicle details:', selectedVehicleDetails);
-    console.log('Parts data:', partsData);
-    alert('Proceeding to next step...');
+    // Navigate to the next page - replace '/next-page' with your actual route
+    navigate('/model_configuration', {
+      state: {
+        vehicleDetails: selectedVehicleDetails,
+        partsData: partsData,
+        categoryData: categoryData
+      }
+    });
   };
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -728,7 +733,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
           {/* Next Button - Bottom right of Bill of Materials card */}
           {isBillOfMaterialsPopulated && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, pr: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, pr: 2 }}>
               <StyledButton
                 variant="contained"
                 size="large"

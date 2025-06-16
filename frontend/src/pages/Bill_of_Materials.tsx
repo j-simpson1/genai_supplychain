@@ -78,7 +78,7 @@ function GetManufacturers() {
 }
 
 
-function App() {
+function BillOfMaterials() {
   const [brands, setBrands] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,4 +117,4 @@ function App() {
   );
 }
 
-export default App;
+export default BillOfMaterials;
