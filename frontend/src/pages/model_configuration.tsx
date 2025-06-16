@@ -72,6 +72,9 @@ const ModelConfiguration = () => {
   const [scenarioType, setScenarioType] = useState('');
   const [country, setCountry] = useState('');
   const [tariffRate, setTariffRate] = useState('');
+  const [manufacturerLocation, setManufacturerLocation] = useState('');
+  const [inflationRate, setInflationRate] = useState('');
+  const [dispatchCost, setDispatchCost] = useState('');
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -131,17 +134,10 @@ const ModelConfiguration = () => {
     <MainLayout>
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Page Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box sx={{ mb: 3 }}>
           <Typography variant="h4" component="h1" fontWeight="bold">
             Model Configuration
           </Typography>
-
-          <StyledButton
-            variant="outlined"
-            onClick={handleBack}
-          >
-            Back
-          </StyledButton>
         </Box>
 
         {/* Vehicle Details Card */}
@@ -317,10 +313,68 @@ const ModelConfiguration = () => {
 
         </StyledPaper>
 
-        {/* Next/Save Buttons */}
+        {/* Model Parameter Card */}
+        <StyledPaper>
+          <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ mb: 3 }}>
+            Model Parameters
+          </Typography>
+
+          {/* Manufacturer location Dropdown */}
+          <Box sx={{ mb: 0 }}>
+            <StyledFormControl sx={{ width: 350 }}>
+              <InputLabel id="manufacturer-location-label">Manufacturer Location</InputLabel>
+              <Select
+                labelId="manufacturer-location-label"
+                id="manufacturer-location-select"
+                value={manufacturerLocation}
+                label="Manufacturer Location"
+                onChange={handleScenarioTypeChange}
+              >
+                <MenuItem value="tariff_adjustment">Tariff Adjustment</MenuItem>
+                <MenuItem value="high_inflation">High Inflation</MenuItem>
+                <MenuItem value="recession">Recession</MenuItem>
+              </Select>
+            </StyledFormControl>
+          </Box>
+
+          {/* Tariff Rate Text Field */}
+          <Box sx={{ mb: 0 }}>
+            <StyledTextField
+              id="global-inflation-rate"
+              label="Global Inflation Rate (%)"
+              value={inflationRate}
+              onChange={handleTariffRateChange}
+              sx={{ width: 350 }}
+              placeholder="Enter global inflation rate"
+              inputProps={{
+                inputMode: 'decimal',
+                pattern: '[0-9]*[.]?[0-9]*'
+              }}
+            />
+          </Box>
+
+          {/* Tariff Rate Text Field */}
+          <Box sx={{ mb: 0 }}>
+            <StyledTextField
+              id="dispatch-cost"
+              label="Dispatch Cost (optional)"
+              value={dispatchCost}
+              onChange={handleTariffRateChange}
+              sx={{ width: 350 }}
+              placeholder="Enter dispatch cost"
+              inputProps={{
+                inputMode: 'decimal',
+                pattern: '[0-9]*[.]?[0-9]*'
+              }}
+            />
+          </Box>
+
+        </StyledPaper>
+
+        {/* Next/Back Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4, gap: 2 }}>
-          <StyledButton variant="outlined">
-            Save Configuration
+          <StyledButton variant="outlined" onClick={handleBack}>
+            Back
           </StyledButton>
           <StyledButton variant="contained">
             Continue
