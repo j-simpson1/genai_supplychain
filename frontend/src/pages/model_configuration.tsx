@@ -137,6 +137,24 @@ const ModelConfiguration = () => {
     navigate(-1);
   };
 
+  const handleRunSimulation = () => {
+  navigate('/output', {
+    state: {
+      vehicleDetails,
+      partsData,
+      categoryData,
+      scenarioType,
+      country,
+      tariffRate,
+      manufacturerLocation,
+      inflationRate,
+      dispatchCost,
+      alternativeSupplier1,
+      alternativeSupplier1Country
+    }
+  });
+};
+
   // Check if data is available
   if (!vehicleDetails) {
     return (
@@ -453,8 +471,8 @@ const ModelConfiguration = () => {
           <StyledButton variant="outlined" onClick={handleBack}>
             Back
           </StyledButton>
-          <StyledButton variant="contained">
-            Continue
+          <StyledButton variant="contained" onClick={handleRunSimulation}>
+            Run Simulation
           </StyledButton>
         </Box>
       </Container>
