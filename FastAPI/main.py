@@ -1,17 +1,17 @@
 import pandas as pd
+import os
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers
+from data.auto_parts.ai_analysis import rank_suppliers
+from services.article_selector import select_preferred_article
+
 from typing import List, Dict, Any
 import datetime
-import pandas as pd
-
-from neo4j import GraphDatabase
-from dotenv import load_dotenv
-import os
-from data.auto_parts.transform import transform_data_articles_list
-from data.auto_parts.load import insert_article_data_into_neo4j
-from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list
 
 app = FastAPI()
 
@@ -84,6 +84,10 @@ def retrieve_category_v3(vehicleId: int, manufacturerId: int):
 def retrieve_article_list(manufacturerId: int, vehicleId: int, productGroupId: int):
     return get_article_list(manufacturerId, vehicleId, productGroupId)
 
+@app.get("/suppliers")
+def retrieve_suppliers():
+    return fetch_suppliers()
+
 
 @app.post("/ai/process-bill-of-materials")
 async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
@@ -94,14 +98,33 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
         parts_df = pd.DataFrame([part.dict() for part in request.parts])
 
-        print(parts_df)
-
+        manufacturer_id = request.metadata["manufacturerId"]
+        manufacturer_name = request.vehicleDetails.manufacturerName
         vehicle_id = request.vehicleDetails.vehicleId
 
-        print("Metadata", request.metadata)
+        suppliers = fetch_suppliers()
+        shortened_suppliers = [supplier["supMatchCode"] for supplier in suppliers]
+
+        ranked_suppliers = rank_suppliers(manufacturer_name, shortened_suppliers)
 
         for category_id in parts_df['categoryId']:
-            get_article_list('111', vehicle_id, category_id)
+            article_list = get_article_list(manufacturer_id, vehicle_id, category_id)
+
+            articles = article_list.get('articles') or []
+
+            extracted_articles = [
+                {
+                    'articleNo': article['articleNo'],
+                    'supplierName': article['supplierName'],
+                    'articleProductName': article['articleProductName']
+                }
+                for article in articles
+            ]
+
+            print("selecting preferred_articles")
+            preferred_articles = select_preferred_article(extracted_articles, ranked_suppliers)
+
+            print(preferred_articles)
 
         # Your AI processing logic here
         # For example, you might:
@@ -163,10 +186,3 @@ PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 def get_driver(uri, user, password):
     return GraphDatabase.driver(uri, auth=(user, password))
-
-def main():
-    pass
-
-
-if __name__ == "__main__":
-    main()

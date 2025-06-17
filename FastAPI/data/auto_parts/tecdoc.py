@@ -119,6 +119,19 @@ def get_article_details(articleNumber, countryFilterId="91", langId="4"):
 	response = requests.post(url, data=payload, headers=headers)
 	return response.json()
 
+def fetch_suppliers():
+
+	url = "https://tecdoc-catalog.p.rapidapi.com/suppliers/list"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
+	response = requests.get(url, headers=headers)
+
+	return response.json()
 
 # '100006': {
 # 	'text': 'Braking System',

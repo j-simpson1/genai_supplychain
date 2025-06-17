@@ -361,39 +361,41 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
     try {
       // Prepare the data to send to the backend
-      const billOfMaterialsData = {
-        vehicleDetails: {
-          vehicleId: selectedVehicleDetails.vehicleId,
-          manufacturerName: selectedVehicleDetails.manufacturerName,
-          modelName: selectedVehicleDetails.modelName,
-          typeEngineName: selectedVehicleDetails.typeEngineName,
-          powerPs: selectedVehicleDetails.powerPs,
-          fuelType: selectedVehicleDetails.fuelType,
-          bodyType: selectedVehicleDetails.bodyType
-        },
-        parts: partsData.map(part => ({
-          categoryId: part.categoryId,
-          categoryName: part.categoryName,
-          fullPath: part.fullPath,
-          level: part.level
-        })),
-        categories: categoryData.map(category => ({
-          categoryId: category.categoryId,
-          categoryName: category.categoryName,
-          fullPath: category.fullPath,
-          level: category.level,
-          hasChildren: category.hasChildren
-        })),
-        metadata: {
-          totalParts: partsData.length,
-          totalCategories: categoryData.length,
-          categoryFilter: formData.categoryFilter,
-          filterDescription: formData.categoryFilter === 'all'
-            ? 'Complete Vehicle'
-            : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category',
-          processedAt: new Date().toISOString()
-        }
-      };
+        const billOfMaterialsData = {
+          vehicleDetails: {
+            vehicleId: selectedVehicleDetails.vehicleId,
+            manufacturerId: formData.vehicleId, // Add this line
+            manufacturerName: selectedVehicleDetails.manufacturerName,
+            modelName: selectedVehicleDetails.modelName,
+            typeEngineName: selectedVehicleDetails.typeEngineName,
+            powerPs: selectedVehicleDetails.powerPs,
+            fuelType: selectedVehicleDetails.fuelType,
+            bodyType: selectedVehicleDetails.bodyType
+          },
+          parts: partsData.map(part => ({
+            categoryId: part.categoryId,
+            categoryName: part.categoryName,
+            fullPath: part.fullPath,
+            level: part.level
+          })),
+          categories: categoryData.map(category => ({
+            categoryId: category.categoryId,
+            categoryName: category.categoryName,
+            fullPath: category.fullPath,
+            level: category.level,
+            hasChildren: category.hasChildren
+          })),
+          metadata: {
+            manufacturerId: formData.vehicleId,
+            totalParts: partsData.length,
+            totalCategories: categoryData.length,
+            categoryFilter: formData.categoryFilter,
+            filterDescription: formData.categoryFilter === 'all'
+              ? 'Complete Vehicle'
+              : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category',
+            processedAt: new Date().toISOString()
+          }
+        };
 
       console.log('Sending to AI backend:', billOfMaterialsData);
 
