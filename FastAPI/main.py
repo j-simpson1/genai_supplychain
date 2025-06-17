@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 from data.auto_parts.transform import transform_data_articles_list
 from data.auto_parts.load import insert_article_data_into_neo4j
-from data.auto_parts.tecdoc import get_articles_list, fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list
+from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list
 
 app = FastAPI()
 
@@ -84,15 +84,7 @@ def get_driver(uri, user, password):
     return GraphDatabase.driver(uri, auth=(user, password))
 
 def main():
-    driver = get_driver(URI, USER, PASSWORD)
-
-    # data = fetch_categories_data("140099", "111")
-    # nodes, edges = parse_categories(data)
-    # load_into_neo4j(nodes, edges)
-
-    article_list = get_articles_list("0 986 495 169")
-    transformed_article_list = transform_data_articles_list(article_list)
-    insert_article_data_into_neo4j(driver, transformed_article_list)
+    pass
 
 
 if __name__ == "__main__":
