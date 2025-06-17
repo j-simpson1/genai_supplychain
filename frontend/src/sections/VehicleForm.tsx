@@ -22,11 +22,15 @@ import {
   TableRow,
   TablePagination,
   Tabs,
-  Tab
+  Tab,
+  CircularProgress,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem } from '@mui/x-tree-view/TreeItem';
 import { styled } from '@mui/material/styles';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 // Custom styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -74,6 +78,29 @@ const StyledButton = styled(Button)(({ theme }) => ({
     boxShadow: '0 8px 12px -1px rgba(0, 0, 0, 0.15)',
   },
   transition: 'all 0.2s ease',
+}));
+
+const AIButton = styled(Button)(({ theme }) => ({
+  borderRadius: 12,
+  padding: theme.spacing(2, 4),
+  fontSize: '16px',
+  fontWeight: 600,
+  textTransform: 'none',
+  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  color: 'white',
+  boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+  '&:hover': {
+    background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+    transform: 'translateY(-2px)',
+    boxShadow: '0 8px 20px rgba(102, 126, 234, 0.6)',
+  },
+  '&:disabled': {
+    background: '#e5e7eb',
+    color: '#9ca3af',
+    boxShadow: 'none',
+    transform: 'none',
+  },
+  transition: 'all 0.3s ease',
 }));
 
 const StyledTreeView = styled(SimpleTreeView)(({ theme }) => ({
@@ -182,6 +209,12 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
   // Tab state
   const [tabValue, setTabValue] = useState(0);
+
+  // AI Processing state
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [aiProcessingResult, setAiProcessingResult] = useState<any>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [showAiSnackbar, setShowAiSnackbar] = useState(false);
 
   const vehicleTypes = [
     { value: 'sedan', label: 'Sedan' },
@@ -312,6 +345,88 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }
 
     return {};
+  };
+
+  // NEW: AI Processing function
+  const handleProcessWithAI = async () => {
+    if (!selectedVehicleDetails || partsData.length === 0) {
+      setAiError('No bill of materials data available to process');
+      setShowAiSnackbar(true);
+      return;
+    }
+
+    setIsProcessingAI(true);
+    setAiError(null);
+    setAiProcessingResult(null);
+
+    try {
+      // Prepare the data to send to the backend
+      const billOfMaterialsData = {
+        vehicleDetails: {
+          vehicleId: selectedVehicleDetails.vehicleId,
+          manufacturerName: selectedVehicleDetails.manufacturerName,
+          modelName: selectedVehicleDetails.modelName,
+          typeEngineName: selectedVehicleDetails.typeEngineName,
+          powerPs: selectedVehicleDetails.powerPs,
+          fuelType: selectedVehicleDetails.fuelType,
+          bodyType: selectedVehicleDetails.bodyType
+        },
+        parts: partsData.map(part => ({
+          categoryId: part.categoryId,
+          categoryName: part.categoryName,
+          fullPath: part.fullPath,
+          level: part.level
+        })),
+        categories: categoryData.map(category => ({
+          categoryId: category.categoryId,
+          categoryName: category.categoryName,
+          fullPath: category.fullPath,
+          level: category.level,
+          hasChildren: category.hasChildren
+        })),
+        metadata: {
+          totalParts: partsData.length,
+          totalCategories: categoryData.length,
+          categoryFilter: formData.categoryFilter,
+          filterDescription: formData.categoryFilter === 'all'
+            ? 'Complete Vehicle'
+            : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category',
+          processedAt: new Date().toISOString()
+        }
+      };
+
+      console.log('Sending to AI backend:', billOfMaterialsData);
+
+      // Send POST request to FastAPI backend
+      const response = await fetch('http://127.0.0.1:8000/ai/process-bill-of-materials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(billOfMaterialsData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error occurred' }));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('AI Processing Result:', result);
+
+      setAiProcessingResult(result);
+      setShowAiSnackbar(true);
+
+      // You can also navigate to a results page or update the UI to show the results
+      // navigate('/ai-results', { state: { result, originalData: billOfMaterialsData } });
+
+    } catch (error) {
+      console.error('Error processing with AI:', error);
+      setAiError(error.message || 'Failed to process bill of materials with AI');
+      setShowAiSnackbar(true);
+    } finally {
+      setIsProcessingAI(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -458,6 +573,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     setAllCategoryData([]);
     setAllPartsData([]);
     setPage(0);
+    // Clear AI results when clearing table
+    setAiProcessingResult(null);
+    setAiError(null);
   };
 
   const handleNext = () => {
@@ -469,7 +587,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         categoryData: categoryData,
         allPartsData: allPartsData,
         allCategoryData: allCategoryData,
-        selectedCategoryFilter: formData.categoryFilter
+        selectedCategoryFilter: formData.categoryFilter,
+        aiProcessingResult: aiProcessingResult // Include AI results in navigation
       }
     });
   };
@@ -732,10 +851,56 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 </Typography>
               )}
             </Box>
-            <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
-              Clear Bill of Materials
-            </StyledButton>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* AI Processing Button */}
+              <AIButton
+                variant="contained"
+                onClick={handleProcessWithAI}
+                disabled={isProcessingAI || !isBillOfMaterialsPopulated}
+                startIcon={
+                  isProcessingAI ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    <SmartToyIcon />
+                  )
+                }
+                sx={{ minWidth: 200 }}
+              >
+                {isProcessingAI ? 'Processing with AI...' : 'Process Parts with AI'}
+              </AIButton>
+
+              <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
+                Clear Bill of Materials
+              </StyledButton>
+            </Box>
           </Box>
+
+          {/* AI Processing Results */}
+          {aiProcessingResult && (
+            <Box sx={{
+              backgroundColor: '#f0f9ff',
+              borderRadius: 2,
+              p: 3,
+              mb: 3,
+              border: '1px solid #0ea5e9',
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#0369a1', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SmartToyIcon color="primary" />
+                AI Processing Results
+              </Typography>
+              <Box sx={{
+                backgroundColor: 'white',
+                borderRadius: 1,
+                p: 2,
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                maxHeight: '200px',
+                overflow: 'auto'
+              }}>
+                <pre>{JSON.stringify(aiProcessingResult, null, 2)}</pre>
+              </Box>
+            </Box>
+          )}
 
           {/* Vehicle Information */}
           <Box sx={{
@@ -909,6 +1074,22 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               </StyledButton>
             </Box>
           )}
+
+      {/* Snackbar for AI Processing notifications */}
+      <Snackbar
+        open={showAiSnackbar}
+        autoHideDuration={6000}
+        onClose={() => setShowAiSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setShowAiSnackbar(false)}
+          severity={aiError ? 'error' : 'success'}
+          sx={{ width: '100%' }}
+        >
+          {aiError || 'Bill of Materials processed successfully with AI!'}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

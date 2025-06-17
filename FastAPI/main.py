@@ -1,6 +1,10 @@
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Dict, Any
+import datetime
+import pandas as pd
 
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
@@ -14,6 +18,34 @@ app = FastAPI()
 class Item(BaseModel):
     text: str = None
     is_done: bool = False
+
+class VehicleDetails(BaseModel):
+    vehicleId: int
+    manufacturerName: str
+    modelName: str
+    typeEngineName: str
+    powerPs: str
+    fuelType: str
+    bodyType: str
+
+class PartItem(BaseModel):
+    categoryId: str
+    categoryName: str
+    fullPath: str
+    level: int
+
+class CategoryItem(BaseModel):
+    categoryId: str
+    categoryName: str
+    fullPath: str
+    level: int
+    hasChildren: bool
+
+class BillOfMaterialsRequest(BaseModel):
+    vehicleDetails: VehicleDetails
+    parts: List[PartItem]
+    categories: List[CategoryItem]
+    metadata: Dict[str, Any]
 
 items = []
 
@@ -51,6 +83,55 @@ def retrieve_category_v3(vehicleId: int, manufacturerId: int):
 @app.get("/manufacturers/models/engine_type/category_v3/article_list")
 def retrieve_article_list(manufacturerId: int, vehicleId: int, productGroupId: int):
     return get_article_list(manufacturerId, vehicleId, productGroupId)
+
+
+@app.post("/ai/process-bill-of-materials")
+async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
+    try:
+        print("Received request:")
+        print(f"Vehicle Details: {request.vehicleDetails.dict()}")
+        print(f"Number of parts: {len(request.parts)}")
+
+        parts_df = pd.DataFrame([part.dict() for part in request.parts])
+
+        print(parts_df)
+
+        vehicle_id = request.vehicleDetails.vehicleId
+
+        print("Metadata", request.metadata)
+
+        for category_id in parts_df['categoryId']:
+            get_article_list('111', vehicle_id, category_id)
+
+        # Your AI processing logic here
+        # For example, you might:
+        # 1. Analyze the parts for compatibility
+        # 2. Generate recommendations
+        # 3. Predict maintenance schedules
+        # 4. Optimize part configurations
+
+        # Print the received information
+
+
+        # Example AI processing result
+        ai_result = {
+            "status": "success",
+            "vehicle_analysis": {
+                "total_parts_analyzed": len(request.parts),
+            },
+            "ai_recommendations": [
+                "Consider upgrading brake pads based on performance requirements",
+                "Engine components show optimal configuration for fuel efficiency",
+                "Recommended service interval: 12 months or 15,000 km"
+            ],
+            "processing_timestamp": datetime.datetime.now().isoformat(),
+            "processing_duration_ms": 1500
+        }
+
+        return ai_result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
 
 # Examples
 
