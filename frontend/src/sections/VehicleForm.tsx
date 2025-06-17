@@ -141,6 +141,11 @@ interface PartItem {
   level: number;
 }
 
+interface CategoryOption {
+  id: string;
+  name: string;
+}
+
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -149,6 +154,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     model: '',
     modelId: '',
     type: '',
+    categoryFilter: 'all', // New field for category filter
   });
 
   const [models, setModels] = useState<{ modelId: number, modelName: string }[]>([]);
@@ -159,10 +165,15 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [loadingEngines, setLoadingEngines] = useState(false);
   const [engineError, setEngineError] = useState<string | null>(null);
 
+  // New state for available categories
+  const [availableCategories, setAvailableCategories] = useState<CategoryOption[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
   // Table state
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [partsData, setPartsData] = useState<PartItem[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [allCategoryData, setAllCategoryData] = useState<any[]>([]); // Store all categories
+  const [allPartsData, setAllPartsData] = useState<PartItem[]>([]); // Store all parts
   const [selectedVehicleDetails, setSelectedVehicleDetails] = useState<any>(null);
 
   // Table pagination
@@ -228,6 +239,32 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }
   }, [formData.vehicleId, formData.modelId]);
 
+  // New effect to load available categories when engine type is selected
+  useEffect(() => {
+    if (formData.vehicleId && formData.type && !selectedVehicleDetails) {
+      const selectedEngine = engineOptions.find(engine => engine.typeEngineName === formData.type);
+      if (selectedEngine) {
+        setLoadingCategories(true);
+
+        fetch(`http://127.0.0.1:8000/manufacturers/models/engine_type/category_v3?vehicleId=${selectedEngine.vehicleId}&manufacturerId=${formData.vehicleId}`)
+          .then(res => res.json())
+          .then(data => {
+            const categories = data.categories || data;
+            const level1Categories: CategoryOption[] = Object.entries(categories).map(([id, category]: [string, any]) => ({
+              id: id,
+              name: category.text
+            }));
+            setAvailableCategories(level1Categories);
+          })
+          .catch(error => {
+            console.error('Error fetching categories:', error);
+            setAvailableCategories([]);
+          })
+          .finally(() => setLoadingCategories(false));
+      }
+    }
+  }, [formData.vehicleId, formData.type, engineOptions, selectedVehicleDetails]);
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setFormData(prev => ({
@@ -259,6 +296,22 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     });
 
     return parts;
+  };
+
+  // Filter categories based on selected category filter
+  const filterCategoriesBySelection = (categories, categoryFilter) => {
+    if (categoryFilter === 'all') {
+      return categories;
+    }
+
+    // Find the specific category
+    const targetCategory = Object.entries(categories).find(([id, category]: [string, any]) => id === categoryFilter);
+    if (targetCategory) {
+      const [id, category] = targetCategory;
+      return { [id]: category };
+    }
+
+    return {};
   };
 
   const handleSubmit = async (event) => {
@@ -293,6 +346,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       }
 
       const categoryResult = await categoryResponse.json();
+      const allCategories = categoryResult.categories || categoryResult;
+
+      // Filter categories based on selection
+      const filteredCategories = filterCategoriesBySelection(allCategories, formData.categoryFilter);
 
       // Process the hierarchical category data for TreeView
       const processCategories = (categories, parentPath = '') => {
@@ -321,18 +378,30 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         return treeData;
       };
 
-      const treeData = processCategories(categoryResult.categories || categoryResult);
-      setCategoryData(treeData);
+      // Store all data for reference
+      const allTreeData = processCategories(allCategories);
+      const allParts = extractParts(allCategories);
+      setAllCategoryData(allTreeData);
+      setAllPartsData(allParts);
 
-      // Extract parts for the table
-      const parts = extractParts(categoryResult.categories || categoryResult);
-      setPartsData(parts);
+      // Set filtered data for display
+      const filteredTreeData = processCategories(filteredCategories);
+      const filteredParts = extractParts(filteredCategories);
+      setCategoryData(filteredTreeData);
+      setPartsData(filteredParts);
 
       console.log('Form submitted:', formData);
       console.log('Vehicle details:', selectedEngine);
-      console.log('Categories fetched:', treeData.length);
-      console.log('Parts extracted:', parts.length);
-      alert(`Vehicle added with bill of materials tree structure`);
+      console.log('All categories fetched:', allTreeData.length);
+      console.log('Filtered categories:', filteredTreeData.length);
+      console.log('All parts extracted:', allParts.length);
+      console.log('Filtered parts:', filteredParts.length);
+
+      const filterMessage = formData.categoryFilter === 'all'
+        ? 'all categories'
+        : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'selected category';
+
+      alert(`Vehicle added with bill of materials for ${filterMessage}`);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -342,22 +411,52 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }
   };
 
+  // Handle category filter change
+  const handleCategoryFilterChange = (event) => {
+    const newCategoryFilter = event.target.value;
+    setFormData(prev => ({
+      ...prev,
+      categoryFilter: newCategoryFilter
+    }));
+
+    // If vehicle is already loaded, update the displayed data
+    if (selectedVehicleDetails && allCategoryData.length > 0) {
+      if (newCategoryFilter === 'all') {
+        setCategoryData(allCategoryData);
+        setPartsData(allPartsData);
+      } else {
+        // Filter the stored data
+        const filteredTreeData = allCategoryData.filter(category => category.categoryId === newCategoryFilter);
+        const filteredParts = allPartsData.filter(part =>
+          part.fullPath.startsWith(availableCategories.find(cat => cat.id === newCategoryFilter)?.name || '')
+        );
+        setCategoryData(filteredTreeData);
+        setPartsData(filteredParts);
+      }
+      setPage(0); // Reset pagination
+    }
+  };
+
   const handleReset = () => {
     setFormData({
       vehicle: '',
       vehicleId: '',
       model: '',
       modelId: '',
-      type: ''
+      type: '',
+      categoryFilter: 'all'
     });
     setModels([]);
     setEngineOptions([]);
+    setAvailableCategories([]);
   };
 
   const handleClearTable = () => {
     setSelectedVehicleDetails(null);
     setCategoryData([]);
     setPartsData([]);
+    setAllCategoryData([]);
+    setAllPartsData([]);
     setPage(0);
   };
 
@@ -367,7 +466,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       state: {
         vehicleDetails: selectedVehicleDetails,
         partsData: partsData,
-        categoryData: categoryData
+        categoryData: categoryData,
+        allPartsData: allPartsData,
+        allCategoryData: allCategoryData,
+        selectedCategoryFilter: formData.categoryFilter
       }
     });
   };
@@ -477,8 +579,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                   ...prev,
                   vehicleId: newValue?.id || '',
                   vehicle: newValue?.label || '',
-                  model: ''
+                  model: '',
+                  categoryFilter: 'all'
                 }));
+                setAvailableCategories([]);
               }}
               disableClearable
               renderOption={(props, option) => (
@@ -503,8 +607,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                   setFormData(prev => ({
                     ...prev,
                     model: selectedModel?.modelName || '',
-                    modelId: selectedModel?.modelId || ''
+                    modelId: selectedModel?.modelId || '',
+                    categoryFilter: 'all'
                   }));
+                  setAvailableCategories([]);
                 }}
               >
                 {loadingModels ? (
@@ -531,7 +637,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               name="type"
               value={formData.type}
               label="Engine Type"
-              onChange={handleInputChange}
+              onChange={(e) => {
+                setFormData(prev => ({
+                  ...prev,
+                  type: e.target.value,
+                  categoryFilter: 'all'
+                }));
+                setAvailableCategories([]);
+              }}
             >
               {loadingEngines ? (
                 <MenuItem value="" disabled>Loading engine types...</MenuItem>
@@ -543,6 +656,46 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 engineOptions.map((engine, index) => (
                   <MenuItem key={index} value={engine.typeEngineName}>
                     {engine.typeEngineName} — {engine.powerPs} PS, {engine.fuelType}, {engine.bodyType}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </StyledFormControl>
+
+          {/* New Category Filter Dropdown */}
+          <StyledFormControl fullWidth disabled={!formData.type || selectedVehicleDetails !== null}>
+            <InputLabel id="category-filter-label">Parts Category</InputLabel>
+            <Select
+              labelId="category-filter-label"
+              id="category-filter-select"
+              name="categoryFilter"
+              value={formData.categoryFilter}
+              label="Parts Category"
+              onChange={handleCategoryFilterChange}
+            >
+              <MenuItem value="all">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontWeight: 600 }}>Complete Vehicle</Typography>
+                  <Chip label="All Parts" size="small" color="primary" variant="outlined" />
+                </Box>
+              </MenuItem>
+              {loadingCategories ? (
+                <MenuItem value="" disabled>Loading categories...</MenuItem>
+              ) : availableCategories.length === 0 ? (
+                <MenuItem value="" disabled>Select an engine type to load categories</MenuItem>
+              ) : (
+                availableCategories.map((category) => (
+                  <MenuItem key={category.id} value={category.id}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography>{category.name}</Typography>
+                      <Chip
+                        label={category.id}
+                        size="small"
+                        variant="filled"
+                        color="default"
+                        sx={{ fontSize: '0.7rem', height: '20px' }}
+                      />
+                    </Box>
                   </MenuItem>
                 ))
               )}
@@ -569,9 +722,16 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       {selectedVehicleDetails && (
         <StyledTablePaper elevation={3}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-            <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
-              Bill of Materials
-            </Typography>
+            <Box>
+              <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
+                Bill of Materials
+              </Typography>
+              {formData.categoryFilter !== 'all' && (
+                <Typography variant="body2" sx={{ ml: 1.5, mt: 0.5, color: '#6b7280' }}>
+                  Filtered by: {availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category'}
+                </Typography>
+              )}
+            </Box>
             <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
               Clear Bill of Materials
             </StyledButton>
