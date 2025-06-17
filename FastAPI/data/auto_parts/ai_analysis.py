@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import pandas as pd
 
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
@@ -71,3 +72,66 @@ Here is the supplier list:
             "first_choices": [],
             "second_choices": []
         }
+
+
+
+def generate_price_estimation(df: pd.DataFrame):
+    client = OpenAI(api_key=openai_key)
+
+    try:
+        # Build a prompt list of part details
+        parts_prompt = ""
+        for _, row in df.iterrows():
+            parts_prompt += (
+                f"- Category: {row['categoryName']} | Supplier: {row['supplierName']} | "
+                f"Part Name: {row['articleProductName']} | Article No: {row['articleNo']}\n"
+            )
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an automotive parts pricing analyst. "
+                    "Based on historical pricing trends, supplier tier, and part type, estimate realistic wholesale prices for each part below. "
+                    "Do not speculate beyond the data given. Assume standard EU pricing levels. Return the result in JSON format as a list of objects."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"""
+Estimate the price (in GBP) for each of the following parts. Use the part type, supplier name, and any hints from the product name.
+
+Return in the following JSON format:
+
+[
+  {{
+    "articleNo": "XXX",
+    "estimatedPriceGBP": 12.34
+  }},
+  ...
+]
+
+Here is the part list:
+
+{parts_prompt}
+"""
+            }
+        ]
+
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=messages,
+            temperature=0.3
+        )
+
+        print("Raw response:")
+        print(response.choices[0].message.content)
+
+        return json.loads(response.choices[0].message.content)
+
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        return []
+    except Exception as e:
+        print(f"Error in generate_price_estimation: {e}")
+        return []

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers
-from data.auto_parts.ai_analysis import rank_suppliers
+from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation
 from services.article_selector import select_preferred_article
 
 from typing import List, Dict, Any
@@ -98,6 +98,11 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
         parts_df = pd.DataFrame([part.dict() for part in request.parts])
 
+        article_numbers = []
+        supplier_names = []
+        product_names = []
+        supplier_tiers = []
+
         manufacturer_id = request.metadata["manufacturerId"]
         manufacturer_name = request.vehicleDetails.manufacturerName
         vehicle_id = request.vehicleDetails.vehicleId
@@ -121,10 +126,24 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
                 for article in articles
             ]
 
-            print("selecting preferred_articles")
-            preferred_articles = select_preferred_article(extracted_articles, ranked_suppliers)
+            preferred_article, tier = select_preferred_article(extracted_articles, ranked_suppliers)
 
-            print(preferred_articles)
+            article_numbers.append(preferred_article.get('articleNo') if preferred_article else None)
+            supplier_names.append(preferred_article.get('supplierName') if preferred_article else None)
+            product_names.append(preferred_article.get('articleProductName') if preferred_article else None)
+            supplier_tiers.append(tier)
+
+        # Add columns to parts_df
+        parts_df['articleNo'] = article_numbers
+        parts_df['supplierName'] = supplier_names
+        parts_df['articleProductName'] = product_names
+        parts_df['supplierTier'] = supplier_tiers
+
+        price_estimattion = generate_price_estimation(parts_df)
+        print(price_estimattion)
+
+        print("Updated parts dataframe with selected articles:")
+        print(parts_df)
 
         # Your AI processing logic here
         # For example, you might:
