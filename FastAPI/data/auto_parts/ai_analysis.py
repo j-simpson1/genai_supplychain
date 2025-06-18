@@ -75,7 +75,7 @@ Here is the supplier list:
 
 
 
-def generate_price_estimation(df: pd.DataFrame):
+def generate_price_estimation_and_country(df: pd.DataFrame):
     client = OpenAI(api_key=openai_key)
 
     try:
@@ -91,22 +91,26 @@ def generate_price_estimation(df: pd.DataFrame):
             {
                 "role": "system",
                 "content": (
-                    "You are an automotive parts pricing analyst. "
-                    "Based on historical pricing trends, supplier tier, and part type, estimate realistic wholesale prices for each part below. "
-                    "Do not speculate beyond the data given. Assume standard EU pricing levels. Return the result in JSON format as a list of objects."
+                    "You are an expert automotive parts pricing and sourcing analyst. "
+                    "Using your knowledge of global OEM and aftermarket supply chains, estimate realistic wholesale prices for each part listed, "
+                    "and the most likely country of manufacture based on supplier, part type, and industry norms. "
+                    "Be concise and do not guess beyond typical patterns. "
+                    "Assume standard EU pricing for estimates. Return the result as a JSON list of objects."
                 )
             },
             {
                 "role": "user",
                 "content": f"""
-Estimate the price (in GBP) for each of the following parts. Use the part type, supplier name, and any hints from the product name.
+Estimate the **price (in GBP)** and most likely **country of manufacture** for each of the following parts. 
+Base your judgment on the part type, supplier name, and any clues from the product name or category.
 
-Return in the following JSON format:
+Return your answer in the following JSON format:
 
 [
   {{
     "articleNo": "XXX",
-    "estimatedPriceGBP": 12.34
+    "estimatedPriceGBP": 12.34,
+    "likelyManufacturingOrigin": "Germany"
   }},
   ...
 ]
@@ -135,5 +139,5 @@ Make sure to return a result for every part.
         print(f"JSON parsing error: {e}")
         return []
     except Exception as e:
-        print(f"Error in generate_price_estimation: {e}")
+        print(f"Error in generate_price_estimation_with_country: {e}")
         return []

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from neo4j import GraphDatabase
 
 from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers
-from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation
+from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from services.article_selector import select_preferred_article
 
 from typing import List, Dict, Any
@@ -139,11 +139,13 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
         parts_df['articleProductName'] = product_names
         parts_df['supplierTier'] = supplier_tiers
 
-        price_estimation = generate_price_estimation(parts_df)
+        price_country_estimation = generate_price_estimation_and_country(parts_df)
 
-        price_map = {item['articleNo']: item['estimatedPriceGBP'] for item in price_estimation}
+        price_map = {item['articleNo']: item['estimatedPriceGBP'] for item in price_country_estimation}
+        country_map = {item['articleNo']: item['likelyManufacturingOrigin'] for item in price_country_estimation}
 
         parts_df['estimatedPriceGBP'] = parts_df['articleNo'].map(price_map)
+        parts_df['likelyManufacturingOrigin'] = parts_df['articleNo'].map(country_map)
 
         print("Updated parts dataframe with parts and estimated prices:")
         print(parts_df)
