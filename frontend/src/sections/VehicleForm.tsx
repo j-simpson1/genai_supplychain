@@ -376,23 +376,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
   // Computed values
   const filteredPartsData = useMemo(() => {
-    if (!formData.manufacturingOrigin || !aiProcessingResult) {
-      return partsData;
-    }
-
-    // Filter based on AI processing results if available
-    if (aiProcessingResult && aiProcessingResult.parts_data) {
-      const filteredAIParts = aiProcessingResult.parts_data.filter(part =>
-        part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
-      );
-      // Map back to original part structure for display
-      return partsData.filter(part =>
-        filteredAIParts.some(aiPart => aiPart.categoryId === part.categoryId)
-      );
-    }
-
     return partsData;
-  }, [partsData, formData.manufacturingOrigin, aiProcessingResult]);
+  }, [partsData]);
 
   const paginatedParts = useMemo(
     () => filteredPartsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -548,10 +533,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       setPage(0);
     }
   }, [selectedVehicleDetails, allCategoryData, allPartsData, availableCategories]);
-
-  const handleManufacturingOriginChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, manufacturingOrigin: event.target.value }));
-  }, []);
 
   const handleProcessWithAI = useCallback(async () => {
     if (!selectedVehicleDetails || partsData.length === 0) {
@@ -1028,40 +1009,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             </Box>
           </Box>
 
-          {/* Manufacturing Origin Filter (only show after AI processing) */}
-          {aiProcessingResult && (
-            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
-              <StyledFormControl sx={{ minWidth: 250, mb: 0 }}>
-                <InputLabel id="origin-filter-label">Filter by Manufacturing Origin</InputLabel>
-                <Select
-                  labelId="origin-filter-label"
-                  id="origin-filter-select"
-                  name="manufacturingOrigin"
-                  value={formData.manufacturingOrigin}
-                  label="Filter by Manufacturing Origin"
-                  onChange={handleManufacturingOriginChange}
-                  size="small"
-                >
-                  {manufacturingOrigins.map((origin) => (
-                    <MenuItem key={origin.id} value={origin.id}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontWeight: origin.id === 'all' ? 600 : 400 }}>
-                          {origin.name}
-                        </Typography>
-                        {origin.id === 'all' && (
-                          <Chip label="All" size="small" color="primary" variant="outlined" />
-                        )}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </StyledFormControl>
-              <Typography variant="body2" sx={{ mt: 1, color: '#6b7280' }}>
-                Filter parts by their likely manufacturing origin (available after AI processing)
-              </Typography>
-            </Box>
-          )}
-
           {/* AI Processing Results */}
           {aiProcessingResult && (
             <Box sx={{
@@ -1156,10 +1103,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                       {/* If AI results are available, use the processed parts data */}
                       {aiProcessingResult ? (
                         aiProcessingResult.parts_data
-                          .filter(part =>
-                            formData.manufacturingOrigin === 'all' ||
-                            part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
-                          )
                           .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                           .map((part) => (
                             <TableRow key={part.categoryId} hover>
@@ -1238,13 +1181,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 <TablePagination
                   rowsPerPageOptions={[5, 10, 25, 50]}
                   component="div"
-                  count={aiProcessingResult ?
-                    aiProcessingResult.parts_data.filter(part =>
-                      !formData.manufacturingOrigin ||
-                      part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
-                    ).length :
-                    filteredPartsData.length
-                  }
+                  count={aiProcessingResult ? aiProcessingResult.parts_data.length : filteredPartsData.length}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={(e, newPage) => setPage(newPage)}
