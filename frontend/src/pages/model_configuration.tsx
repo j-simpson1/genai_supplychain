@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from "../components/Header";
 import { MainLayout } from "../layouts/MainLayout";
@@ -81,6 +81,25 @@ const ModelConfiguration = () => {
   const [dispatchCost, setDispatchCost] = useState('');
   const [alternativeSupplier1, setAlternativeSupplier1] = useState('');
   const [alternativeSupplier1Country, setAlternativeSupplier1Country] = useState('');
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+  const fetchSuppliers = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:8000/suppliers');
+      const data = await response.json();
+      setSuppliers(data);
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchSuppliers();
+}, []);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -418,12 +437,13 @@ const ModelConfiguration = () => {
                 value={alternativeSupplier1}
                 label="Alternative Supplier 1"
                 onChange={handleAlternativeSupplier1Change}
+                disabled={loading}
               >
-                <MenuItem value="bosch">Bosch</MenuItem>
-                <MenuItem value="denso">Denso</MenuItem>
-                <MenuItem value="zf_friedrichshafen">ZF Friedrichshafen</MenuItem>
-                <MenuItem value="continental">Continental</MenuItem>
-                <MenuItem value="magna">Magna International</MenuItem>
+                {suppliers.map((supplier) => (
+                  <MenuItem key={supplier.supId} value={supplier.supMatchCode}>
+                    {supplier.supBrand}
+                  </MenuItem>
+                ))}
               </Select>
             </StyledFormControl>
           </Box>
