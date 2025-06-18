@@ -31,6 +31,7 @@ import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem } from '@mui/x-tree-view/TreeItem';
 import { styled } from '@mui/material/styles';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import { getName, getNames, getCodes } from 'country-list';
 
 // Types
 interface VehicleData {
@@ -291,18 +292,22 @@ const fetchCategories = async (vehicleId: string, manufacturerId: string) => {
 
 const fetchCountries = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/countries`);
-    const data = await response.json();
+    // Get all country names and codes from country-list
+    const countryCodes = getCodes();
+    const countryNames = getNames();
 
-    // Transform the API response to match our expected format (without "All Origins")
-    const transformedCountries = data.countries.map((country: any) => ({
-      id: country.couCode.toLowerCase(),
-      name: country.countryName
+    // Transform into our required format
+    const transformedCountries = countryCodes.map((code, index) => ({
+      id: code.toLowerCase(),
+      name: countryNames[index]
     }));
+
+    // Sort alphabetically by name
+    transformedCountries.sort((a, b) => a.name.localeCompare(b.name));
 
     return transformedCountries;
   } catch (error) {
-    console.error('Error fetching countries:', error);
+    console.error('Error creating countries list:', error);
     // Return default countries without "All Origins"
     return DEFAULT_MANUFACTURING_ORIGINS.slice(1);
   }
