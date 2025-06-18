@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from neo4j import GraphDatabase
 
 from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers
 from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation
@@ -98,18 +99,17 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
         parts_df = pd.DataFrame([part.dict() for part in request.parts])
 
+        manufacturer_id = request.metadata["manufacturerId"]
+        manufacturer_name = request.vehicleDetails.manufacturerName
+        vehicle_id = request.vehicleDetails.vehicleId
+
         article_numbers = []
         supplier_names = []
         product_names = []
         supplier_tiers = []
 
-        manufacturer_id = request.metadata["manufacturerId"]
-        manufacturer_name = request.vehicleDetails.manufacturerName
-        vehicle_id = request.vehicleDetails.vehicleId
-
         suppliers = fetch_suppliers()
         shortened_suppliers = [supplier["supMatchCode"] for supplier in suppliers]
-
         ranked_suppliers = rank_suppliers(manufacturer_name, shortened_suppliers)
 
         for category_id in parts_df['categoryId']:
@@ -139,28 +139,21 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
         parts_df['articleProductName'] = product_names
         parts_df['supplierTier'] = supplier_tiers
 
-        price_estimattion = generate_price_estimation(parts_df)
-        print(price_estimattion)
+        price_estimation = generate_price_estimation(parts_df)
 
-        print("Updated parts dataframe with selected articles:")
+        price_map = {item['articleNo']: item['estimatedPriceGBP'] for item in price_estimation}
+
+        parts_df['estimatedPriceGBP'] = parts_df['articleNo'].map(price_map)
+
+        print("Updated parts dataframe with parts and estimated prices:")
         print(parts_df)
 
-        # Your AI processing logic here
-        # For example, you might:
-        # 1. Analyze the parts for compatibility
-        # 2. Generate recommendations
-        # 3. Predict maintenance schedules
-        # 4. Optimize part configurations
-
-        # Print the received information
-
-
-        # Example AI processing result
         ai_result = {
             "status": "success",
             "vehicle_analysis": {
                 "total_parts_analyzed": len(request.parts),
             },
+            "parts_data": parts_df.to_dict(orient="records"),  # Convert DataFrame to list of dictionaries
             "ai_recommendations": [
                 "Consider upgrading brake pads based on performance requirements",
                 "Engine components show optimal configuration for fuel efficiency",
