@@ -67,6 +67,7 @@ interface FormData {
   modelId: string;
   type: string;
   categoryFilter: string;
+  manufacturingOrigin: string;
 }
 
 interface EngineOption {
@@ -81,6 +82,26 @@ interface EngineOption {
 
 // Constants
 const API_BASE_URL = 'http://127.0.0.1:8000';
+
+// Default fallback origins if API fails
+const DEFAULT_MANUFACTURING_ORIGINS = [
+  { id: 'all', name: 'All Origins' },
+  { id: 'germany', name: 'Germany' },
+  { id: 'japan', name: 'Japan' },
+  { id: 'china', name: 'China' },
+  { id: 'south_korea', name: 'South Korea' },
+  { id: 'usa', name: 'United States' },
+  { id: 'italy', name: 'Italy' },
+  { id: 'france', name: 'France' },
+  { id: 'uk', name: 'United Kingdom' },
+  { id: 'india', name: 'India' },
+  { id: 'mexico', name: 'Mexico' },
+  { id: 'turkey', name: 'Turkey' },
+  { id: 'poland', name: 'Poland' },
+  { id: 'czech_republic', name: 'Czech Republic' },
+  { id: 'thailand', name: 'Thailand' },
+  { id: 'other', name: 'Other' }
+];
 
 // Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -268,6 +289,25 @@ const fetchCategories = async (vehicleId: string, manufacturerId: string) => {
   return data.categories || data;
 };
 
+const fetchCountries = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/countries`);
+    const data = await response.json();
+
+    // Transform the API response to match our expected format (without "All Origins")
+    const transformedCountries = data.countries.map((country: any) => ({
+      id: country.couCode.toLowerCase(),
+      name: country.countryName
+    }));
+
+    return transformedCountries;
+  } catch (error) {
+    console.error('Error fetching countries:', error);
+    // Return default countries without "All Origins"
+    return DEFAULT_MANUFACTURING_ORIGINS.slice(1);
+  }
+};
+
 const processWithAI = async (billOfMaterialsData: any) => {
   const response = await fetch(`${API_BASE_URL}/ai/process-bill-of-materials`, {
     method: 'POST',
@@ -297,12 +337,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     modelId: '',
     type: '',
     categoryFilter: 'all',
+    manufacturingOrigin: '',
   });
 
   // Data state
   const [models, setModels] = useState<{ modelId: number, modelName: string }[]>([]);
   const [engineOptions, setEngineOptions] = useState<EngineOption[]>([]);
   const [availableCategories, setAvailableCategories] = useState<CategoryOption[]>([]);
+  const [manufacturingOrigins, setManufacturingOrigins] = useState<{ id: string, name: string }[]>([]);
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [partsData, setPartsData] = useState<PartItem[]>([]);
   const [allCategoryData, setAllCategoryData] = useState<any[]>([]);
@@ -314,6 +356,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     models: false,
     engines: false,
     categories: false,
+    countries: false,
     ai: false
   });
 
@@ -332,9 +375,28 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [showAiSnackbar, setShowAiSnackbar] = useState(false);
 
   // Computed values
+  const filteredPartsData = useMemo(() => {
+    if (!formData.manufacturingOrigin || !aiProcessingResult) {
+      return partsData;
+    }
+
+    // Filter based on AI processing results if available
+    if (aiProcessingResult && aiProcessingResult.parts_data) {
+      const filteredAIParts = aiProcessingResult.parts_data.filter(part =>
+        part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
+      );
+      // Map back to original part structure for display
+      return partsData.filter(part =>
+        filteredAIParts.some(aiPart => aiPart.categoryId === part.categoryId)
+      );
+    }
+
+    return partsData;
+  }, [partsData, formData.manufacturingOrigin, aiProcessingResult]);
+
   const paginatedParts = useMemo(
-    () => partsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [partsData, page, rowsPerPage]
+    () => filteredPartsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filteredPartsData, page, rowsPerPage]
   );
 
   const isBillOfMaterialsPopulated = selectedVehicleDetails && (categoryData.length > 0 || partsData.length > 0);
@@ -345,9 +407,41 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   );
 
   const filterMessage = useMemo(() => {
-    if (formData.categoryFilter === 'all') return 'all categories';
-    return availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'selected category';
-  }, [formData.categoryFilter, availableCategories]);
+    const categoryMsg = formData.categoryFilter === 'all' ? 'all categories' :
+      availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'selected category';
+
+    const originMsg = !formData.manufacturingOrigin ? 'any origin' :
+      manufacturingOrigins.find(origin => origin.id === formData.manufacturingOrigin)?.name || 'selected origin';
+
+    return `${categoryMsg}, ${originMsg}`;
+  }, [formData.categoryFilter, formData.manufacturingOrigin, availableCategories, manufacturingOrigins]);
+
+  // Load countries on component mount
+  useEffect(() => {
+    const loadCountries = async () => {
+      setLoading(prev => ({ ...prev, countries: true }));
+      try {
+        const countries = await fetchCountries();
+        setManufacturingOrigins(countries);
+        // Set default to first country if none selected
+        if (!formData.manufacturingOrigin && countries.length > 0) {
+          setFormData(prev => ({ ...prev, manufacturingOrigin: countries[0].id }));
+        }
+      } catch (error) {
+        console.error('Error loading countries:', error);
+        const fallbackCountries = DEFAULT_MANUFACTURING_ORIGINS.slice(1);
+        setManufacturingOrigins(fallbackCountries);
+        // Set default to first country if none selected
+        if (!formData.manufacturingOrigin && fallbackCountries.length > 0) {
+          setFormData(prev => ({ ...prev, manufacturingOrigin: fallbackCountries[0].id }));
+        }
+      } finally {
+        setLoading(prev => ({ ...prev, countries: false }));
+      }
+    };
+
+    loadCountries();
+  }, []);
 
   // Load models when vehicle changes
   useEffect(() => {
@@ -424,6 +518,11 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     loadCategories();
   }, [formData.vehicleId, formData.type, selectedEngine, selectedVehicleDetails]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [formData.categoryFilter, formData.manufacturingOrigin]);
+
   // Handlers
   const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -449,6 +548,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       setPage(0);
     }
   }, [selectedVehicleDetails, allCategoryData, allPartsData, availableCategories]);
+
+  const handleManufacturingOriginChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, manufacturingOrigin: event.target.value }));
+  }, []);
 
   const handleProcessWithAI = useCallback(async () => {
     if (!selectedVehicleDetails || partsData.length === 0) {
@@ -491,6 +594,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           totalParts: partsData.length,
           totalCategories: categoryData.length,
           categoryFilter: formData.categoryFilter,
+          manufacturingOriginFilter: formData.manufacturingOrigin,
           filterDescription: filterMessage,
           processedAt: new Date().toISOString()
         }
@@ -565,7 +669,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       model: '',
       modelId: '',
       type: '',
-      categoryFilter: 'all'
+      categoryFilter: 'all',
+      manufacturingOrigin: 'all'
     });
     setModels([]);
     setEngineOptions([]);
@@ -573,6 +678,23 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   }, []);
 
   const handleClearTable = useCallback(() => {
+    // Reset form data
+    setFormData({
+      vehicle: '',
+      vehicleId: '',
+      model: '',
+      modelId: '',
+      type: '',
+      categoryFilter: 'all',
+      manufacturingOrigin: ''
+    });
+
+    // Clear dependent data
+    setModels([]);
+    setEngineOptions([]);
+    setAvailableCategories([]);
+
+    // Clear bill of materials data
     setSelectedVehicleDetails(null);
     setCategoryData([]);
     setPartsData([]);
@@ -587,15 +709,16 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     navigate('/model_configuration', {
       state: {
         vehicleDetails: selectedVehicleDetails,
-        partsData: partsData,
+        partsData: filteredPartsData,
         categoryData: categoryData,
         allPartsData: allPartsData,
         allCategoryData: allCategoryData,
         selectedCategoryFilter: formData.categoryFilter,
+        selectedManufacturingOrigin: formData.manufacturingOrigin,
         aiProcessingResult: aiProcessingResult
       }
     });
-  }, [navigate, selectedVehicleDetails, partsData, categoryData, allPartsData, allCategoryData, formData.categoryFilter, aiProcessingResult]);
+  }, [navigate, selectedVehicleDetails, filteredPartsData, categoryData, allPartsData, allCategoryData, formData.categoryFilter, formData.manufacturingOrigin, aiProcessingResult]);
 
   // Render functions
   const renderTreeItems = useCallback((items: any[]) => {
@@ -669,7 +792,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                   model: '',
                   modelId: '',
                   type: '',
-                  categoryFilter: 'all'
+                  categoryFilter: 'all',
+                  manufacturingOrigin: ''
                 }));
                 setAvailableCategories([]);
               }}
@@ -683,38 +807,53 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             />
           </StyledFormControl>
 
-          <StyledFormControl fullWidth required disabled={!formData.vehicleId || loading.models}>
-            <InputLabel id="model-label">Model</InputLabel>
-            <Select
-              labelId="model-label"
-              id="model-select"
-              name="model"
-              value={formData.model}
-              label="Model"
-              onChange={(e) => {
-                const selectedModel = models.find((m) => m.modelName === e.target.value);
+          <StyledFormControl fullWidth required>
+            <Autocomplete
+              options={models}
+              getOptionLabel={(option) => option.modelName}
+              isOptionEqualToValue={(option, value) => option.modelId === value.modelId}
+              value={models.find(m => m.modelName === formData.model) || null}
+              onChange={(event, newValue) => {
                 setFormData(prev => ({
                   ...prev,
-                  model: selectedModel?.modelName || '',
-                  modelId: selectedModel?.modelId.toString() || '',
+                  model: newValue?.modelName || '',
+                  modelId: newValue?.modelId.toString() || '',
                   type: '',
-                  categoryFilter: 'all'
+                  categoryFilter: 'all',
+                  manufacturingOrigin: 'all'
                 }));
                 setAvailableCategories([]);
               }}
-            >
-              {renderSelectMenuItems(
-                loading.models,
-                errors.models,
-                models,
-                'Select a brand to load models',
-                (model) => (
-                  <MenuItem key={model.modelId} value={model.modelName}>
-                    {model.modelName}
-                  </MenuItem>
-                )
+              disabled={!formData.vehicleId || loading.models}
+              loading={loading.models}
+              disableClearable
+              renderOption={(props, option) => (
+                <li {...props} key={option.modelId}>{option.modelName}</li>
               )}
-            </Select>
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Model"
+                  required
+                  error={!!errors.models}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loading.models ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              noOptionsText={
+                !formData.vehicleId ? 'Select a brand to load models' :
+                loading.models ? 'Loading models...' :
+                errors.models ? errors.models :
+                'No models found'
+              }
+            />
           </StyledFormControl>
 
           <StyledFormControl fullWidth required disabled={!formData.modelId || loading.engines}>
@@ -729,7 +868,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 setFormData(prev => ({
                   ...prev,
                   type: e.target.value,
-                  categoryFilter: 'all'
+                  categoryFilter: 'all',
+                  manufacturingOrigin: ''
                 }));
                 setAvailableCategories([]);
               }}
@@ -787,6 +927,47 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             </Select>
           </StyledFormControl>
 
+          <StyledFormControl fullWidth>
+            <Autocomplete
+              options={manufacturingOrigins}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={manufacturingOrigins.find(origin => origin.id === formData.manufacturingOrigin) || null}
+              onChange={(event, newValue) => {
+                setFormData(prev => ({
+                  ...prev,
+                  manufacturingOrigin: newValue?.id || ''
+                }));
+              }}
+              disabled={!formData.type || selectedVehicleDetails !== null}
+              loading={loading.countries}
+              disableClearable
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Typography sx={{ flexGrow: 1 }}>
+                    {option.name}
+                  </Typography>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Manufacturing Origin"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
+            />
+          </StyledFormControl>
+
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
             <StyledButton
               type="submit"
@@ -795,9 +976,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               disabled={loading.categories || selectedVehicleDetails !== null}
             >
               {loading.categories ? 'Loading Bill of Materials...' : selectedVehicleDetails ? 'Vehicle Already Added' : 'Add Vehicle'}
-            </StyledButton>
-            <StyledButton onClick={handleReset} variant="outlined" size="medium">
-              Reset Form
             </StyledButton>
           </Box>
         </Box>
@@ -811,11 +989,21 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               <Typography variant="h5" component="h3" sx={{ fontWeight: 700, color: '#1f2937', mt: 1.5, ml: 1.5, fontSize: '1.75rem' }}>
                 Bill of Materials
               </Typography>
-              {formData.categoryFilter !== 'all' && (
-                <Typography variant="body2" sx={{ ml: 1.5, mt: 0.5, color: '#6b7280' }}>
-                  Filtered by: {availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category'}
+              <Box sx={{ ml: 1.5, mt: 0.5 }}>
+                {formData.categoryFilter !== 'all' && (
+                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
+                    Category: {availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Selected Category'}
+                  </Typography>
+                )}
+                {formData.manufacturingOrigin && (
+                  <Typography variant="body2" sx={{ color: '#6b7280' }}>
+                    Origin: {manufacturingOrigins.find(origin => origin.id === formData.manufacturingOrigin)?.name || 'Selected Origin'}
+                  </Typography>
+                )}
+                <Typography variant="body2" sx={{ color: '#6b7280', mt: 0.5 }}>
+                  Showing {filteredPartsData.length} of {partsData.length} parts
                 </Typography>
-              )}
+              </Box>
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <AIButton
@@ -835,47 +1023,80 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               </AIButton>
 
               <StyledButton onClick={handleClearTable} variant="outlined" color="error" size="small">
-                Clear Bill of Materials
+                Reset Form & Clear Data
               </StyledButton>
             </Box>
           </Box>
 
+          {/* Manufacturing Origin Filter (only show after AI processing) */}
+          {aiProcessingResult && (
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <StyledFormControl sx={{ minWidth: 250, mb: 0 }}>
+                <InputLabel id="origin-filter-label">Filter by Manufacturing Origin</InputLabel>
+                <Select
+                  labelId="origin-filter-label"
+                  id="origin-filter-select"
+                  name="manufacturingOrigin"
+                  value={formData.manufacturingOrigin}
+                  label="Filter by Manufacturing Origin"
+                  onChange={handleManufacturingOriginChange}
+                  size="small"
+                >
+                  {manufacturingOrigins.map((origin) => (
+                    <MenuItem key={origin.id} value={origin.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography sx={{ fontWeight: origin.id === 'all' ? 600 : 400 }}>
+                          {origin.name}
+                        </Typography>
+                        {origin.id === 'all' && (
+                          <Chip label="All" size="small" color="primary" variant="outlined" />
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </StyledFormControl>
+              <Typography variant="body2" sx={{ mt: 1, color: '#6b7280' }}>
+                Filter parts by their likely manufacturing origin (available after AI processing)
+              </Typography>
+            </Box>
+          )}
+
           {/* AI Processing Results */}
-            {/* AI Processing Summary */}
-            {aiProcessingResult && (
-              <Box sx={{
-                backgroundColor: '#ecfdf5',
-                borderRadius: 2,
-                p: 2,
-                mt: 3,
-                mb: 3,
-                border: '1px solid #6ee7b7',
-              }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
-                      AI Analysis Summary
-                    </Typography>
-                    <Typography variant="body2">
-                      Parts Analyzed: {aiProcessingResult.vehicle_analysis.total_parts_analyzed}
-                    </Typography>
-                    <Typography variant="body2">
-                      Processing Time: {aiProcessingResult.processing_duration_ms}ms
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
-                      Recommendations
-                    </Typography>
-                    <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-                      {aiProcessingResult.ai_recommendations.map((rec, idx) => (
-                        <li key={idx}><Typography variant="body2">{rec}</Typography></li>
-                      ))}
-                    </ul>
-                  </Grid>
+          {aiProcessingResult && (
+            <Box sx={{
+              backgroundColor: '#ecfdf5',
+              borderRadius: 2,
+              p: 2,
+              mt: 3,
+              mb: 3,
+              border: '1px solid #6ee7b7',
+            }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
+                    AI Analysis Summary
+                  </Typography>
+                  <Typography variant="body2">
+                    Parts Analyzed: {aiProcessingResult.vehicle_analysis.total_parts_analyzed}
+                  </Typography>
+                  <Typography variant="body2">
+                    Processing Time: {aiProcessingResult.processing_duration_ms}ms
+                  </Typography>
                 </Grid>
-              </Box>
-            )}
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
+                    Recommendations
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: '1rem' }}>
+                    {aiProcessingResult.ai_recommendations.map((rec, idx) => (
+                      <li key={idx}><Typography variant="body2">{rec}</Typography></li>
+                    ))}
+                  </ul>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
 
           {/* Vehicle Information */}
           <Box sx={{
@@ -909,127 +1130,139 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           {/* Tabs for Parts Table and Tree View */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} aria-label="bill of materials view">
-              <Tab label={`Parts Table (${partsData.length} parts)`} />
+              <Tab label={`Parts Table (${filteredPartsData.length} parts)`} />
               <Tab label={`Tree View (${getTotalItemCount(categoryData)} total items)`} />
             </Tabs>
           </Box>
 
           {/* Tab Content */}
-            {tabValue === 0 && (
-              // Parts Table
-              partsData.length > 0 ? (
-                <>
-                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
-                      <Table stickyHeader>
-                        <StyledTableHead>
-                          <TableRow>
-                            <TableCell>Part ID</TableCell>
-                            <TableCell>Part Name</TableCell>
-                            <TableCell>Article No.</TableCell>
-                            <TableCell>Supplier</TableCell>
-                            <TableCell>Price (GBP)</TableCell>
-                            <TableCell>Origin</TableCell>
-                          </TableRow>
-                        </StyledTableHead>
-                        <TableBody>
-                          {/* If AI results are available, use the processed parts data */}
-                          {aiProcessingResult ? (
-                            aiProcessingResult.parts_data.map((part) => (
-                              <TableRow key={part.categoryId} hover>
-                                <TableCell>
+          {tabValue === 0 && (
+            // Parts Table
+            filteredPartsData.length > 0 ? (
+              <>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+                  <Table stickyHeader>
+                    <StyledTableHead>
+                      <TableRow>
+                        <TableCell>Part ID</TableCell>
+                        <TableCell>Part Name</TableCell>
+                        <TableCell>Article No.</TableCell>
+                        <TableCell>Supplier</TableCell>
+                        <TableCell>Price (GBP)</TableCell>
+                        <TableCell>Origin</TableCell>
+                      </TableRow>
+                    </StyledTableHead>
+                    <TableBody>
+                      {/* If AI results are available, use the processed parts data */}
+                      {aiProcessingResult ? (
+                        aiProcessingResult.parts_data
+                          .filter(part =>
+                            formData.manufacturingOrigin === 'all' ||
+                            part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
+                          )
+                          .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                          .map((part) => (
+                            <TableRow key={part.categoryId} hover>
+                              <TableCell>
+                                <Chip
+                                  label={part.categoryId}
+                                  size="small"
+                                  variant="filled"
+                                  color="default"
+                                  sx={{ fontSize: '0.75rem' }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {part.categoryName}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                  {part.fullPath}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{part.articleNo || 'N/A'}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={part.supplierName || 'Unknown'}
+                                  size="small"
+                                  color={part.supplierTier === 'first_choice' ? 'success' :
+                                         part.supplierTier === 'second_choice' ? 'primary' : 'default'}
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell>£{part.estimatedPriceGBP?.toFixed(2) || 'N/A'}</TableCell>
+                              <TableCell>
+                                {part.likelyManufacturingOrigin ? (
                                   <Chip
-                                    label={part.categoryId}
+                                    label={part.likelyManufacturingOrigin}
                                     size="small"
-                                    variant="filled"
-                                    color="default"
-                                    sx={{ fontSize: '0.75rem' }}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                    {part.categoryName}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                                    {part.fullPath}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>{part.articleNo || 'N/A'}</TableCell>
-                                <TableCell>
-                                  <Chip
-                                    label={part.supplierName || 'Unknown'}
-                                    size="small"
-                                    color={part.supplierTier === 'first_choice' ? 'success' :
-                                           part.supplierTier === 'second_choice' ? 'primary' : 'default'}
                                     variant="outlined"
-                                  />
-                                </TableCell>
-                                <TableCell>£{part.estimatedPriceGBP?.toFixed(2) || 'N/A'}</TableCell>
-                                <TableCell>
-                                  {part.likelyManufacturingOrigin ? (
-                                    <Chip
-                                      label={part.likelyManufacturingOrigin}
-                                      size="small"
-                                      variant="outlined"
-                                      color="info"
-                                      sx={{ fontSize: '0.75rem' }}
-                                    />
-                                  ) : 'Unknown'}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          ) : (
-                            paginatedParts.map((part) => (
-                              <TableRow key={part.categoryId} hover>
-                                <TableCell>
-                                  <Chip
-                                    label={part.categoryId}
-                                    size="small"
-                                    variant="filled"
-                                    color="default"
+                                    color="info"
                                     sx={{ fontSize: '0.75rem' }}
                                   />
-                                </TableCell>
-                                <TableCell>
-                                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                    {part.categoryName}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                    {part.fullPath}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>-</TableCell>
-                                <TableCell>-</TableCell>
-                                <TableCell>-</TableCell>
-                                <TableCell>-</TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                                ) : 'Unknown'}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      ) : (
+                        paginatedParts.map((part) => (
+                          <TableRow key={part.categoryId} hover>
+                            <TableCell>
+                              <Chip
+                                label={part.categoryId}
+                                size="small"
+                                variant="filled"
+                                color="default"
+                                sx={{ fontSize: '0.75rem' }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {part.categoryName}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                                {part.fullPath}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-                  <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    component="div"
-                    count={aiProcessingResult ? aiProcessingResult.parts_data.length : partsData.length}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={(e, newPage) => setPage(newPage)}
-                    onRowsPerPageChange={(e) => {
-                      setRowsPerPage(parseInt(e.target.value, 10));
-                      setPage(0);
-                    }}
-                    sx={{ mt: 2 }}
-                  />
-                </>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    Loading parts data...
-                  </Typography>
-                </Box>
-              )
-            )}
+                <TablePagination
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  component="div"
+                  count={aiProcessingResult ?
+                    aiProcessingResult.parts_data.filter(part =>
+                      !formData.manufacturingOrigin ||
+                      part.likelyManufacturingOrigin?.toLowerCase() === formData.manufacturingOrigin.replace('_', ' ')
+                    ).length :
+                    filteredPartsData.length
+                  }
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  onPageChange={(e, newPage) => setPage(newPage)}
+                  onRowsPerPageChange={(e) => {
+                    setRowsPerPage(parseInt(e.target.value, 10));
+                    setPage(0);
+                  }}
+                  sx={{ mt: 2 }}
+                />
+              </>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body1" color="text.secondary">
+                  Loading parts data...
+                </Typography>
+              </Box>
+            )
+          )}
 
           {tabValue === 1 && (
             // Tree View

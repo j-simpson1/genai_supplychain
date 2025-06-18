@@ -133,6 +133,22 @@ def fetch_suppliers():
 
 	return response.json()
 
+def fetch_countries():
+
+	url = "https://tecdoc-catalog.p.rapidapi.com/countries/list"
+
+	load_dotenv()
+	headers = {
+		"x-rapidapi-key": os.getenv("RAPIDAPI_KEY"),
+		"x-rapidapi-host": "tecdoc-catalog.p.rapidapi.com"
+	}
+
+	response = requests.get(url, headers=headers)
+
+	return response.json()
+
+print(fetch_countries())
+
 # '100006': {
 # 	'text': 'Braking System',
 # 	'children': {

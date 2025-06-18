@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from neo4j import GraphDatabase
 
-from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers
+from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers, fetch_countries
 from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from services.article_selector import select_preferred_article
 
@@ -89,6 +89,9 @@ def retrieve_article_list(manufacturerId: int, vehicleId: int, productGroupId: i
 def retrieve_suppliers():
     return fetch_suppliers()
 
+@app.get("/countries")
+def retrieve_countries():
+    return fetch_countries()
 
 @app.post("/ai/process-bill-of-materials")
 async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
