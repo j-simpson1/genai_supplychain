@@ -551,6 +551,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     setAiProcessingResult(null);
 
     try {
+      const originName = manufacturingOrigins.find(origin =>
+        origin.id === formData.manufacturingOrigin
+      )?.name || 'Unknown';
+
       const billOfMaterialsData = {
         vehicleDetails: {
           vehicleId: selectedVehicleDetails.vehicleId,

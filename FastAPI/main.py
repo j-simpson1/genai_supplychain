@@ -28,6 +28,7 @@ class VehicleDetails(BaseModel):
     powerPs: str
     fuelType: str
     bodyType: str
+    manufacturingOrigin: str
 
 class PartItem(BaseModel):
     categoryId: str
@@ -105,6 +106,7 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
         manufacturer_id = request.metadata["manufacturerId"]
         manufacturer_name = request.vehicleDetails.manufacturerName
         vehicle_id = request.vehicleDetails.vehicleId
+        manufacturing_origin = request.vehicleDetails.manufacturingOrigin
 
         article_numbers = []
         supplier_names = []
@@ -113,7 +115,7 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
         suppliers = fetch_suppliers()
         shortened_suppliers = [supplier["supMatchCode"] for supplier in suppliers]
-        ranked_suppliers = rank_suppliers(manufacturer_name, shortened_suppliers)
+        ranked_suppliers = rank_suppliers(manufacturer_name, shortened_suppliers, manufacturing_origin)
 
         for category_id in parts_df['categoryId']:
             article_list = get_article_list(manufacturer_id, vehicle_id, category_id)
