@@ -50,7 +50,7 @@ Here is the supplier list:
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1-mini",
             messages=messages,
             temperature=0.2
         )
@@ -119,7 +119,7 @@ Here is the part list:
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1-mini",
             messages=messages,
             temperature=0.3
         )
