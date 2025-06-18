@@ -841,31 +841,41 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           </Box>
 
           {/* AI Processing Results */}
-          {aiProcessingResult && (
-            <Box sx={{
-              backgroundColor: '#f0f9ff',
-              borderRadius: 2,
-              p: 3,
-              mb: 3,
-              border: '1px solid #0ea5e9',
-            }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#0369a1', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <SmartToyIcon color="primary" />
-                AI Processing Results
-              </Typography>
+            {/* AI Processing Summary */}
+            {aiProcessingResult && (
               <Box sx={{
-                backgroundColor: 'white',
-                borderRadius: 1,
+                backgroundColor: '#ecfdf5',
+                borderRadius: 2,
                 p: 2,
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                maxHeight: '200px',
-                overflow: 'auto'
+                mt: 3,
+                mb: 3,
+                border: '1px solid #6ee7b7',
               }}>
-                <pre>{JSON.stringify(aiProcessingResult, null, 2)}</pre>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
+                      AI Analysis Summary
+                    </Typography>
+                    <Typography variant="body2">
+                      Parts Analyzed: {aiProcessingResult.vehicle_analysis.total_parts_analyzed}
+                    </Typography>
+                    <Typography variant="body2">
+                      Processing Time: {aiProcessingResult.processing_duration_ms}ms
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
+                      Recommendations
+                    </Typography>
+                    <ul style={{ margin: 0, paddingLeft: '1rem' }}>
+                      {aiProcessingResult.ai_recommendations.map((rec, idx) => (
+                        <li key={idx}><Typography variant="body2">{rec}</Typography></li>
+                      ))}
+                    </ul>
+                  </Grid>
+                </Grid>
               </Box>
-            </Box>
-          )}
+            )}
 
           {/* Vehicle Information */}
           <Box sx={{
@@ -905,69 +915,108 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           </Box>
 
           {/* Tab Content */}
-          {tabValue === 0 && (
-            // Parts Table
-            partsData.length > 0 ? (
-              <>
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
-                  <Table stickyHeader>
-                    <StyledTableHead>
-                      <TableRow>
-                        <TableCell>Part ID</TableCell>
-                        <TableCell>Part Name</TableCell>
-                        <TableCell>Category</TableCell>
-                      </TableRow>
-                    </StyledTableHead>
-                    <TableBody>
-                      {paginatedParts.map((part) => (
-                        <TableRow key={part.categoryId} hover>
-                          <TableCell>
-                            <Chip
-                              label={part.categoryId}
-                              size="small"
-                              variant="filled"
-                              color="default"
-                              sx={{ fontSize: '0.75rem' }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {part.categoryName}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                              {part.fullPath}
-                            </Typography>
-                          </TableCell>
+            {tabValue === 0 && (
+              // Parts Table
+              partsData.length > 0 ? (
+                <>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600 }}>
+                    <Table stickyHeader>
+                      <StyledTableHead>
+                        <TableRow>
+                          <TableCell>Part ID</TableCell>
+                          <TableCell>Part Name</TableCell>
+                          <TableCell>Article No.</TableCell>
+                          <TableCell>Supplier</TableCell>
+                          <TableCell>Price (GBP)</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </StyledTableHead>
+                      <TableBody>
+                        {/* If AI results are available, use the processed parts data */}
+                        {aiProcessingResult ? (
+                          aiProcessingResult.parts_data.map((part) => (
+                            <TableRow key={part.categoryId} hover>
+                              <TableCell>
+                                <Chip
+                                  label={part.categoryId}
+                                  size="small"
+                                  variant="filled"
+                                  color="default"
+                                  sx={{ fontSize: '0.75rem' }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {part.categoryName}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                  {part.fullPath}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{part.articleNo || 'N/A'}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={part.supplierName || 'Unknown'}
+                                  size="small"
+                                  color={part.supplierTier === 'first_choice' ? 'success' :
+                                         part.supplierTier === 'second_choice' ? 'primary' : 'default'}
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                              <TableCell>£{part.estimatedPriceGBP?.toFixed(2) || 'N/A'}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          paginatedParts.map((part) => (
+                            <TableRow key={part.categoryId} hover>
+                              <TableCell>
+                                <Chip
+                                  label={part.categoryId}
+                                  size="small"
+                                  variant="filled"
+                                  color="default"
+                                  sx={{ fontSize: '0.75rem' }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                  {part.categoryName}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                                  {part.fullPath}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>-</TableCell>
+                              <TableCell>-</TableCell>
+                              <TableCell>-</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
 
-                <TablePagination
-                  rowsPerPageOptions={[5, 10, 25, 50]}
-                  component="div"
-                  count={partsData.length}
-                  rowsPerPage={rowsPerPage}
-                  page={page}
-                  onPageChange={(e, newPage) => setPage(newPage)}
-                  onRowsPerPageChange={(e) => {
-                    setRowsPerPage(parseInt(e.target.value, 10));
-                    setPage(0);
-                  }}
-                  sx={{ mt: 2 }}
-                />
-              </>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" color="text.secondary">
-                  Loading parts data...
-                </Typography>
-              </Box>
-            )
-          )}
+                  <TablePagination
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    component="div"
+                    count={aiProcessingResult ? aiProcessingResult.parts_data.length : partsData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(e, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setRowsPerPage(parseInt(e.target.value, 10));
+                      setPage(0);
+                    }}
+                    sx={{ mt: 2 }}
+                  />
+                </>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    Loading parts data...
+                  </Typography>
+                </Box>
+              )
+            )}
 
           {tabValue === 1 && (
             // Tree View
