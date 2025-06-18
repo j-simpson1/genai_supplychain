@@ -76,7 +76,6 @@ const ModelConfiguration = () => {
   const [scenarioType, setScenarioType] = useState('');
   const [country, setCountry] = useState('');
   const [tariffRate, setTariffRate] = useState('');
-  const [manufacturerLocation, setManufacturerLocation] = useState('');
   const [inflationRate, setInflationRate] = useState('3');
   const [dispatchCost, setDispatchCost] = useState('');
   const [alternativeSupplier1, setAlternativeSupplier1] = useState('');
@@ -128,10 +127,6 @@ const ModelConfiguration = () => {
     }
   };
 
-  const handleManufacturerLocationChange = (event) => {
-    setManufacturerLocation(event.target.value);
-  };
-
   const handleInflationRateChange = (event) => {
     const value = event.target.value;
     // Only allow numbers and decimal point
@@ -161,22 +156,24 @@ const ModelConfiguration = () => {
   };
 
   const handleRunSimulation = () => {
-  navigate('/output', {
-    state: {
-      vehicleDetails,
-      partsData,
-      categoryData,
-      scenarioType,
-      country: country.toLowerCase(),
-      tariffRate,
-      manufacturerLocation,
-      inflationRate,
-      dispatchCost,
-      alternativeSupplier1,
-      alternativeSupplier1Country
-    }
-  });
-};
+    navigate('/output', {
+      state: {
+        vehicleDetails,
+        partsData,
+        categoryData,
+        scenarioType,
+        country: country.toLowerCase(),
+        tariffRate,
+        inflationRate,
+        dispatchCost,
+        alternativeSupplier1,
+        alternativeSupplier1Country,
+        selectedCategoryFilter: location.state?.selectedCategoryFilter,
+        selectedManufacturingOrigin: location.state?.selectedManufacturingOrigin,
+        aiProcessingResult: location.state?.aiProcessingResult
+      }
+    });
+  };
 
   // Check if data is available
   if (!vehicleDetails) {
