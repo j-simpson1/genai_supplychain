@@ -114,6 +114,8 @@ Return in the following JSON format:
 Here is the part list:
 
 {parts_prompt}
+
+Make sure to return a result for every part.
 """
             }
         ]
