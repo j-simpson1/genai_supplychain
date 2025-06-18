@@ -427,46 +427,46 @@ const ModelConfiguration = () => {
             Alternative Suppliers
           </Typography>
 
-          {/* Alternative Supplier 1 Dropdown */}
+          {/* Alternative Supplier 1 Autocomplete */}
           <Box sx={{ mb: 0 }}>
-            <StyledFormControl sx={{ width: 350 }}>
-              <InputLabel id="alternative-supplier-1-label">Alternative Supplier 1</InputLabel>
-              <Select
-                labelId="alternative-supplier-1-label"
-                id="alternative-supplier-1-select"
-                value={alternativeSupplier1}
-                label="Alternative Supplier 1"
-                onChange={handleAlternativeSupplier1Change}
-                disabled={loading}
-              >
-                {suppliers.map((supplier) => (
-                  <MenuItem key={supplier.supId} value={supplier.supMatchCode}>
-                    {supplier.supBrand}
-                  </MenuItem>
-                ))}
-              </Select>
-            </StyledFormControl>
+            <Autocomplete
+              id="alternative-supplier-1-autocomplete"
+              options={suppliers}
+              getOptionLabel={(option) => option.supBrand}
+              value={suppliers.find(supplier => supplier.supMatchCode === alternativeSupplier1) || null}
+              onChange={(event, newValue) => {
+                setAlternativeSupplier1(newValue ? newValue.supMatchCode : '');
+              }}
+              loading={loading}
+              renderInput={(params) => (
+                <StyledTextField
+                  {...params}
+                  label="Alternative Supplier 1"
+                  placeholder="Search for a supplier"
+                />
+              )}
+              sx={{ width: 350 }}
+            />
           </Box>
 
           {/* Alternative Supplier 1 Country Dropdown */}
           <Box sx={{ mb: 0 }}>
-            <StyledFormControl sx={{ width: 350 }}>
-              <InputLabel id="alternative-supplier-1-country-label">Alternative Supplier 1 Country</InputLabel>
-              <Select
-                labelId="alternative-supplier-1-country-label"
-                id="alternative-supplier-1-country-select"
-                value={alternativeSupplier1Country}
-                label="Alternative Supplier 1 Country"
-                onChange={handleAlternativeSupplier1CountryChange}
-              >
-                <MenuItem value="uk">United Kingdom</MenuItem>
-                <MenuItem value="usa">United States</MenuItem>
-                <MenuItem value="france">France</MenuItem>
-                <MenuItem value="germany">Germany</MenuItem>
-                <MenuItem value="japan">Japan</MenuItem>
-                <MenuItem value="china">China</MenuItem>
-              </Select>
-            </StyledFormControl>
+            <Autocomplete
+              id="alternative-supplier-1-country-autocomplete"
+              options={countryNames}
+              value={alternativeSupplier1Country}
+              onChange={(event, newValue) => {
+                setAlternativeSupplier1Country(newValue || '');
+              }}
+              renderInput={(params) => (
+                <StyledTextField
+                  {...params}
+                  label="Alternative Supplier 1 Country"
+                  placeholder="Search for a country"
+                />
+              )}
+              sx={{ width: 350 }}
+            />
           </Box>
         </StyledPaper>
 
