@@ -565,7 +565,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         powerPs: selectedVehicleDetails.powerPs,
         fuelType: selectedVehicleDetails.fuelType,
         bodyType: selectedVehicleDetails.bodyType,
-        manufacturingOrigin: formData.manufacturingOrigin, // Ensure this is included
+        manufacturingOrigin: formData.manufacturingOrigin,
       },
       parts: partsData.map(part => ({
         categoryId: part.categoryId,

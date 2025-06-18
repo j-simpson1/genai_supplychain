@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Header from "../components/Header";
 import { MainLayout } from "../layouts/MainLayout";
 import {
+  Autocomplete,
   Box,
   Typography,
   Paper,
@@ -22,6 +23,9 @@ import {
   TextField
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { getNames } from 'country-list';
+
+const countryNames = getNames();
 
 // Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -73,7 +77,7 @@ const ModelConfiguration = () => {
   const [country, setCountry] = useState('');
   const [tariffRate, setTariffRate] = useState('');
   const [manufacturerLocation, setManufacturerLocation] = useState('');
-  const [inflationRate, setInflationRate] = useState('');
+  const [inflationRate, setInflationRate] = useState('3');
   const [dispatchCost, setDispatchCost] = useState('');
   const [alternativeSupplier1, setAlternativeSupplier1] = useState('');
   const [alternativeSupplier1Country, setAlternativeSupplier1Country] = useState('');
@@ -144,7 +148,7 @@ const ModelConfiguration = () => {
       partsData,
       categoryData,
       scenarioType,
-      country,
+      country: country.toLowerCase(),
       tariffRate,
       manufacturerLocation,
       inflationRate,
@@ -324,20 +328,20 @@ const ModelConfiguration = () => {
             <>
               {/* Country Impacted Dropdown */}
               <Box sx={{ mb: 0 }}>
-                <StyledFormControl sx={{ width: 350 }}>
-                  <InputLabel id="country-impacted-label">Country Impacted</InputLabel>
-                  <Select
-                    labelId="country-impacted-label"
-                    id="country-impacted-select"
-                    value={country}
-                    label="Country Impacted"
-                    onChange={handleCountryChange}
-                  >
-                    <MenuItem value="usa">United States</MenuItem>
-                    <MenuItem value="uk">United Kingdom</MenuItem>
-                    <MenuItem value="france">France</MenuItem>
-                  </Select>
-                </StyledFormControl>
+                <Autocomplete
+                  id="country-impacted-autocomplete"
+                  options={countryNames}
+                  value={country}
+                  onChange={(event, newValue) => setCountry(newValue || '')}
+                  renderInput={(params) => (
+                    <StyledTextField
+                      {...params}
+                      label="Country Impacted"
+                      placeholder="Select or type a country"
+                    />
+                  )}
+                  sx={{ width: 350 }}
+                />
               </Box>
 
               {/* Tariff Rate Text Field */}
@@ -364,26 +368,6 @@ const ModelConfiguration = () => {
           <Typography variant="h6" gutterBottom fontWeight="bold" sx={{ mb: 3 }}>
             Model Parameters
           </Typography>
-
-          {/* Manufacturer location Dropdown */}
-          <Box sx={{ mb: 0 }}>
-            <StyledFormControl sx={{ width: 350 }}>
-              <InputLabel id="manufacturer-location-label">Manufacturer Location</InputLabel>
-              <Select
-                labelId="manufacturer-location-label"
-                id="manufacturer-location-select"
-                value={manufacturerLocation}
-                label="Manufacturer Location"
-                onChange={handleManufacturerLocationChange}
-              >
-                <MenuItem value="usa">United States</MenuItem>
-                <MenuItem value="uk">United Kingdom</MenuItem>
-                <MenuItem value="germany">Germany</MenuItem>
-                <MenuItem value="japan">Japan</MenuItem>
-                <MenuItem value="china">China</MenuItem>
-              </Select>
-            </StyledFormControl>
-          </Box>
 
           {/* Global Inflation Rate Text Field */}
           <Box sx={{ mb: 0 }}>
