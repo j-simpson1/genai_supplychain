@@ -555,40 +555,41 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         origin.id === formData.manufacturingOrigin
       )?.name || 'Unknown';
 
-      const billOfMaterialsData = {
-        vehicleDetails: {
-          vehicleId: selectedVehicleDetails.vehicleId,
-          manufacturerId: formData.vehicleId,
-          manufacturerName: selectedVehicleDetails.manufacturerName,
-          modelName: selectedVehicleDetails.modelName,
-          typeEngineName: selectedVehicleDetails.typeEngineName,
-          powerPs: selectedVehicleDetails.powerPs,
-          fuelType: selectedVehicleDetails.fuelType,
-          bodyType: selectedVehicleDetails.bodyType
-        },
-        parts: partsData.map(part => ({
-          categoryId: part.categoryId,
-          categoryName: part.categoryName,
-          fullPath: part.fullPath,
-          level: part.level
-        })),
-        categories: categoryData.map(category => ({
-          categoryId: category.categoryId,
-          categoryName: category.categoryName,
-          fullPath: category.fullPath,
-          level: category.level,
-          hasChildren: category.hasChildren
-        })),
-        metadata: {
-          manufacturerId: formData.vehicleId,
-          totalParts: partsData.length,
-          totalCategories: categoryData.length,
-          categoryFilter: formData.categoryFilter,
-          manufacturingOriginFilter: formData.manufacturingOrigin,
-          filterDescription: filterMessage,
-          processedAt: new Date().toISOString()
-        }
-      };
+    const billOfMaterialsData = {
+      vehicleDetails: {
+        vehicleId: selectedVehicleDetails.vehicleId,
+        manufacturerId: formData.vehicleId,
+        manufacturerName: selectedVehicleDetails.manufacturerName,
+        modelName: selectedVehicleDetails.modelName,
+        typeEngineName: selectedVehicleDetails.typeEngineName,
+        powerPs: selectedVehicleDetails.powerPs,
+        fuelType: selectedVehicleDetails.fuelType,
+        bodyType: selectedVehicleDetails.bodyType,
+        manufacturingOrigin: formData.manufacturingOrigin, // Ensure this is included
+      },
+      parts: partsData.map(part => ({
+        categoryId: part.categoryId,
+        categoryName: part.categoryName,
+        fullPath: part.fullPath,
+        level: part.level,
+      })),
+      categories: categoryData.map(category => ({
+        categoryId: category.categoryId,
+        categoryName: category.categoryName,
+        fullPath: category.fullPath,
+        level: category.level,
+        hasChildren: category.hasChildren,
+      })),
+      metadata: {
+        manufacturerId: formData.vehicleId,
+        totalParts: partsData.length,
+        totalCategories: categoryData.length,
+        categoryFilter: formData.categoryFilter,
+        manufacturingOriginFilter: formData.manufacturingOrigin,
+        filterDescription: filterMessage,
+        processedAt: new Date().toISOString(),
+      },
+    };
 
       const result = await processWithAI(billOfMaterialsData);
       setAiProcessingResult(result);
