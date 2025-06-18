@@ -85,7 +85,7 @@ def generate_price_estimation_and_country(df: pd.DataFrame):
         parts_prompt = ""
         for _, row in df.iterrows():
             parts_prompt += (
-                f"- Category: {row['categoryName']} | Supplier: {row['supplierName']} | "
+                f"- Category: {row['categoryName']} | Category Path : {row['fullPath']} | Supplier: {row['supplierName']} | "
                 f"Part Name: {row['articleProductName']} | Article No: {row['articleNo']}\n"
             )
 
