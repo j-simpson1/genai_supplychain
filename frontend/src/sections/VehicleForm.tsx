@@ -869,7 +869,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             </Select>
           </StyledFormControl>
 
-          <StyledFormControl fullWidth disabled={!formData.type || selectedVehicleDetails !== null}>
+          <StyledFormControl fullWidth required disabled={!formData.type || selectedVehicleDetails !== null}>
             <InputLabel id="category-filter-label">Parts Category</InputLabel>
             <Select
               labelId="category-filter-label"
@@ -878,6 +878,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               value={formData.categoryFilter}
               label="Parts Category"
               onChange={handleCategoryFilterChange}
+              required
             >
               <MenuItem value="all">
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -908,7 +909,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             </Select>
           </StyledFormControl>
 
-          <StyledFormControl fullWidth>
+          <StyledFormControl fullWidth required>
             <Autocomplete
               options={manufacturingOrigins}
               getOptionLabel={(option) => option.name}
@@ -934,6 +935,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 <TextField
                   {...params}
                   label="Manufacturing Origin"
+                  required
                   InputProps={{
                     ...params.InputProps,
                     endAdornment: (
