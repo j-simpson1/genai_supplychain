@@ -199,8 +199,10 @@ async def run_simulation(request: SimulationRequest):
         # Process the simulation based on the request data
         # This is where you would implement your simulation logic
 
-        print("Received simulation request:")
-        print(request.dict())
+        print("Parts data received:")
+        parts_data = request.aiProcessingResult
+        parts_df = pd.DataFrame(parts_data['parts_data'])
+        print(parts_df)
 
         # Example of a simulation result
         simulation_result = {
