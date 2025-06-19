@@ -202,6 +202,7 @@ async def run_simulation(request: SimulationRequest):
         print("Parts data received:")
         parts_data = request.aiProcessingResult
         parts_df = pd.DataFrame(parts_data['parts_data'])
+        parts_df = parts_df.drop(['level', 'supplierTier'], axis=1)
         print(parts_df)
 
         # Example of a simulation result
