@@ -1242,16 +1242,23 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
       {/* Next Button */}
       {isBillOfMaterialsPopulated && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, pr: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', mt: 3, pr: 2 }}>
+          {!aiProcessingResult && (
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+              Please process parts with AI before proceeding
+            </Typography>
+          )}
           <StyledButton
             variant="contained"
             size="large"
             onClick={handleNext}
+            disabled={!aiProcessingResult}
             sx={{
               minWidth: 120,
               fontSize: '18px',
               py: 1.5,
               px: 4,
+              opacity: aiProcessingResult ? 1 : 0.7,
             }}
           >
             Next
