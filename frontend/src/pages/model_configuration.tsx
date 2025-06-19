@@ -155,24 +155,59 @@ const ModelConfiguration = () => {
     navigate(-1);
   };
 
-  const handleRunSimulation = () => {
-    navigate('/output', {
-      state: {
+  const handleRunSimulation = async () => {
+    try {
+      // Prepare the data to send to the backend
+      const simulationData = {
         vehicleDetails,
-        partsData,
-        categoryData,
         scenarioType,
         country: country.toLowerCase(),
-        tariffRate,
-        inflationRate,
-        dispatchCost,
-        alternativeSupplier1,
-        alternativeSupplier1Country,
+        tariffRate: parseFloat(tariffRate) || 0,
+        inflationRate: parseFloat(inflationRate) || 3,
+        dispatchCost: parseFloat(dispatchCost) || 0,
+        alternativeSupplier: {
+          supplierCode: alternativeSupplier1,
+          country: alternativeSupplier1Country
+        },
         selectedCategoryFilter: location.state?.selectedCategoryFilter,
         selectedManufacturingOrigin: location.state?.selectedManufacturingOrigin,
+        partsData,
         aiProcessingResult: location.state?.aiProcessingResult
+      };
+
+      // Send the data to the FastAPI backend
+      const response = await fetch('http://localhost:8000/run_simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(simulationData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
+
+      const simulationResults = await response.json();
+
+      // Navigate to output page with the results
+      navigate('/output', {
+        state: {
+          ...location.state,
+          scenarioType,
+          country: country.toLowerCase(),
+          tariffRate,
+          inflationRate,
+          dispatchCost,
+          alternativeSupplier1,
+          alternativeSupplier1Country,
+          simulationResults
+        }
+      });
+    } catch (error) {
+      console.error('Error running simulation:', error);
+      // Handle error (e.g., show an error message)
+    }
   };
 
   // Check if data is available

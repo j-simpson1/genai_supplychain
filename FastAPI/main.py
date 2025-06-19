@@ -11,7 +11,7 @@ from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engi
 from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from services.article_selector import select_preferred_article
 
-from typing import List, Dict, Any
+from typing import Optional, Dict, Any, List
 import datetime
 
 app = FastAPI()
@@ -48,6 +48,23 @@ class BillOfMaterialsRequest(BaseModel):
     parts: List[PartItem]
     categories: List[CategoryItem]
     metadata: Dict[str, Any]
+
+class AlternativeSupplier(BaseModel):
+    supplierCode: str
+    country: str
+
+class SimulationRequest(BaseModel):
+    vehicleDetails: Dict[str, Any]
+    scenarioType: str
+    country: str
+    tariffRate: float
+    inflationRate: float
+    dispatchCost: float
+    alternativeSupplier: AlternativeSupplier
+    selectedCategoryFilter: Optional[str] = None
+    selectedManufacturingOrigin: Optional[str] = None
+    partsData: List[Dict[str, Any]]
+    aiProcessingResult: Optional[Dict[str, Any]] = None
 
 items = []
 
@@ -174,6 +191,32 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
+
+
+@app.post("/run_simulation")
+async def run_simulation(request: SimulationRequest):
+    try:
+        # Process the simulation based on the request data
+        # This is where you would implement your simulation logic
+
+        print("Received simulation request:")
+        print(request.dict())
+
+        # Example of a simulation result
+        simulation_result = {
+            "status": "success",
+            "scenario": request.scenarioType,
+            "results": {
+                "cost_impact",
+                "supply_chain_analysis",
+                "risk_assessment",
+            },
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+
+        return simulation_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
 # Examples
 
