@@ -2,7 +2,6 @@ import mesa
 from .agent import SupplierAgent, ManufacturerAgent
 import pandas as pd
 import heapq
-import random
 
 
 class SupplyChainModel(mesa.Model):

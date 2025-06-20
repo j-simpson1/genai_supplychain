@@ -1,45 +1,9 @@
-from .agent import ManufacturerAgent
 from .model import SupplyChainModel
 import matplotlib.pyplot as plt
 import pandas as pd
 
-
-def run_simulation(supplier_data, steps=20):
-    """Run simulation with DataFrame input"""
-
-    model = SupplyChainModel(supplier_data=supplier_data, seed=42)
-
-    # Analyze initial supplier setup
-    model.analyze_supplier_diversity()
-
-    tariff_shock_step = 8
-
-    for t in range(steps):
-        print(f"\n--- Time Step {t} ---")
-
-        if t == tariff_shock_step:
-            # Simulate China tariff increase
-            model.tariffs['China'] = 0.50
-            print("🚨 TRADE WAR: 50% tariff applied to Chinese imports")
-
-        model.step()
-
-        # Print current inventory levels every 5 steps
-        if t % 5 == 0:
-            print(f"Current inventory levels: {dict(list(model.parts_inventory.items())[:3])}...")
-
-    # Final analysis
-    print(f"\n=== SIMULATION COMPLETE ===")
-    print(f"Total components built: {model.manufacturer.components_built}")
-    print(f"Final component cost: ${model.manufacturer.get_component_cost():.2f}")
-    print(f"Total production failures: {len(model.metrics['production_failures'])}")
-
-    return model
-
-
 def plot_simulation_results(model, tariff_shock_step=8):
     """Create the original 2x2 visualization plots"""
-    import matplotlib.pyplot as plt
 
     steps = len(model.metrics["cost_history"])
 
@@ -151,4 +115,4 @@ if __name__ == "__main__":
     df = pd.DataFrame(brake_parts_data)
 
     # Run simulation with DataFrame and create plots
-    model = run_brake_simulation_with_plots(df, steps=24)
+    model = run_simulation_with_plots(df, steps=24)

@@ -10,7 +10,7 @@ from neo4j import GraphDatabase
 from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers, fetch_countries
 from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from services.article_selector import select_preferred_article
-from automotive_abm.run import run_simulation, run_simulation_with_plots, plot_simulation_results
+from automotive_abm.run import run_simulation_with_plots, plot_simulation_results
 
 
 from typing import Optional, Dict, Any, List
