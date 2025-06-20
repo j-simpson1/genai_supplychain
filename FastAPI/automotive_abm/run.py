@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def run_brake_simulation(supplier_data, steps=20):
+def run_simulation(supplier_data, steps=20):
     """Run simulation with DataFrame input"""
 
     model = SupplyChainModel(supplier_data=supplier_data, seed=42)
@@ -94,7 +94,7 @@ def plot_simulation_results(model, tariff_shock_step=8):
     plt.show()
 
 
-def run_brake_simulation_with_plots(supplier_data, steps=24):
+def run_simulation_with_plots(supplier_data, steps=24):
     """Run simulation with DataFrame input and create plots"""
 
     model = SupplyChainModel(supplier_data=supplier_data, seed=42)
