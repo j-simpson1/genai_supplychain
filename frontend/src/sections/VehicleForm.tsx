@@ -1045,7 +1045,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#065f46' }}>
-                    Recommendations
+                    Insights
                   </Typography>
                   <ul style={{ margin: 0, paddingLeft: '1rem' }}>
                     {aiProcessingResult.ai_recommendations.map((rec, idx) => (

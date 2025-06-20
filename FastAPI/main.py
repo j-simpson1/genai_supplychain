@@ -179,9 +179,9 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
             },
             "parts_data": parts_df.to_dict(orient="records"),  # Convert DataFrame to list of dictionaries
             "ai_recommendations": [
-                "Consider upgrading brake pads based on performance requirements",
-                "Engine components show optimal configuration for fuel efficiency",
-                "Recommended service interval: 12 months or 15,000 km"
+                "Insight 1",
+                "Insight 2",
+                "Insight 3"
             ],
             "processing_timestamp": datetime.datetime.now().isoformat(),
             "processing_duration_ms": 1500
