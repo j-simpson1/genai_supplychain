@@ -1,5 +1,5 @@
-from agent import ManufacturerAgent
-from model import SupplyChainModel
+from .agent import ManufacturerAgent
+from .model import SupplyChainModel
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -13,7 +13,6 @@ def run_brake_simulation(supplier_data, steps=20):
     model.analyze_supplier_diversity()
 
     tariff_shock_step = 8
-    brexit_analysis_step = 12
 
     for t in range(steps):
         print(f"\n--- Time Step {t} ---")
@@ -22,10 +21,6 @@ def run_brake_simulation(supplier_data, steps=20):
             # Simulate China tariff increase
             model.tariffs['China'] = 0.50
             print("🚨 TRADE WAR: 50% tariff applied to Chinese imports")
-
-        if t == brexit_analysis_step:
-            # Analyze Brexit impact
-            model.simulate_brexit_impact()
 
         model.step()
 
@@ -108,7 +103,6 @@ def run_brake_simulation_with_plots(supplier_data, steps=24):
     model.analyze_supplier_diversity()
 
     tariff_shock_step = 8
-    brexit_analysis_step = 12
 
     for t in range(steps):
         print(f"\n--- Time Step {t} ---")
@@ -117,10 +111,6 @@ def run_brake_simulation_with_plots(supplier_data, steps=24):
             # Simulate China tariff increase
             model.tariffs['China'] = 0.50
             print("🚨 TRADE WAR: 50% tariff applied to Chinese imports")
-
-        if t == brexit_analysis_step:
-            # Analyze Brexit impact
-            model.simulate_brexit_impact()
 
         model.step()
 

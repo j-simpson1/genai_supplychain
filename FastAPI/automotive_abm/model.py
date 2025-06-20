@@ -1,5 +1,5 @@
 import mesa
-from agent import SupplierAgent, ManufacturerAgent
+from .agent import SupplierAgent, ManufacturerAgent
 import pandas as pd
 import heapq
 import random
@@ -179,29 +179,3 @@ class SupplyChainModel(mesa.Model):
             print(f"{country}: {count} suppliers ({percentage:.1f}%)")
 
         return supplier_countries
-
-    def simulate_brexit_impact(self):
-        """Simulate the impact of Brexit on UK suppliers"""
-        print("\n=== Simulating Brexit Impact ===")
-
-        # Increase tariffs on UK goods
-        original_uk_tariff = self.tariffs.get('United Kingdom', 0)
-        self.tariffs['United Kingdom'] = 0.15  # 15% tariff post-Brexit
-
-        # Analyze cost impact
-        impact = self.manufacturer.analyze_tariff_impact({'United Kingdom': 0.15})
-
-        if impact['affected_parts']:
-            print(f"Brexit impact analysis:")
-            print(f"Total potential savings by switching suppliers: ${impact['total_potential_savings']:.2f}")
-
-            for part, details in impact['affected_parts'].items():
-                print(f"  {part}:")
-                print(f"    Current: {details['current']} - ${details['current_cost']:.2f}")
-                print(f"    Alternative: {details['alternative']} - ${details['alternative_cost']:.2f}")
-                print(f"    Potential savings: ${details['savings']:.2f}")
-
-        # Restore original tariff
-        self.tariffs['United Kingdom'] = original_uk_tariff
-
-        return impact
