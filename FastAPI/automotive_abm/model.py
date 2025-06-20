@@ -1,16 +1,30 @@
 import mesa
 from agent import SupplierAgent, ManufacturerAgent
 import pandas as pd
-import json
 import heapq
+import random
 
 
 class SupplyChainModel(mesa.Model):
-    def __init__(self, supplier_csv_path="../data/dummy_braking_system_bom.csv", seed=None):
+    def __init__(self, supplier_data, seed=None):
+        """
+        Initialize the supply chain model
+
+        Args:
+            supplier_data: DataFrame with parts data (complete bill of materials)
+            seed: Random seed for reproducibility
+        """
         super().__init__(seed=seed)
 
         self.base_prices = {}
-        self.tariffs = {}
+        self.tariffs = {
+            'China': 0.25,
+            'Japan': 0.05,
+            'Poland': 0.10,
+            'Germany': 0.08,
+            'United Kingdom': 0.02,
+            'France': 0.12
+        }
         self.parts_inventory = {}
         self.metrics = {
             "cost_history": [],
@@ -24,52 +38,100 @@ class SupplyChainModel(mesa.Model):
         self.event_queue = []
         self.event_counter = 0
 
-        # Load average tariff data from JSON
-        with open("../data/tariff_data/avg_tariff_dict.json", "r") as f:
-            avg_tariff_data = json.load(f)
+        # Process the parts data
+        self._process_brake_parts_data(supplier_data.copy())
 
-        # Convert % tariffs to decimal form
-        self.tariffs = {country: rate / 100 for country, rate in avg_tariff_data.items()}
+        # Configure manufacturer based on available parts
+        self._configure_manufacturer()
 
-        # Load dummy data
-        df = pd.read_csv(supplier_csv_path)
+    def _configure_manufacturer(self):
+        """Configure manufacturer using all available parts (1 of each)"""
+        available_parts = list(self.base_prices.keys())
+        print(f"Available parts in BOM: {available_parts}")
 
-        # Build base_prices dictionary and create SupplierAgents
-        for _, row in df.iterrows():
-            part_type = row["Component"]
-            country = row["Country"]
-            price = row["Price (USD)"]
-            supplier_name = row["Supplier No."]
-            lead_time = int(row["Lead Time (days)"])
-            reliability = float(row["Reliability"])
+        required_parts = {}
+        preferred_sources = {}
 
-            # Store base price
-            self.base_prices.setdefault(part_type, {})[country] = price
+        # Use all available parts, 1 of each
+        for part in available_parts:
+            supplier_found = False
+            if part in self.base_prices:
+                for country in self.base_prices[part]:
+                    # Find supplier name for this part/country combo
+                    for agent in self.schedule_agents:
+                        if (isinstance(agent, SupplierAgent) and
+                                agent.part_type == part and
+                                agent.country == country):
+                            preferred_sources[part] = f"{agent.supplier_name}_{country}"
+                            required_parts[part] = 1  # Always 1 of each part
+                            supplier_found = True
+                            break
+                    if supplier_found:
+                        break
 
-            # Create agent
-            supplier = SupplierAgent(self, supplier_name, part_type, country, lead_time, reliability)
-            self.schedule_agents.append(supplier)
+        print(f"Manufacturer configured with {len(required_parts)} parts:")
+        for part, qty in required_parts.items():
+            source = preferred_sources.get(part, 'Unknown')
+            print(f"  - {part} (qty: {qty}) from {source}")
 
-        # Define a manufacturer using some components (customize this as needed)
         self.manufacturer = ManufacturerAgent(
             self,
-            required_parts={
-                "Brake Pad (Front)": 2,
-                "Brake Disc (Front)": 2,
-                "Brake Caliper": 2
-            },
-            manufacturer_name="Ford",
-            preferred_sources={
-                "Brake Pad (Front)": "SUP-1001_Germany",
-                "Brake Disc (Front)": "SUP-1201_Mexico",
-                "Brake Caliper": "SUP-1001_Germany"
-            }
+            required_parts=required_parts,
+            manufacturer_name="Component_Manufacturer",
+            preferred_sources=preferred_sources
         )
         self.schedule_agents.append(self.manufacturer)
 
+    def get_manufacturing_description(self):
+        """Get human-readable description of what's being manufactured"""
+        return f"Component Assembly (using {len(self.manufacturer.required_parts)} different parts)"
+
+    def _process_brake_parts_data(self, df):
+        """Process the brake parts DataFrame to create suppliers and base prices"""
+
+        created_suppliers = set()  # Track created suppliers to avoid duplicates
+
+        for _, row in df.iterrows():
+            # Skip rows with missing data
+            if pd.isna(row['supplierName']) or pd.isna(row['likelyManufacturingOrigin']):
+                continue
+
+            supplier_name = row['supplierName']
+            country = row['likelyManufacturingOrigin']
+            category_name = row['categoryName']
+            price_gbp = row['estimatedPriceGBP']
+
+            # Convert GBP to USD (approximate rate)
+            price_usd = price_gbp * 1.27
+
+            # Create supplier key
+            supplier_key = f"{supplier_name}_{country}"
+
+            # Store base price (use category name as part type)
+            self.base_prices.setdefault(category_name, {})[country] = price_usd
+
+            # Create SupplierAgent if not already created
+            if supplier_key not in created_suppliers:
+                # Generate realistic lead times based on country
+                lead_time = self._get_lead_time_by_country(country)
+
+                supplier = SupplierAgent(
+                    self,
+                    supplier_name,
+                    category_name,
+                    country,
+                    lead_time,
+                    reliability=1.0  # Perfect reliability for all suppliers
+                )
+                self.schedule_agents.append(supplier)
+                created_suppliers.add(supplier_key)
+
+    def _get_lead_time_by_country(self, country):
+        """Set fixed lead time for all countries"""
+        return 2  # Fixed 2-day lead time for all suppliers
+
     def step(self):
         """Model step - activate all agents"""
-
         self.process_events()
 
         for agent in self.schedule_agents:
@@ -100,4 +162,46 @@ class SupplyChainModel(mesa.Model):
                 self.parts_inventory[key] = self.parts_inventory.get(key, 0) + qty
                 print(f"[Step {self.current_step}] Delivered {qty} units of {key}")
 
+    def analyze_supplier_diversity(self):
+        """Analyze supplier diversity and geographic risk"""
+        supplier_countries = {}
+        total_suppliers = 0
 
+        for agent in self.schedule_agents:
+            if isinstance(agent, SupplierAgent):
+                country = agent.country
+                supplier_countries[country] = supplier_countries.get(country, 0) + 1
+                total_suppliers += 1
+
+        print("\n=== Supplier Geographic Distribution ===")
+        for country, count in sorted(supplier_countries.items()):
+            percentage = (count / total_suppliers) * 100
+            print(f"{country}: {count} suppliers ({percentage:.1f}%)")
+
+        return supplier_countries
+
+    def simulate_brexit_impact(self):
+        """Simulate the impact of Brexit on UK suppliers"""
+        print("\n=== Simulating Brexit Impact ===")
+
+        # Increase tariffs on UK goods
+        original_uk_tariff = self.tariffs.get('United Kingdom', 0)
+        self.tariffs['United Kingdom'] = 0.15  # 15% tariff post-Brexit
+
+        # Analyze cost impact
+        impact = self.manufacturer.analyze_tariff_impact({'United Kingdom': 0.15})
+
+        if impact['affected_parts']:
+            print(f"Brexit impact analysis:")
+            print(f"Total potential savings by switching suppliers: ${impact['total_potential_savings']:.2f}")
+
+            for part, details in impact['affected_parts'].items():
+                print(f"  {part}:")
+                print(f"    Current: {details['current']} - ${details['current_cost']:.2f}")
+                print(f"    Alternative: {details['alternative']} - ${details['alternative_cost']:.2f}")
+                print(f"    Potential savings: ${details['savings']:.2f}")
+
+        # Restore original tariff
+        self.tariffs['United Kingdom'] = original_uk_tariff
+
+        return impact

@@ -1,26 +1,58 @@
 from agent import ManufacturerAgent
 from model import SupplyChainModel
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
-def run_simulation(steps=10):
-    model = SupplyChainModel(seed=42)
-    tariff_shock_step = 5
+def run_brake_simulation(supplier_data, steps=20):
+    """Run simulation with DataFrame input"""
+
+    model = SupplyChainModel(supplier_data=supplier_data, seed=42)
+
+    # Analyze initial supplier setup
+    model.analyze_supplier_diversity()
+
+    tariff_shock_step = 8
+    brexit_analysis_step = 12
 
     for t in range(steps):
         print(f"\n--- Time Step {t} ---")
 
         if t == tariff_shock_step:
-            model.tariffs['Mexico'] = 0.50
-            print("Tariff shock applied: 50% on Mexican imports")
+            # Simulate China tariff increase
+            model.tariffs['China'] = 0.50
+            print("🚨 TRADE WAR: 50% tariff applied to Chinese imports")
+
+        if t == brexit_analysis_step:
+            # Analyze Brexit impact
+            model.simulate_brexit_impact()
 
         model.step()
 
+        # Print current inventory levels every 5 steps
+        if t % 5 == 0:
+            print(f"Current inventory levels: {dict(list(model.parts_inventory.items())[:3])}...")
+
+    # Final analysis
+    print(f"\n=== SIMULATION COMPLETE ===")
+    print(f"Total components built: {model.manufacturer.components_built}")
+    print(f"Final component cost: ${model.manufacturer.get_component_cost():.2f}")
+    print(f"Total production failures: {len(model.metrics['production_failures'])}")
+
+    return model
+
+
+def plot_simulation_results(model, tariff_shock_step=8):
+    """Create the original 2x2 visualization plots"""
+    import matplotlib.pyplot as plt
+
+    steps = len(model.metrics["cost_history"])
+
+    # Calculate production failures by step
     failure_counts = {}
     for step, _ in model.metrics["production_failures"]:
         failure_counts[step] = failure_counts.get(step, 0) + 1
 
-    steps_with_failures = sorted(failure_counts.keys())
     failure_values = [failure_counts.get(i, 0) for i in range(steps)]
 
     # Plot results using 2x2 grid
@@ -67,5 +99,66 @@ def run_simulation(steps=10):
     plt.show()
 
 
+def run_brake_simulation_with_plots(supplier_data, steps=24):
+    """Run simulation with DataFrame input and create plots"""
+
+    model = SupplyChainModel(supplier_data=supplier_data, seed=42)
+
+    # Analyze initial supplier setup
+    model.analyze_supplier_diversity()
+
+    tariff_shock_step = 8
+    brexit_analysis_step = 12
+
+    for t in range(steps):
+        print(f"\n--- Time Step {t} ---")
+
+        if t == tariff_shock_step:
+            # Simulate China tariff increase
+            model.tariffs['China'] = 0.50
+            print("🚨 TRADE WAR: 50% tariff applied to Chinese imports")
+
+        if t == brexit_analysis_step:
+            # Analyze Brexit impact
+            model.simulate_brexit_impact()
+
+        model.step()
+
+        # Print current inventory levels every 5 steps
+        if t % 5 == 0:
+            print(f"Current inventory levels: {dict(list(model.parts_inventory.items())[:3])}...")
+
+    # Final analysis
+    print(f"\n=== SIMULATION COMPLETE ===")
+    print(f"Total components built: {model.manufacturer.components_built}")
+    print(f"Final component cost: ${model.manufacturer.get_component_cost():.2f}")
+    print(f"Total production failures: {len(model.metrics['production_failures'])}")
+
+    # Create visualizations
+    plot_simulation_results(model, tariff_shock_step)
+
+    return model
+
+
+# Example usage
 if __name__ == "__main__":
-    run_simulation(steps=24)
+    # Create DataFrame from your brake parts data
+    brake_parts_data = {
+        'categoryId': [100025, 100026, 100806, 100807, 100028],
+        'categoryName': ['Brake Booster', 'Brake Master Cylinder', 'Brake Caliper Parts', 'Brake Caliper Mounting',
+                         'Wheel Cylinders'],
+        'fullPath': ['Braking System > Brake Booster', 'Braking System > Brake Master Cylinder',
+                     'Braking System > Brake Caliper > Brake Caliper...',
+                     'Braking System > Brake Caliper > Brake Caliper...', 'Braking System > Wheel Cylinders'],
+        'articleNo': [None, 'BMT-155', 'SZ733', '0 986 473 202', 'WCT-039'],
+        'supplierName': [None, 'AISIN', 'TRW', 'BOSCH', 'AISIN'],
+        'articleProductName': [None, 'Brake Master Cylinder', 'Piston, brake caliper', 'Brake Caliper',
+                               'Wheel Brake Cylinder'],
+        'estimatedPriceGBP': [70, 45, 12, 85, 18],
+        'likelyManufacturingOrigin': ['China', 'Japan', 'Poland', 'Germany', 'Japan']
+    }
+
+    df = pd.DataFrame(brake_parts_data)
+
+    # Run simulation with DataFrame and create plots
+    model = run_brake_simulation_with_plots(df, steps=24)
