@@ -3,13 +3,16 @@ from FastAPI.data.auto_parts.ai_analysis import rank_suppliers, generate_price_e
 from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_abm.run import run_simulation_with_plots
 from FastAPI.automotive_abm.export import export_simulation_data
+from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi, get_access_token
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
 import pandas as pd
 import datetime
 import os
+from typing import Optional, Dict, Any
+from pathlib import Path
+import requests
 
 router = APIRouter()
 
@@ -159,3 +162,44 @@ async def run_simulation(request: SimulationRequest):
         error_detail = traceback.format_exc()
         print(f"Simulation error: {error_detail}")
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+
+@router.post("/upload_powerbi")
+async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):
+    """
+    Upload a simulation export file to Power BI
+
+    Args:
+        csv_filename: Name of CSV file in the exports folder (or latest if None)
+
+    Returns:
+        Information about the upload
+    """
+    # Find the file to upload
+    if csv_filename:
+        csv_path = os.path.join("exports", csv_filename)
+    else:
+        # Find the latest CSV in the exports directory
+        export_dir = Path("exports")
+        csv_files = list(export_dir.glob("simulation_*.csv"))
+
+        if not csv_files:
+            raise HTTPException(status_code=404, detail="No simulation export files found in exports directory")
+
+        # Get the most recent file
+        csv_path = str(max(csv_files, key=lambda x: x.stat().st_mtime))
+        csv_filename = os.path.basename(csv_path)
+
+    print(f"Uploading {csv_filename} to Power BI...")
+
+    # Get access token
+    access_token = get_access_token()
+
+    # Upload to Power BI
+    result = upload_to_powerbi(
+        csv_path=csv_path,
+        access_token=access_token,
+        dataset_name=f"Supply Chain Simulation {csv_filename.replace('.csv', '')}"
+    )
+
+    return result
