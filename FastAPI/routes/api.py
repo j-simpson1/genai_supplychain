@@ -2,11 +2,14 @@ from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fe
 from FastAPI.data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_abm.run import run_simulation_with_plots
+from FastAPI.automotive_abm.export import export_simulation_data
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 import pandas as pd
 import datetime
+import os
 
 router = APIRouter()
 
@@ -124,28 +127,35 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 async def run_simulation(request: SimulationRequest):
     try:
         # Process the simulation based on the request data
-        # This is where you would implement your simulation logic
-
-        print("Parts data received:")
         parts_data = request.aiProcessingResult
         parts_df = pd.DataFrame(parts_data['parts_data'])
         parts_df = parts_df.drop(['level', 'supplierTier'], axis=1)
-        print(parts_df)
 
         model = run_simulation_with_plots(parts_df, steps=24)
 
-        # Example of a simulation result
+        print("Exporting data for Power BI")
+        # Export data for Power BI
+        # Create exports directory if it doesn't exist
+        os.makedirs("exports", exist_ok=True)
+        print("Directory created")
+
+        filename = f"simulation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        export_path = os.path.join("exports", filename)
+        exported_file = export_simulation_data(model, export_path)
+
         simulation_result = {
             "status": "success",
             "scenario": request.scenarioType,
             "results": {
-                "cost_impact": model.get_cost_impact(),
-                "supply_chain_analysis": model.get_supply_chain_analysis(),
-                "risk_assessment": model.get_risk_assessment()
+
             },
+            "export_filename": filename,  # Just return the filename, not full path
             "timestamp": datetime.datetime.now().isoformat()
         }
 
         return simulation_result
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"Simulation error: {error_detail}")
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
