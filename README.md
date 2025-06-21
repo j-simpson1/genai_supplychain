@@ -4,8 +4,6 @@ MSc Computer Science Project, James Simpson
 1) Start FastAPI Backend
 ------------------------
 
-- Navigate to the `FastAPI` directory:
-    cd FastAPI
 - Install Uvicorn if not already installed:
     pip install uvicorn
 - Run the FastAPI server with:
@@ -16,6 +14,7 @@ MSc Computer Science Project, James Simpson
 
 2) Start React Frontend
 ------------------------
+
 - Navigate to the `frontend` directory:
     cd frontend
 - Install dependencies:
