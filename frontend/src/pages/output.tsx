@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from "../components/Header";
 import { MainLayout } from "../layouts/MainLayout";
+import axios from 'axios';
 import {
   Box,
   Typography,
@@ -37,6 +38,7 @@ const StyledButton = styled(Button)(({ theme }) => ({
   fontWeight: 600,
   textTransform: 'none'
 }));
+
 
 const OutputPage = () => {
   const location = useLocation();
@@ -80,6 +82,50 @@ const OutputPage = () => {
   const handleBack = () => {
     navigate(-1);
   };
+
+const exportToPowerBI = async () => {
+  try {
+    setIsLoading(true);
+
+    // Call FastAPI endpoint directly at http://localhost:8000/upload_powerbi
+    // Using json_filename parameter instead of csv_filename
+    const response = await axios.post('http://localhost:8000/upload_powerbi', {
+      json_filename: null // Let the backend choose the latest JSON file
+    });
+
+    if (response.status === 200) {
+      alert('Successfully exported to Power BI');
+    }
+  } catch (error) {
+    console.error('Error exporting to Power BI:', error);
+
+    if (axios.isAxiosError(error)) {
+      if (!error.response) {
+        // Network error or no response
+        alert('Network error: Unable to connect to the server. Please check your internet connection.');
+      } else {
+        // Server responded with an error
+        const status = error.response.status;
+        const errorData = error.response.data;
+
+        if (status === 404) {
+          alert('Error: No simulation export files found. Please run a simulation first.');
+        } else if (status === 401 || status === 403) {
+          alert('Authentication error: Unable to connect to Power BI. Please check your credentials.');
+        } else if (errorData?.detail) {
+          alert(`Export failed: ${errorData.detail}`);
+        } else {
+          alert(`Export failed with status ${status}. Please try again later.`);
+        }
+      }
+    } else {
+      // Non-axios error
+      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Check if data is available
   if (!vehicleDetails) {
@@ -260,10 +306,18 @@ const OutputPage = () => {
           </>
         )}
 
-        {/* Back Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <StyledButton variant="contained" onClick={handleBack}>
             Back to Model Configuration
+          </StyledButton>
+          <StyledButton
+            variant="contained"
+            color="secondary"
+            onClick={exportToPowerBI}
+            disabled={isLoading}
+            startIcon={isLoading ? <CircularProgress size={20} /> : null}
+          >
+            Export to Power BI
           </StyledButton>
         </Box>
       </Container>
