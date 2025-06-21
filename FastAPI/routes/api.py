@@ -3,7 +3,7 @@ from FastAPI.data.auto_parts.ai_analysis import rank_suppliers, generate_price_e
 from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_abm.run import run_simulation_with_plots
 from FastAPI.automotive_abm.export import export_simulation_data
-from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi, get_access_token
+from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
 from fastapi import APIRouter, HTTPException
@@ -12,7 +12,7 @@ import datetime
 import os
 from typing import Optional, Dict, Any
 from pathlib import Path
-import requests
+from FastAPI.powerbi_integration.auth import get_access_token
 
 router = APIRouter()
 
@@ -152,34 +152,21 @@ async def run_simulation(request: SimulationRequest):
             print(f"Error creating exports directory: {dir_error}")
             raise
 
-        # Export as JSON with error handling
-        filename = f"simulation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        export_path = os.path.join("exports", filename)
+        # Export comprehensive data as CSV only
+        filename = f"simulation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        csv_path = os.path.join("exports", f"{filename}.csv")
 
         try:
-            # Create a DataFrame from model metrics
-            model_data = pd.DataFrame({
-                'step': range(len(model.metrics["cost_history"])),
-                'cost': model.metrics["cost_history"],
-                'components_built': model.metrics["components_built"],
-                'unused_inventory': model.metrics["unused_inventory"]
-            })
+            # Use the enhanced export function
+            export_simulation_data(model, csv_path)
 
-            # Check if data exists
-            if model_data.empty:
-                raise ValueError("Model data is empty")
+            # Verify CSV file was created
+            if not os.path.exists(csv_path):
+                raise FileNotFoundError(f"CSV file was not created at {csv_path}")
 
-            # Save to JSON with explicit path
-            print(f"Saving JSON to {os.path.abspath(export_path)}")
-            model_data.to_json(export_path, orient='records')
-
-            # Verify file was created
-            if not os.path.exists(export_path):
-                raise FileNotFoundError(f"JSON file was not created at {export_path}")
-
-            print(f"Successfully created simulation file: {filename}")
-        except Exception as json_error:
-            print(f"Error creating JSON file: {json_error}")
+            print(f"Successfully created simulation file: {filename}.csv")
+        except Exception as export_error:
+            print(f"Error creating CSV file: {export_error}")
             raise
 
         return {
@@ -197,40 +184,35 @@ async def run_simulation(request: SimulationRequest):
 
 
 @router.post("/upload_powerbi")
-async def upload_simulation_to_powerbi(json_filename: Optional[str] = None):
+async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):
     # Find the file to upload
-    if json_filename:
-        json_path = os.path.join("exports", json_filename)
+    if csv_filename:
+        csv_path = os.path.join("exports", csv_filename)
+        if not csv_filename.endswith('.csv'):
+            csv_path += '.csv'
     else:
-        # Find the latest JSON in the exports directory
+        # Find the latest CSV in the exports directory
         export_dir = Path("exports")
-        json_files = list(export_dir.glob("simulation_*.json"))
+        csv_files = list(export_dir.glob("simulation_*.csv"))
 
-        if not json_files:
+        if not csv_files:
             raise HTTPException(status_code=404, detail="No simulation export files found in exports directory")
 
         # Get the most recent file
-        json_path = str(max(json_files, key=lambda x: x.stat().st_mtime))
-        json_filename = os.path.basename(json_path)
+        csv_path = str(max(csv_files, key=lambda x: x.stat().st_mtime))
+        csv_filename = os.path.basename(csv_path)
 
-    # Read JSON data
-    df = pd.read_json(json_path)
+    # Verify the CSV file exists
+    if not os.path.exists(csv_path):
+        raise HTTPException(status_code=404, detail=f"CSV file not found: {csv_path}")
 
-    # Convert to CSV temporarily for Power BI (if your upload function requires CSV)
-    temp_csv_path = json_path.replace('.json', '_temp.csv')
-    df.to_csv(temp_csv_path, index=False)
-
-    # Upload to Power BI
+    # Upload to Power BI directly from CSV
     access_token = get_access_token()
     result = upload_to_powerbi(
-        csv_path=temp_csv_path,
+        csv_path=csv_path,
         access_token=access_token,
-        dataset_name=f"Supply Chain Simulation {json_filename.replace('.json', '')}",
+        dataset_name=f"Supply Chain Simulation {csv_filename.replace('.csv', '')}",
         workspace_id='188dcf61-6524-4b27-93ce-222438bb3545'
     )
-
-    # Clean up temporary file
-    if os.path.exists(temp_csv_path):
-        os.remove(temp_csv_path)
 
     return result
