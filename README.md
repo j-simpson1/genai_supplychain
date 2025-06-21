@@ -7,7 +7,7 @@ MSc Computer Science Project, James Simpson
 - Install Uvicorn if not already installed:
     pip install uvicorn
 - Run the FastAPI server with:
-    uvicorn main:app --reload
+    uvicorn FastAPI.main:app --reload
   The API will be available at: http://127.0.0.1:8000  
   Swagger UI: http://127.0.0.1:8000/docs
 
