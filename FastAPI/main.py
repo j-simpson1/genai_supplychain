@@ -225,29 +225,6 @@ async def run_simulation(request: SimulationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
-# Examples
-
-# @app.get("/")
-# async def root():
-#     return {"message": "Hello World"}
-#
-# @app.post("/items")
-# def create_item(item: Item):
-#     items.append(item)
-#     return items
-#
-# @app.get("/items", response_model=list[Item])
-# def list_items(limit: int = 10):
-#     return items[0:limit]
-#
-# @app.get("/items/{item_id}", response_model=Item)
-# def get_items(item_id: int) -> Item:
-#     if item_id < len(items):
-#         return items[item_id]
-#     else:
-#         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
-
-
 load_dotenv()
 URI = os.getenv("NEO4J_URI")
 USER = os.getenv("NEO4J_USERNAME")
