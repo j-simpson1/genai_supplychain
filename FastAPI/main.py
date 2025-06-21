@@ -1,16 +1,13 @@
 import pandas as pd
-import os
-from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from neo4j import GraphDatabase
 
 from data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers, fetch_countries
 from data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from services.article_selector import select_preferred_article
-from automotive_abm.run import run_simulation_with_plots, plot_simulation_results
+from automotive_abm.run import run_simulation_with_plots
 
 
 from typing import Optional, Dict, Any, List
@@ -224,11 +221,3 @@ async def run_simulation(request: SimulationRequest):
         return simulation_result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
-
-load_dotenv()
-URI = os.getenv("NEO4J_URI")
-USER = os.getenv("NEO4J_USERNAME")
-PASSWORD = os.getenv("NEO4J_PASSWORD")
-
-def get_driver(uri, user, password):
-    return GraphDatabase.driver(uri, auth=(user, password))
