@@ -5,7 +5,7 @@ from FastAPI.automotive_abm.run import run_simulation_with_plots
 from FastAPI.automotive_abm.export import export_simulation_data
 from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi
 
-from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
+from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest
 from fastapi import APIRouter, HTTPException
 import pandas as pd
 import datetime
@@ -13,6 +13,7 @@ import os
 from typing import Optional, Dict, Any
 from pathlib import Path
 from FastAPI.powerbi_integration.auth import get_access_token
+from FastAPI.services.stream_chat_services import chat_client
 
 router = APIRouter()
 
@@ -216,3 +217,8 @@ async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):
     )
 
     return result
+
+@router.post("/token")
+def get_token(request: TokenRequest):
+    token = chat_client.create_token(request.userId)
+    return {"token": token}

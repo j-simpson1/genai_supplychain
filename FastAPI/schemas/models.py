@@ -51,3 +51,6 @@ class SimulationRequest(BaseModel):
     selectedManufacturingOrigin: Optional[str] = None
     partsData: List[Dict[str, Any]]
     aiProcessingResult: Optional[Dict[str, Any]] = None
+
+class TokenRequest(BaseModel):
+    userId: str
