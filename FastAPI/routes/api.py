@@ -225,7 +225,8 @@ async def upload_simulation_to_powerbi(json_filename: Optional[str] = None):
     result = upload_to_powerbi(
         csv_path=temp_csv_path,
         access_token=access_token,
-        dataset_name=f"Supply Chain Simulation {json_filename.replace('.json', '')}"
+        dataset_name=f"Supply Chain Simulation {json_filename.replace('.json', '')}",
+        workspace_id='188dcf61-6524-4b27-93ce-222438bb3545'
     )
 
     # Clean up temporary file
