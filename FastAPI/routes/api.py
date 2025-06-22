@@ -4,9 +4,11 @@ from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_abm.run import run_simulation_with_plots
 from FastAPI.automotive_abm.export import export_simulation_data
 from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi
+from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
+from FastAPI.actions.handle_action import handle_actions
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest, Message, ChatRequest
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 import pandas as pd
 import datetime
 import os
@@ -16,6 +18,8 @@ from FastAPI.powerbi_integration.auth import get_access_token
 from FastAPI.services.stream_chat_services import chat_client
 import openai
 from dotenv import load_dotenv
+import json
+import traceback
 
 router = APIRouter()
 
@@ -231,34 +235,65 @@ openai.api_key = openai_key
 @router.post("/chat")
 async def chat_with_openai(request: ChatRequest):
     try:
-        # Get OpenAI response
+
+        SYSTEM_PROMPT = {
+            "role": "system",
+            "content": (
+                "You are an AI assistant integrated into a system that can call backend APIs. "
+                "If the user's request requires a backend action (e.g., retrieving manufacturers), "
+                "respond with a JSON object like:\n\n"
+                "{\n"
+                '  "response": "I’m fetching that for you...",\n'
+                '  "action": {\n'
+                '    "type": "retrieve_manufacturers",\n'
+                '    "params": {}\n'
+                "  }\n"
+                "}\n\n"
+                "If no action is required, respond as plain text."
+            )
+        }
+        # Step 1: Call OpenAI
         response = openai.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": m.role, "content": m.content} for m in request.messages]
+            messages=[SYSTEM_PROMPT] + [{"role": m.role, "content": m.content} for m in request.messages]
         )
 
-        ai_message = response.choices[0].message.content
+        ai_raw = response.choices[0].message.content.strip()
 
-        # Send the AI response directly to Stream Chat from the server
+        # Step 2: Parse response
         try:
-            channel = chat_client.channel("messaging", "ai-assistant")
+            parsed = json.loads(ai_raw)
+            base_message = parsed.get("response", "")
+            action = parsed.get("action")
+        except json.JSONDecodeError:
+            base_message = ai_raw
+            action = None
 
-            # Send message as the AI assistant user (correct syntax)
-            channel.send_message(
-                message={"text": ai_message},
-                user_id="ai-assistant"
-            )
-            print(f"✓ AI message sent to channel: {ai_message[:50]}...")
+        # Step 3: Run action (and get any result)
+        action_result = None
+        if action:
+            action_result = handle_actions(action)
 
+        # Step 4: Compose final message
+        if action_result:
+            full_message = f"{base_message}\n\n{action_result}"
+        else:
+            full_message = base_message
+
+        # Step 5: Send to Stream Chat
+        try:
+            channel = chat_client.channel("messaging", request.channel_id)
+            channel.send_message({"text": full_message}, user_id="ai-assistant")
         except Exception as stream_error:
-            print(f"Warning: Could not send message to Stream Chat: {stream_error}")
-            # Continue anyway - the frontend will still get the response
+            print(f"Stream Chat error: {stream_error}")
 
-        return {"message": ai_message}
+        return {"message": full_message}
+
 
     except Exception as e:
-        print(f"Error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("AI request failed:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"AI request failed: {e}")
 
 
 @router.post("/token")

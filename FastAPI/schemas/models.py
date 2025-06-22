@@ -61,3 +61,4 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    channel_id: str
