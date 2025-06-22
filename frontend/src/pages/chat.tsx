@@ -40,74 +40,91 @@ const ChatPage = () => {
   }, []);
 
   // Get authentication token from backend
-  const getAuthToken = useCallback(async () => {
-    const response = await fetch(`${BACKEND_URL}/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: USER_ID }),
-    });
+  const getAuthToken = useCallback(async (userId) => {
+    try {
+      console.log(`Requesting token for user: ${userId}`);
+      const response = await fetch(`${BACKEND_URL}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to get authentication token from server');
+      if (!response.ok) {
+        throw new Error(`Failed to get authentication token: ${response.status} ${response.statusText}`);
+      }
+
+      const { token } = await response.json();
+      if (!token) {
+        throw new Error('No token received from server');
+      }
+
+      console.log(`Token received for ${userId}`);
+      return token;
+    } catch (error) {
+      console.error(`Error getting token for ${userId}:`, error);
+      throw error;
     }
-
-    const { token } = await response.json();
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-
-    return token;
   }, []);
 
   // Initialize Stream Chat client
-  const initializeStreamClient = useCallback(async (token) => {
-    const chatClient = StreamChat.getInstance(API_KEY);
+  const initializeStreamClient = useCallback(async (token, userId, userName) => {
+    try {
+      console.log(`Initializing client for ${userName}...`);
+      const chatClient = new StreamChat(API_KEY);
 
-    await chatClient.connectUser(
-      { id: USER_ID, name: 'User' },
-      token
-    );
+      await chatClient.connectUser(
+        { id: userId, name: userName },
+        token
+      );
 
-    console.log("Connected user to Stream Chat");
-    return chatClient;
+      console.log(`✓ Connected ${userName} to Stream Chat`);
+      return chatClient;
+    } catch (error) {
+      console.error(`Error connecting ${userName}:`, error);
+      throw error;
+    }
   }, []);
 
   // Create or get existing chat channel
   const setupChannel = useCallback(async (chatClient) => {
-    const chatChannel = chatClient.channel(CHANNEL_TYPE, CHANNEL_ID, {
-      name: "AI Assistant Chat",
-      created_by: { id: USER_ID }
-    });
+    try {
+      console.log("Setting up channel...");
 
-    console.log("Setting up channel");
-    await chatChannel.watch();
+      const chatChannel = chatClient.channel(CHANNEL_TYPE, CHANNEL_ID, {
+        name: "AI Assistant Chat",
+        created_by: { id: USER_ID }
+      });
 
-    return chatChannel;
+      await chatChannel.watch();
+      console.log("✓ Channel setup complete");
+
+      return chatChannel;
+    } catch (error) {
+      console.error("Error setting up channel:", error);
+      throw error;
+    }
   }, []);
 
   // Send message to AI backend and get response
   const sendToAI = useCallback(async (messageHistory) => {
-    const response = await fetch(`${BACKEND_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messageHistory }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get AI response');
-    }
-
-    const data = await response.json();
-    return data.message;
-  }, []);
-
-  // Send error message to chat
-  const sendErrorMessage = useCallback(async (channel, errorMessage = "Sorry, there was an error processing your request.") => {
-    if (channel) {
-      await channel.sendMessage({
-        text: errorMessage,
-        user: { id: 'ai-assistant', name: 'AI Assistant' }
+    try {
+      console.log("Sending message to AI backend...");
+      const response = await fetch(`${BACKEND_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messageHistory }),
       });
+
+      if (!response.ok) {
+        throw new Error(`AI request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("✓ AI response received");
+      return data.message;
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      throw error;
     }
   }, []);
 
@@ -117,65 +134,87 @@ const ChatPage = () => {
 
     if (!messageText?.trim()) return;
 
+    // Check if client and channel are still valid
+    if (!channel || !client) {
+      console.error("Chat components not available");
+      return;
+    }
+
     try {
-      // Send user message to Stream Chat UI
+      console.log(`User message: "${messageText}"`);
+
+      // Send user message to Stream Chat UI first
       await channel.sendMessage({
         text: messageText,
-        user: { id: USER_ID }
       });
 
       // Update message history for AI context
       const updatedMessages = [...messages, { role: 'user', content: messageText }];
       setMessages(updatedMessages);
 
-      // Get AI response
+      // Get AI response (the server will send the AI message to the chat)
       const aiResponse = await sendToAI(updatedMessages);
+      console.log(`AI response received: "${aiResponse}"`);
 
-      // Send AI response to Stream Chat UI
-      await channel.sendMessage({
-        text: aiResponse,
-        user: { id: 'ai-assistant', name: 'AI Assistant' }
-      });
-
-      // Update message history with AI response
+      // Update local message history with AI response
       const finalMessages = [...updatedMessages, { role: 'assistant', content: aiResponse }];
       setMessages(finalMessages);
 
     } catch (error) {
-      console.error("Error handling message:", error);
-      await sendErrorMessage(channel);
+      console.error("Error in message handler:", error);
+
+      // Send error message through the channel
+      if (channel && client && client.user) {
+        try {
+          await channel.sendMessage({
+            text: `Error: ${error.message}`,
+          });
+        } catch (sendError) {
+          console.error("Could not send error message:", sendError);
+        }
+      }
     }
-  }, [channel, messages, extractMessageText, sendToAI, sendErrorMessage]);
+  }, [channel, client, messages, extractMessageText, sendToAI]);
 
   // Setup chat interface on component mount
   useEffect(() => {
+    let userClient = null;
+    let mounted = true;
+
     const setupStreamChat = async () => {
       try {
-        console.log("Setting up Stream Chat with API key:", API_KEY ? "Available" : "Missing");
+        console.log("=== Setting up Stream Chat ===");
+        console.log("API key available:", API_KEY ? "✓" : "✗");
 
         if (!API_KEY) {
           throw new Error('Stream Chat API key is missing');
         }
 
-        // Get authentication token
-        const token = await getAuthToken();
-        console.log("Received token from server");
+        // Get authentication token for user
+        const userToken = await getAuthToken(USER_ID);
+        if (!mounted) return;
 
         // Initialize Stream Chat client
-        const chatClient = await initializeStreamClient(token);
+        userClient = await initializeStreamClient(userToken, USER_ID, 'User');
+        if (!mounted) return;
 
         // Setup chat channel
-        const chatChannel = await setupChannel(chatClient);
+        const chatChannel = await setupChannel(userClient);
+        if (!mounted) return;
 
         // Update state
-        setClient(chatClient);
+        setClient(userClient);
         setChannel(chatChannel);
 
+        console.log("=== Stream Chat setup complete ===");
+
       } catch (err) {
-        console.error("Error setting up chat interface:", err);
+        console.error("=== Stream Chat setup failed ===", err);
         setError(err.message || "Failed to initialize chat");
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -183,11 +222,28 @@ const ChatPage = () => {
 
     // Cleanup on component unmount
     return () => {
-      if (client) {
-        client.disconnectUser();
-      }
+      mounted = false;
+      const cleanup = async () => {
+        try {
+          console.log("Cleaning up chat client...");
+
+          // Clear state first to prevent any further operations
+          setChannel(null);
+          setClient(null);
+
+          // Disconnect client
+          if (userClient) {
+            await userClient.disconnectUser();
+          }
+
+          console.log("✓ Cleanup complete");
+        } catch (error) {
+          console.error("Error during cleanup:", error);
+        }
+      };
+      cleanup();
     };
-  }, [getAuthToken, initializeStreamClient, setupChannel, client]);
+  }, []);
 
   // Render loading state
   if (loading) {

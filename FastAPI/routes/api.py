@@ -220,11 +220,6 @@ async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):
 
     return result
 
-@router.post("/token")
-def get_token(request: TokenRequest):
-    token = chat_client.create_token(request.userId)
-    return {"token": token}
-
 load_dotenv()
 openai_key = os.getenv("OPENAI_API_KEY")
 if not openai_key:
@@ -232,13 +227,53 @@ if not openai_key:
 
 openai.api_key = openai_key
 
+
 @router.post("/chat")
 async def chat_with_openai(request: ChatRequest):
     try:
+        # Get OpenAI response
         response = openai.chat.completions.create(
-            model="gpt-4",  # or any preferred model
+            model="gpt-4",
             messages=[{"role": m.role, "content": m.content} for m in request.messages]
         )
-        return {"message": response.choices[0].message.content}
+
+        ai_message = response.choices[0].message.content
+
+        # Send the AI response directly to Stream Chat from the server
+        try:
+            channel = chat_client.channel("messaging", "ai-assistant")
+
+            # Send message as the AI assistant user (correct syntax)
+            channel.send_message(
+                message={"text": ai_message},
+                user_id="ai-assistant"
+            )
+            print(f"✓ AI message sent to channel: {ai_message[:50]}...")
+
+        except Exception as stream_error:
+            print(f"Warning: Could not send message to Stream Chat: {stream_error}")
+            # Continue anyway - the frontend will still get the response
+
+        return {"message": ai_message}
+
     except Exception as e:
+        print(f"Error in chat endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/token")
+def get_token(request: TokenRequest):
+    # Generate token for the requested user
+    token = chat_client.create_token(request.userId)
+
+    # Only update user data for the main user, not the AI assistant
+    if request.userId == "js-user":
+        try:
+            chat_client.update_user({
+                "id": "js-user",
+                "name": "User",
+            })
+        except Exception as e:
+            print(f"Warning: Could not update user data: {e}")
+
+    return {"token": token}
