@@ -51,7 +51,7 @@ body,
   height: 100%; // Fill parent height
 
   .sidebar-header {
-    padding: 1.5rem 1rem;
+    padding: 1.19rem 1.1rem;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
     justify-content: space-between;
@@ -59,7 +59,7 @@ body,
 
     h3 {
       margin: 0;
-      font-size: 1.25rem;
+      font-size: 1.15rem;
       color: #1f2937;
     }
 
@@ -365,3 +365,13 @@ body,
     }
   }
 }
+
+// Adjust header positioning
+.str-chat__channel-header {
+  padding-top: 16px; // Increase top padding to push header down
+  padding-bottom: 16px; // Optional: balance the spacing
+  margin-bottom: 8px; // Add space between header and messages
+  border-bottom: 1px solid #e5e7eb; // Optional: add a subtle separator
+}
+
+
