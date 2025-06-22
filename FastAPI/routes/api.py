@@ -5,7 +5,7 @@ from FastAPI.automotive_abm.run import run_simulation_with_plots
 from FastAPI.automotive_abm.export import export_simulation_data
 from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi
 
-from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest
+from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest, Message, ChatRequest
 from fastapi import APIRouter, HTTPException
 import pandas as pd
 import datetime
@@ -14,6 +14,8 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from FastAPI.powerbi_integration.auth import get_access_token
 from FastAPI.services.stream_chat_services import chat_client
+import openai
+from dotenv import load_dotenv
 
 router = APIRouter()
 
@@ -222,3 +224,21 @@ async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):
 def get_token(request: TokenRequest):
     token = chat_client.create_token(request.userId)
     return {"token": token}
+
+load_dotenv()
+openai_key = os.getenv("OPENAI_API_KEY")
+if not openai_key:
+    raise ValueError("OPENAI_API_KEY environment variable not set")
+
+openai.api_key = openai_key
+
+@router.post("/chat")
+async def chat_with_openai(request: ChatRequest):
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4",  # or any preferred model
+            messages=[{"role": m.role, "content": m.content} for m in request.messages]
+        )
+        return {"message": response.choices[0].message.content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -3,102 +3,157 @@ import { useState, useEffect } from "react";
 import {
   Chat,
   Channel,
-  ChannelList,
   Window,
   ChannelHeader,
   MessageList,
   MessageInput,
-  Thread,
 } from "stream-chat-react";
 import { StreamChat } from "stream-chat";
 import "stream-chat-react/dist/css/v2/index.css";
 import "./chat.scss";
 
-interface TokenRequest {
-  userId: string;
-}
-
 const apiKey = import.meta.env.VITE_REACT_APP_STREAM_API_KEY;
-console.log("API Key available:", !!apiKey);
 const userId = "js-user";
-const filters = { members: { $in: [userId] }, type: "messaging" };
-const options = { presence: true, state: true };
-const sort = { last_message_at: -1 };
 
 const ChatPage = () => {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [channel, setChannel] = useState(null);
+  const [messages, setMessages] = useState([
+    { role: 'system', content: 'You are a helpful assistant.' }
+  ]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const initChat = async () => {
+    const setupStreamUI = async () => {
       try {
-        // Call your FastAPI endpoint to get the token
-        const response = await fetch('http://127.0.0.1:8000/token', {
+        console.log("Setting up Stream Chat with API key:", apiKey ? "Available" : "Missing");
+
+        // 1. Get token from backend
+        const tokenResponse = await fetch('http://127.0.0.1:8000/token', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch token');
-        }
+        if (!tokenResponse.ok) throw new Error('Failed to get token from server');
+        const { token } = await tokenResponse.json();
 
-        const { token } = await response.json();
+        if (!token) throw new Error('No token received from server');
+        console.log("Received token from server");
 
-        // Initialize the Stream chat client
+        // 2. Initialize Stream chat client with the token
         const chatClient = StreamChat.getInstance(apiKey);
         await chatClient.connectUser(
-          { id: userId, name: 'James Simpson' },
+          { id: userId, name: 'User' },
           token
         );
+        console.log("Connected user to Stream Chat");
 
-        const channel = chatClient.channel("messaging", "general-chat", {
-          name: "General Chat",
-          members: [userId]
+        // 3. Create or get existing channel
+        const localChannel = chatClient.channel("messaging", "ai-assistant", {
+          name: "AI Assistant Chat",
+          created_by: { id: userId }
         });
 
-        await channel.create();
+        console.log("Watching channel");
+        await localChannel.watch();
 
+        setChannel(localChannel);
         setClient(chatClient);
       } catch (err) {
-        console.error("Error initializing chat:", err);
-        setError(err.message);
+        console.error("Error setting up chat UI:", err);
+        setError(err.message || "Failed to initialize chat");
       } finally {
         setLoading(false);
       }
     };
 
-    initChat();
+    setupStreamUI();
 
-    // Cleanup
     return () => {
       if (client) client.disconnectUser();
     };
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  const handleSendMessage = async (messageData) => {
+    // Extract text from messageData - Stream Chat sends different object structure
+    const messageText = typeof messageData === 'string'
+      ? messageData
+      : messageData?.text || messageData?.message?.text;
+
+    if (!messageText || !messageText.trim()) return;
+
+    try {
+      // Add user message to the UI
+      await channel.sendMessage({
+        text: messageText,
+        user: { id: userId }
+      });
+
+      // Update messages array for OpenAI
+      const updatedMessages = [...messages, { role: 'user', content: messageText }];
+      setMessages(updatedMessages);
+
+      // Send to OpenAI through backend
+      const response = await fetch('http://127.0.0.1:8000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: updatedMessages }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get response');
+
+      const data = await response.json();
+
+      // Add AI response to the UI
+      await channel.sendMessage({
+        text: data.message,
+        user: { id: 'ai-assistant', name: 'AI Assistant' }
+      });
+
+      // Update messages array with AI response
+      setMessages([...updatedMessages, { role: 'assistant', content: data.message }]);
+    } catch (error) {
+      console.error("Error:", error);
+      if (channel) {
+        await channel.sendMessage({
+          text: "Sorry, there was an error processing your request.",
+          user: { id: 'ai-assistant', name: 'AI Assistant' }
+        });
+      }
+    }
+  };
+
+  if (loading) return <div>Loading chat interface...</div>;
   if (error) return <div>Error: {error}</div>;
-  if (!client) return <div>Could not initialize chat client</div>;
+  if (!apiKey) return <div>Error: Stream Chat API key is missing</div>;
+  if (!client) return <div>Error: Could not initialize Stream Chat client</div>;
+  if (!channel) return <div>Error: Could not create chat channel</div>;
 
   return (
     <>
       <Header />
-       <div className="chat-container">
+      <div className="chat-container">
         <Chat client={client}>
-          <ChannelList sort={sort} filters={filters} options={options} />
-          <Channel>
+          <Channel channel={channel}>
             <Window>
-              <ChannelHeader />
+              <ChannelHeader title="AI Assistant" />
               <MessageList />
-              <MessageInput />
+              <MessageInput
+                overrideSubmitHandler={(message) => {
+                  // Ensure message exists before processing
+                  if (message && (message.text || (message.message && message.message.text))) {
+                    handleSendMessage(message);
+                    return true;
+                  }
+                  return false;
+                }}
+              />
             </Window>
-            <Thread />
           </Channel>
         </Chat>
-       </div>
+      </div>
     </>
   );
 };
