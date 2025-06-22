@@ -1,5 +1,5 @@
 import Header from "../components/Header";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Chat,
   Channel,
@@ -12,125 +12,202 @@ import { StreamChat } from "stream-chat";
 import "stream-chat-react/dist/css/v2/index.css";
 import "./chat.scss";
 
-const apiKey = import.meta.env.VITE_REACT_APP_STREAM_API_KEY;
-const userId = "js-user";
+// Constants
+const API_KEY = import.meta.env.VITE_REACT_APP_STREAM_API_KEY;
+const USER_ID = "js-user";
+const BACKEND_URL = "http://127.0.0.1:8000";
+const CHANNEL_TYPE = "messaging";
+const CHANNEL_ID = "ai-assistant";
+
+// Initial system message for AI context
+const INITIAL_SYSTEM_MESSAGE = {
+  role: 'system',
+  content: 'You are a helpful assistant.'
+};
 
 const ChatPage = () => {
+  // State management
   const [client, setClient] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState(null);
-  const [messages, setMessages] = useState([
-    { role: 'system', content: 'You are a helpful assistant.' }
-  ]);
+  const [messages, setMessages] = useState([INITIAL_SYSTEM_MESSAGE]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Utility function to extract message text from different Stream Chat formats
+  const extractMessageText = useCallback((messageData) => {
+    if (typeof messageData === 'string') return messageData;
+    return messageData?.text || messageData?.message?.text || '';
+  }, []);
+
+  // Get authentication token from backend
+  const getAuthToken = useCallback(async () => {
+    const response = await fetch(`${BACKEND_URL}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: USER_ID }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get authentication token from server');
+    }
+
+    const { token } = await response.json();
+    if (!token) {
+      throw new Error('No token received from server');
+    }
+
+    return token;
+  }, []);
+
+  // Initialize Stream Chat client
+  const initializeStreamClient = useCallback(async (token) => {
+    const chatClient = StreamChat.getInstance(API_KEY);
+
+    await chatClient.connectUser(
+      { id: USER_ID, name: 'User' },
+      token
+    );
+
+    console.log("Connected user to Stream Chat");
+    return chatClient;
+  }, []);
+
+  // Create or get existing chat channel
+  const setupChannel = useCallback(async (chatClient) => {
+    const chatChannel = chatClient.channel(CHANNEL_TYPE, CHANNEL_ID, {
+      name: "AI Assistant Chat",
+      created_by: { id: USER_ID }
+    });
+
+    console.log("Setting up channel");
+    await chatChannel.watch();
+
+    return chatChannel;
+  }, []);
+
+  // Send message to AI backend and get response
+  const sendToAI = useCallback(async (messageHistory) => {
+    const response = await fetch(`${BACKEND_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: messageHistory }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get AI response');
+    }
+
+    const data = await response.json();
+    return data.message;
+  }, []);
+
+  // Send error message to chat
+  const sendErrorMessage = useCallback(async (channel, errorMessage = "Sorry, there was an error processing your request.") => {
+    if (channel) {
+      await channel.sendMessage({
+        text: errorMessage,
+        user: { id: 'ai-assistant', name: 'AI Assistant' }
+      });
+    }
+  }, []);
+
+  // Main message handler
+  const handleSendMessage = useCallback(async (messageData) => {
+    const messageText = extractMessageText(messageData);
+
+    if (!messageText?.trim()) return;
+
+    try {
+      // Send user message to Stream Chat UI
+      await channel.sendMessage({
+        text: messageText,
+        user: { id: USER_ID }
+      });
+
+      // Update message history for AI context
+      const updatedMessages = [...messages, { role: 'user', content: messageText }];
+      setMessages(updatedMessages);
+
+      // Get AI response
+      const aiResponse = await sendToAI(updatedMessages);
+
+      // Send AI response to Stream Chat UI
+      await channel.sendMessage({
+        text: aiResponse,
+        user: { id: 'ai-assistant', name: 'AI Assistant' }
+      });
+
+      // Update message history with AI response
+      const finalMessages = [...updatedMessages, { role: 'assistant', content: aiResponse }];
+      setMessages(finalMessages);
+
+    } catch (error) {
+      console.error("Error handling message:", error);
+      await sendErrorMessage(channel);
+    }
+  }, [channel, messages, extractMessageText, sendToAI, sendErrorMessage]);
+
+  // Setup chat interface on component mount
   useEffect(() => {
-    const setupStreamUI = async () => {
+    const setupStreamChat = async () => {
       try {
-        console.log("Setting up Stream Chat with API key:", apiKey ? "Available" : "Missing");
+        console.log("Setting up Stream Chat with API key:", API_KEY ? "Available" : "Missing");
 
-        // 1. Get token from backend
-        const tokenResponse = await fetch('http://127.0.0.1:8000/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        });
+        if (!API_KEY) {
+          throw new Error('Stream Chat API key is missing');
+        }
 
-        if (!tokenResponse.ok) throw new Error('Failed to get token from server');
-        const { token } = await tokenResponse.json();
-
-        if (!token) throw new Error('No token received from server');
+        // Get authentication token
+        const token = await getAuthToken();
         console.log("Received token from server");
 
-        // 2. Initialize Stream chat client with the token
-        const chatClient = StreamChat.getInstance(apiKey);
-        await chatClient.connectUser(
-          { id: userId, name: 'User' },
-          token
-        );
-        console.log("Connected user to Stream Chat");
+        // Initialize Stream Chat client
+        const chatClient = await initializeStreamClient(token);
 
-        // 3. Create or get existing channel
-        const localChannel = chatClient.channel("messaging", "ai-assistant", {
-          name: "AI Assistant Chat",
-          created_by: { id: userId }
-        });
+        // Setup chat channel
+        const chatChannel = await setupChannel(chatClient);
 
-        console.log("Watching channel");
-        await localChannel.watch();
-
-        setChannel(localChannel);
+        // Update state
         setClient(chatClient);
+        setChannel(chatChannel);
+
       } catch (err) {
-        console.error("Error setting up chat UI:", err);
+        console.error("Error setting up chat interface:", err);
         setError(err.message || "Failed to initialize chat");
       } finally {
         setLoading(false);
       }
     };
 
-    setupStreamUI();
+    setupStreamChat();
 
+    // Cleanup on component unmount
     return () => {
-      if (client) client.disconnectUser();
-    };
-  }, []);
-
-  const handleSendMessage = async (messageData) => {
-    // Extract text from messageData - Stream Chat sends different object structure
-    const messageText = typeof messageData === 'string'
-      ? messageData
-      : messageData?.text || messageData?.message?.text;
-
-    if (!messageText || !messageText.trim()) return;
-
-    try {
-      // Add user message to the UI
-      await channel.sendMessage({
-        text: messageText,
-        user: { id: userId }
-      });
-
-      // Update messages array for OpenAI
-      const updatedMessages = [...messages, { role: 'user', content: messageText }];
-      setMessages(updatedMessages);
-
-      // Send to OpenAI through backend
-      const response = await fetch('http://127.0.0.1:8000/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: updatedMessages }),
-      });
-
-      if (!response.ok) throw new Error('Failed to get response');
-
-      const data = await response.json();
-
-      // Add AI response to the UI
-      await channel.sendMessage({
-        text: data.message,
-        user: { id: 'ai-assistant', name: 'AI Assistant' }
-      });
-
-      // Update messages array with AI response
-      setMessages([...updatedMessages, { role: 'assistant', content: data.message }]);
-    } catch (error) {
-      console.error("Error:", error);
-      if (channel) {
-        await channel.sendMessage({
-          text: "Sorry, there was an error processing your request.",
-          user: { id: 'ai-assistant', name: 'AI Assistant' }
-        });
+      if (client) {
+        client.disconnectUser();
       }
-    }
-  };
+    };
+  }, [getAuthToken, initializeStreamClient, setupChannel, client]);
 
-  if (loading) return <div>Loading chat interface...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (!apiKey) return <div>Error: Stream Chat API key is missing</div>;
-  if (!client) return <div>Error: Could not initialize Stream Chat client</div>;
-  if (!channel) return <div>Error: Could not create chat channel</div>;
+  // Render loading state
+  if (loading) {
+    return <div className="chat-loading">Loading chat interface...</div>;
+  }
 
+  // Render error states
+  if (error) {
+    return <div className="chat-error">Error: {error}</div>;
+  }
+
+  if (!API_KEY) {
+    return <div className="chat-error">Error: Stream Chat API key is missing</div>;
+  }
+
+  if (!client || !channel) {
+    return <div className="chat-error">Error: Could not initialize chat interface</div>;
+  }
+
+  // Main render
   return (
     <>
       <Header />
@@ -142,8 +219,8 @@ const ChatPage = () => {
               <MessageList />
               <MessageInput
                 overrideSubmitHandler={(message) => {
-                  // Ensure message exists before processing
-                  if (message && (message.text || (message.message && message.message.text))) {
+                  const messageText = extractMessageText(message);
+                  if (messageText?.trim()) {
                     handleSendMessage(message);
                     return true;
                   }

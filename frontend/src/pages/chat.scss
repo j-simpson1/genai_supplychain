@@ -1,3 +1,4 @@
+// Base styles
 html,
 body,
 #root {
@@ -7,6 +8,24 @@ body,
   width: 100%;
 }
 
+// Chat loading and error states
+.chat-loading,
+.chat-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: 1.1rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.chat-error {
+  color: #e74c3c;
+  background-color: #fdf2f2;
+}
+
+// Main chat container
 .chat-container {
   display: flex;
   height: 100%;
@@ -14,41 +33,56 @@ body,
   flex: 1;
 }
 
+// Root layout configuration
 #root {
   display: flex;
   flex-direction: column;
+}
 
-  .str-chat__channel-list {
+// Stream Chat component overrides
+.str-chat {
+  // Channel list styles
+  &__channel-list {
     position: fixed;
     z-index: 1;
     height: 100%;
     width: 0;
     flex-shrink: 0;
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
+    transition: width 0.3s ease-out;
+
     &--open {
       width: 30%;
       position: fixed;
     }
-    transition: width 0.3s ease-out;
   }
-  .str-chat__channel {
+
+  // Main channel container
+  &__channel {
     flex: 1;
     min-width: 0;
   }
-  .str-chat__main-panel {
+
+  // Main panel (message area)
+  &__main-panel {
     min-width: 0;
     flex: 1;
+
     &--thread-open {
       display: none;
     }
   }
-  .str-chat__thread {
+
+  // Thread panel
+  &__thread {
     flex: 1;
     height: 100%;
     position: fixed;
     z-index: 1;
   }
-  .str-chat__channel-header .str-chat__header-hamburger {
+
+  // Channel header hamburger menu
+  &__channel-header &__header-hamburger {
     width: 30px;
     height: 38px;
     padding: var(--xxs-p);
@@ -59,39 +93,84 @@ body,
     cursor: pointer;
     border: none;
     background: transparent;
+
     &:hover {
       svg path {
         fill: var(--primary-color);
       }
     }
   }
-  @media screen and (min-width: 768px) {
-    .str-chat__channel-list {
+}
+
+// Responsive breakpoints
+@media screen and (min-width: 768px) {
+  .str-chat {
+    &__channel-list {
       width: 30%;
       position: initial;
       z-index: 0;
     }
-    .str-chat__thread {
+
+    &__thread {
       position: initial;
       z-index: 0;
     }
-    .str-chat__channel-header .str-chat__header-hamburger {
+
+    &__channel-header &__header-hamburger {
       display: none;
     }
   }
-  @media screen and (min-width: 1024px) {
-    .str-chat__main-panel {
+}
+
+@media screen and (min-width: 1024px) {
+  .str-chat {
+    &__main-panel {
       min-width: 0;
+
       &--thread-open {
         max-width: 55%;
         display: flex;
       }
     }
-    .str-chat__thread {
+
+    &__thread {
       max-width: 45%;
     }
-    .str-chat__channel-header .str-chat__header-hamburger {
+
+    &__channel-header &__header-hamburger {
       display: none;
+    }
+  }
+}
+
+// Additional utility classes for better UX
+.chat-container {
+  // Ensure proper scrolling behavior
+  overflow: hidden;
+
+  // Smooth transitions for responsive changes
+  transition: all 0.3s ease-in-out;
+}
+
+// Custom scrollbar styling for better appearance
+.str-chat__message-list {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f7fafc;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: #cbd5e0;
+    border-radius: 3px;
+
+    &:hover {
+      background-color: #a0aec0;
     }
   }
 }
