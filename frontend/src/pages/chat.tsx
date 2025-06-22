@@ -12,6 +12,7 @@ import {
 } from "stream-chat-react";
 import { StreamChat } from "stream-chat";
 import "stream-chat-react/dist/css/v2/index.css";
+import "./chat.scss";
 
 interface TokenRequest {
   userId: string;
@@ -54,6 +55,13 @@ const ChatPage = () => {
           token
         );
 
+        const channel = chatClient.channel("messaging", "general-chat", {
+          name: "General Chat",
+          members: [userId]
+        });
+
+        await channel.create();
+
         setClient(chatClient);
       } catch (err) {
         console.error("Error initializing chat:", err);
@@ -78,17 +86,19 @@ const ChatPage = () => {
   return (
     <>
       <Header />
-      <Chat client={client}>
-        <ChannelList sort={sort} filters={filters} options={options} />
-        <Channel>
-          <Window>
-            <ChannelHeader />
-            <MessageList />
-            <MessageInput />
-          </Window>
-          <Thread />
-        </Channel>
-      </Chat>
+       <div className="chat-container">
+        <Chat client={client}>
+          <ChannelList sort={sort} filters={filters} options={options} />
+          <Channel>
+            <Window>
+              <ChannelHeader />
+              <MessageList />
+              <MessageInput />
+            </Window>
+            <Thread />
+          </Channel>
+        </Chat>
+       </div>
     </>
   );
 };
