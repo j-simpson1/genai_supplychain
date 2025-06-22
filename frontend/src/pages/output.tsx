@@ -156,7 +156,7 @@ const exportToPowerBI = async () => {
         {/* Page Header */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" component="h1" fontWeight="bold">
-            Simulation Results
+            Simulation Complete
           </Typography>
           <Typography variant="subtitle1" color="textSecondary">
             {scenarioType === 'tariff_adjustment' && 'Tariff Adjustment Scenario'}
