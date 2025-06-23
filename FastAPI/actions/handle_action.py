@@ -9,6 +9,6 @@ def handle_actions(action: dict) -> str:
         manufacturers_list = response.get("manufacturers", [])
 
         names = [m["brand"] for m in manufacturers_list]
-        return "\n".join(f"- {name}" for name in names[:10])
+        return "\n".join(f"- {name}" for name in names[:20])
     else:
         return f"Unknown action: {action_type}"
