@@ -1,4 +1,6 @@
 from typing import Annotated, Sequence, TypedDict
+
+from autogen.agentchat.contrib.text_analyzer_agent import system_message
 from dotenv import load_dotenv
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -14,8 +16,9 @@ load_dotenv()
 # global variable to store document content
 document_content = ""
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
+    tool_calls: list
 
 @tool
 def update(content: str) -> str:
@@ -55,6 +58,36 @@ def retrieve_manufacturers():
 tools = [update, save, retrieve_manufacturers]
 
 model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
+
+drafting_model = ChatOpenAI(model="gpt-4o")
+
+def initial_drafter(state: AgentState) -> AgentState:
+    system_prompt = SystemMessage(content=f"""
+        You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation, 
+        and global supply chains, analysing the impact on automotive supply chains.
+        """
+    )
+    user_message = HumanMessage(content="Please generate the draft report now.")
+
+    all_messages = [system_prompt, user_message]
+
+    response = drafting_model.invoke(all_messages)
+
+    print("\n===== INITIAL DRAFT CREATED =====\n")
+    print(response.content)
+    print("\n=================================\n")
+
+    return {
+        "messages": [response],
+        "tool_calls": [
+            {
+                "name": "update",
+                "args": {"content": response.content}
+            }
+        ]
+    }
+
+
 
 def our_agent(state: AgentState) -> AgentState:
     system_prompt = SystemMessage(content=f"""
@@ -118,11 +151,13 @@ def print_messages(messages):
 
 graph = StateGraph(AgentState)
 
+graph.add_node("report_drafter", initial_drafter)
 graph.add_node("agent", our_agent)
 graph.add_node("tools", ToolNode(tools))
 
-graph.set_entry_point("agent")
+graph.set_entry_point("report_drafter")
 
+graph.add_edge("report_drafter", "agent")
 graph.add_edge("agent", "tools")
 
 graph.add_conditional_edges(
