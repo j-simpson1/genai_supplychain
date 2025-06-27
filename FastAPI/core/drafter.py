@@ -7,6 +7,8 @@ from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
+from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
+
 load_dotenv()
 
 # global variable to store document content
@@ -42,7 +44,15 @@ def save(filename: str) -> str:
     except Exception as e:
         return f"Error saving document: {str(e)}"
 
-tools = [update, save]
+@tool
+def retrieve_manufacturers():
+    """Calls the API retrieving the manufacturers by calling the TecDoc API."""
+    result = fetch_manufacturers()
+    brands = [m['brand'] for m in result.get('manufacturers', [])]
+    for brand in brands:
+        print(brand)
+
+tools = [update, save, retrieve_manufacturers]
 
 model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
 
