@@ -148,6 +148,17 @@ def run_document_agent():
 
     print("\n ===== DRAFTER FINISHED =====")
 
+def load_document(filename: str) -> str:
+    global document_content
+    try:
+        with open(filename, 'r') as file:
+            document_content = file.read()
+        print(f"\nDocument loaded from: {filename}")
+        return f"Document loaded successfully from '{filename}'."
+    except Exception as e:
+        return f"Error loading document: {str(e)}"
+
 
 if __name__ == "__main__":
+    load_document('../../exports/parts_data.csv')
     run_document_agent()
