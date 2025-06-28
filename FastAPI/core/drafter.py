@@ -84,7 +84,22 @@ def researcher(state: AgentState) -> AgentState:
         "with publication dates and URLs."
     )
 
-    summary = search_agent.run(query)
+    # Use search tool directly to avoid tool call complexity
+    search_results = search_tool.invoke({"query": query})
+
+    # Create a prompt for the model to summarize the results
+    summary_prompt = f"""
+    Based on the following search results, create a summary about recent news regarding tariffs, sanctions, inflation, and automotive supply chains. 
+    Summarize in 3-5 bullet points with publication dates and URLs where available.
+
+    Search Results:
+    {search_results}
+    """
+
+    # Get summary from the model without tool calls
+    summary_response = drafting_model.invoke([HumanMessage(content=summary_prompt)])
+    summary = summary_response.content
+
     ai_msg = AIMessage(content=summary)
 
     return {
