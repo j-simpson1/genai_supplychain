@@ -112,9 +112,18 @@ def researcher(state: AgentState) -> AgentState:
 
 
 def initial_drafter(state: AgentState) -> AgentState:
+    research_summary = ""
+    for msg in reversed(state.get("messages", [])):
+        if isinstance(msg, AIMessage):
+            research_summary = msg.content
+            break
+
     system_prompt = SystemMessage(content=f"""
-        You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation, 
+        You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
         and global supply chains, analysing the impact on automotive supply chains.
+
+        Use the following research summary as your main source:
+        {research_summary}
         """
     )
     user_message = HumanMessage(content="Please generate the draft report now.")
