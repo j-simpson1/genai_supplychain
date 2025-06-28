@@ -1,6 +1,14 @@
 # genai_supplychain
 MSc Computer Science Project, James Simpson
 
+## Docker Services
+
+| Service   | Port | Purpose                   | Credentials                            |
+|-----------|------|---------------------------|----------------------------------------|
+| postgres  | 5432 | PostgreSQL database       | `devuser` / `devpass` / `devdb`       |
+| pgadmin   | 5050 | Browser-based DB explorer | `admin@example.com` / `adminpass`     |
+
+
 1) Start FastAPI Backend
 ------------------------
 
@@ -22,3 +30,11 @@ MSc Computer Science Project, James Simpson
 - Start the development server:
     npm run dev
   The app will run at: http://localhost:5173
+
+3) Start Docker
+------------------------
+- Start Docker containers
+    docker compose up -d
+
+  pgAdmin http://localhost:5050
+  Login: admin@example.com / adminpass
