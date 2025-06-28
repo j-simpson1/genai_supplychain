@@ -125,7 +125,7 @@ def initial_drafter(state: AgentState) -> AgentState:
 
     print("\n\n===== INITIAL DRAFT CREATED =====\n")
     print(response.content)
-    print("\n=================================\n")
+    print("\n===== END OF INITIAL DRAFT =====\n")
 
     return {
         "messages": [response],
@@ -202,7 +202,9 @@ def print_messages(messages):
         if isinstance(msg, ToolMessage):
             print(f"\n🛠️ TOOL RESULT: {msg.content}")
         elif isinstance(msg, AIMessage):
+            print("\n\n===== STARTING RESEARCH =====\n")
             print(f"\n RESEARCHER: {msg.content}")
+            print("\n===== END OF RESEARCH =====\n")
 
 
 graph = StateGraph(AgentState)
