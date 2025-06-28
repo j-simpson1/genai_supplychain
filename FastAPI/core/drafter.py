@@ -155,7 +155,84 @@ def initial_drafter(state: AgentState) -> AgentState:
     }
 
 
-def agent_node(state: AgentState) -> AgentState:
+def report_critic(state: AgentState) -> AgentState:
+    """Evaluate and provide feedback on the draft report"""
+    print("\n🔍 Evaluating report quality...")
+
+    global document_content
+
+    system_prompt = SystemMessage(content="""
+    You are a professional report critic. Evaluate the following report on:
+    1. Clarity and readability
+    2. Completeness of information
+    3. Logical structure and flow
+    4. Factual accuracy and sourcing (NOTE: Do NOT comment on dates - assume all dates are correct)
+    5. Professional formatting
+
+    IMPORTANT: Do NOT flag dates or temporal references as issues. Assume all dates in the report are accurate.
+
+    Provide specific, actionable feedback and end with a quality score (1-10).
+    Format your final line as: "QUALITY SCORE: X/10"
+    If score is below 7, suggest specific improvements.
+    """)
+
+    critique_message = HumanMessage(content=f"Please evaluate this report:\n\n{document_content}")
+    response = drafting_model.invoke([system_prompt, critique_message])
+
+    print(f"\n📊 REPORT EVALUATION:\n{response.content}")
+
+    return {"messages": [critique_message, response]}
+
+def auto_reviser(state: AgentState) -> AgentState:
+    """Automatically revise the report based on critic feedback"""
+    print("\n🔧 Auto-revising report based on feedback...")
+
+    global document_content
+
+    # Get critic feedback
+    critic_feedback = ""
+    for msg in reversed(state.get("messages", [])):
+        if isinstance(msg, AIMessage) and ("QUALITY SCORE:" in msg.content or "feedback" in msg.content.lower()):
+            critic_feedback = msg.content
+            break
+
+    system_prompt = SystemMessage(content=f"""
+    You are a report reviser. Improve the following report based on the critic's feedback.
+    Make specific improvements addressing the feedback while maintaining the core content.
+
+    CRITICAL INSTRUCTIONS:
+    - PRESERVE ALL DATES EXACTLY as they appear in the original report
+    - Do NOT change any dates, years, or temporal references
+    - If dates seem unusual, assume they are correct and leave them unchanged
+    - Focus only on improving content quality, structure, and clarity
+
+    Critic Feedback:
+    {critic_feedback}
+
+    Current Report:
+    {document_content}
+    """)
+
+    revision_message = HumanMessage(content="Please revise the report based on the feedback.")
+    response = drafting_model.invoke([system_prompt, revision_message])
+
+    print(f"\n📝 REVISED REPORT:\n{response.content}")
+
+    return {
+        "messages": [
+            revision_message,
+            AIMessage(
+                content=response.content,
+                tool_calls=[{
+                    "name": "update",
+                    "args": {"content": response.content},
+                    "id": "revision_update_call"
+                }]
+            )
+        ]
+    }
+
+def revision_drafter_node(state: AgentState) -> AgentState:
     """Interactive agent for document editing"""
     print("\n💬 Ready for user interaction...")
 
@@ -210,6 +287,51 @@ def should_continue(state: AgentState) -> str:
 
     return "continue"
 
+def needs_revision(state: AgentState) -> str:
+    """Determine if the report needs revision based on critic feedback"""
+    messages = state.get("messages", [])
+
+    # Get the last critic response
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and "QUALITY SCORE:" in msg.content:
+            # Extract score
+            try:
+                score_line = [line for line in msg.content.split('\n') if 'QUALITY SCORE:' in line][-1]
+                score = int(score_line.split(':')[1].split('/')[0].strip())
+                print(f"\n📊 Quality Score: {score}/10")
+
+                if score < 7:
+                    print("📝 Report needs revision")
+                    return "revise"
+                else:
+                    print("✅ Report quality acceptable")
+                    return "proceed"
+            except:
+                print("⚠️ Could not parse quality score, proceeding to revision")
+                return "revise"
+
+    return "revise"
+
+def route_from_tools(state: AgentState) -> str:
+    """Route from tools based on context"""
+    messages = state.get("messages", [])
+
+    # Check if we should end (save was called)
+    for message in reversed(messages[-3:]):
+        if isinstance(message, ToolMessage):
+            if "saved" in message.content.lower() and "document" in message.content.lower():
+                return "end"
+        elif isinstance(message, AIMessage) and hasattr(message, 'tool_calls'):
+            if any(tc.get('name') == 'save' for tc in message.tool_calls or []):
+                return "end"
+
+    # Check if this is the initial draft (should go to critic)
+    if any("update_call_1" in str(msg) for msg in messages):
+        return "critique"
+
+    # Otherwise continue to revision drafter
+    return "continue"
+
 
 def load_document(filename: str) -> str:
     """Load a document from file"""
@@ -231,7 +353,9 @@ def create_graph():
     # Add nodes
     graph.add_node("researcher", researcher)
     graph.add_node("report_drafter", initial_drafter)
-    graph.add_node("agent", agent_node)
+    graph.add_node("report_critique", report_critic)
+    graph.add_node("auto_reviser", auto_reviser)
+    graph.add_node("revision_drafter", revision_drafter_node)
     graph.add_node("tools", ToolNode(tools))
 
     # Set entry point
@@ -240,28 +364,42 @@ def create_graph():
     # Add edges
     graph.add_edge("researcher", "report_drafter")
     graph.add_edge("report_drafter", "tools")
-    graph.add_edge("tools", "agent")
+
+
+    # After critique, decide revision or proceed
+    graph.add_conditional_edges(
+        "report_critique",
+        needs_revision,
+        {
+            "revise": "auto_reviser",
+            "proceed": "revision_drafter"
+        }
+    )
+
+    # Auto reviser goes back to tools to update document
+    graph.add_edge("auto_reviser", "tools")
+
+    graph.add_conditional_edges(
+        "tools",
+        route_from_tools,
+        {
+            "critique": "report_critique",
+            "continue": "revision_drafter",
+            "end": END
+        }
+    )
 
     # Add conditional edges
     graph.add_conditional_edges(
-        "agent",
+        "revision_drafter",
         lambda state: "tools" if any(
             hasattr(msg, 'tool_calls') and msg.tool_calls
             for msg in state.get("messages", [])[-1:]
         ) else "continue",
         {
             "tools": "tools",
-            "continue": "agent"
+            "continue": "revision_drafter"
         }
-    )
-
-    graph.add_conditional_edges(
-        "tools",
-        should_continue,
-        {
-            "continue": "agent",
-            "end": END,
-        },
     )
 
     return graph.compile()
