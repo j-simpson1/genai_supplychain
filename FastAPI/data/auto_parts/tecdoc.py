@@ -147,8 +147,6 @@ def fetch_countries():
 
 	return response.json()
 
-print(fetch_countries())
-
 # '100006': {
 # 	'text': 'Braking System',
 # 	'children': {
