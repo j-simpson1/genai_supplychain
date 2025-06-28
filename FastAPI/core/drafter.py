@@ -2,12 +2,16 @@ from typing import Annotated, Sequence, TypedDict
 
 from autogen.agentchat.contrib.text_analyzer_agent import system_message
 from dotenv import load_dotenv
+import os
+
+from langchain.agents import initialize_agent, AgentType
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langchain_community.tools import TavilySearchResults
 
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
@@ -61,6 +65,37 @@ model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
 
 drafting_model = ChatOpenAI(model="gpt-4o")
 
+search_tool = TavilySearchResults(api_key=os.environ["TAVILY_API_KEY"])
+
+search_model = ChatOpenAI(model="gpt-4o").bind_tools([search_tool])
+
+search_agent = initialize_agent(
+    [search_tool],
+    ChatOpenAI(model="gpt-4o"),
+    agent=AgentType.OPENAI_FUNCTIONS,
+    verbose=False
+)
+
+
+def researcher(state: AgentState) -> AgentState:
+    query = (
+        "Find recent news about tariffs, sanctions, inflation, "
+        "and automotive supply chains. Summarize in 3-5 bullet points "
+        "with publication dates and URLs."
+    )
+
+    summary = search_agent.run(query)
+    ai_msg = AIMessage(content=summary)
+
+    return {
+        "messages": state.get("messages", []) + [
+            HumanMessage(content=query),
+            ai_msg
+        ],
+        "tool_calls": [],
+    }
+
+
 def initial_drafter(state: AgentState) -> AgentState:
     system_prompt = SystemMessage(content=f"""
         You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation, 
@@ -73,7 +108,7 @@ def initial_drafter(state: AgentState) -> AgentState:
 
     response = drafting_model.invoke(all_messages)
 
-    print("\n===== INITIAL DRAFT CREATED =====\n")
+    print("\n\n===== INITIAL DRAFT CREATED =====\n")
     print(response.content)
     print("\n=================================\n")
 
@@ -92,12 +127,16 @@ def initial_drafter(state: AgentState) -> AgentState:
 def our_agent(state: AgentState) -> AgentState:
     system_prompt = SystemMessage(content=f"""
         You are Drafter, a helpful writing assistant. You are going to help the user update and modify documents.
-
-        - If the user wants to update or modify content, use the 'update' tool with the complete updated content.
-        - If the user wants to save and finish, you need to use the 'save' tool.
-        - Make sure to always show the current document state after modifications.
-
-        The current document content is:{document_content}
+    
+        IMPORTANT INSTRUCTION:
+        - Unless the user specifically asks to change or remove other sections, you MUST preserve the existing document content exactly as it is.
+        - When the user requests an adjustment, integrate only the requested changes, and clearly indicate which section was changed.
+        - You should output the complete updated document text (including unchanged parts) after applying any edits.
+        - If the user only asks to review or comment, do not make changes—only provide comments.
+    
+        The current document content is:
+    
+        {document_content}
         """)
 
     if not state["messages"]:
@@ -144,19 +183,23 @@ def print_messages(messages):
     if not messages:
         return
 
-    for message in messages[-3:]:
-        if isinstance(message, ToolMessage):
-            print(f"\n🛠️ TOOL RESULT: {message.content}")
+    for msg in messages[-3:]:
+        if isinstance(msg, ToolMessage):
+            print(f"\n🛠️ TOOL RESULT: {msg.content}")
+        elif isinstance(msg, AIMessage):
+            print(f"\n RESEARCHER: {msg.content}")
 
 
 graph = StateGraph(AgentState)
 
+graph.add_node("researcher", researcher)
 graph.add_node("report_drafter", initial_drafter)
 graph.add_node("agent", our_agent)
 graph.add_node("tools", ToolNode(tools))
 
-graph.set_entry_point("report_drafter")
+graph.set_entry_point("researcher")
 
+graph.add_edge("researcher", "report_drafter")
 graph.add_edge("report_drafter", "agent")
 graph.add_edge("agent", "tools")
 
