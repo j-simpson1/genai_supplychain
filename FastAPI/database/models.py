@@ -56,3 +56,8 @@ class DataSource(SQLModel, table=True):
     dataSourceId: int = Field(primary_key=True)
     dataSourceName: str
 
+class Category(SQLModel, table=True):
+    categoryId: int = Field(primary_key=True)
+    text: str
+    parentId: Optional[int] = Field(default=None, foreign_key="category.categoryId")
+

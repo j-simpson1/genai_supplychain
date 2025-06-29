@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy import text
 
 from FastAPI.database.database import engine
-from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers
+from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers, Category
 from FastAPI.data.auto_parts.autodoc_search import search_autodoc
 
 # Example TOYOTA RAV 4 V
@@ -44,6 +44,31 @@ def flatten_leaf_categories(categories, parent_id=None):
             rows.extend(flatten_leaf_categories(cata_data['children'], parent_id=cat_id))
     return rows
 
+def extract_branch_categories(categories, parent_id=None):
+    branch_nodes = []
+    for cat_id, cat_data in categories.items():
+        if cat_data['children']:
+            branch_nodes.append({
+                'categoryId': cat_id,
+                'text': cat_data['text'],
+                'parentId': parent_id
+            })
+            branch_nodes.extend(
+                extract_branch_categories(cat_data['children'], parent_id=cat_id)
+            )
+    return branch_nodes
+
+def upload_categories_to_db(category_df):
+    with Session(engine) as session:
+        for _, row in category_df.iterrows():
+            category = Category(
+                categoryId=int(row['categoryId']),
+                text=row['text'],
+                parentId=int(row['parentId']) if pd.notnull(row['parentId']) else None
+            )
+            session.add(category)
+        session.commit()
+
 def upload_dummy_data():
     with Session(engine) as session:
         manufacturer = Manufacturers(manufacturerId=111, description="TOYOTA")
@@ -69,7 +94,7 @@ def upload_dummy_data():
 
 def clear_database():
     with Session(engine) as session:
-        session.exec(text("TRUNCATE TABLE articlevehiclelink, parts, vehicle, models, manufacturers, articles, suppliers RESTART IDENTITY CASCADE;"))
+        session.exec(text("TRUNCATE TABLE articlevehiclelink, parts, vehicle, models, manufacturers, articles, suppliers, category RESTART IDENTITY CASCADE;"))
         session.commit()
 
 def upload_articles_and_suppliers(data):
@@ -99,17 +124,24 @@ def upload_articles_and_suppliers(data):
 def automotive_parts():
     # fetch parts data
     parts = fetch_categories_data(vehicleId, manufacturerId)
+    print(parts)
 
     # convert parts data into a pandas dataframe
     parts_dict_list = flatten_leaf_categories(parts['categories'])
     parts_df = pd.DataFrame(parts_dict_list)
     print(parts_df)
 
+    branch_categories = extract_branch_categories(parts['categories'])
+    category_df = pd.DataFrame(branch_categories)
+    print(branch_categories)
+    print(category_df)
+
     # clear database and upload dummy data for manufacturer, model and vehicle
     clear_database()
     upload_dummy_data()
 
     # upload parts to the database
+    upload_categories_to_db(category_df)
     upload_parts_to_db(parts_df)
 
     # extract relevant information from each of the articles
