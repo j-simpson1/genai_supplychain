@@ -124,9 +124,9 @@ def upload_articles_and_suppliers(data):
         session.commit()
 
 
-def find_all_subcategories(df, category_id):
+def add_all_subcategories(df, category_id):
 
-    descendants = set()
+    descendants = {category_id}
     frontier = {category_id}
 
     while frontier:
@@ -156,8 +156,10 @@ def automotive_parts():
     print(category_df)
 
     target_category = "100006"
-    sub_categories = find_all_subcategories(category_df, "100006")
+    sub_categories = add_all_subcategories(category_df, "100006")
     print("Descendants of", target_category, ":", sub_categories)
+
+    filtered_parts_df = parts_df[parts_df['categoryId'].isin(sub_categories)]
 
     # clear database and upload dummy data for manufacturer, model and vehicle
     clear_database()
