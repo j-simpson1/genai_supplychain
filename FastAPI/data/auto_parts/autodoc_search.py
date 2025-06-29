@@ -3,17 +3,20 @@ import json
 import os
 from dotenv import load_dotenv
 
-def search_autodoc(query, api_key):
+def search_autodoc(keyword):
     """
     Make a GET request to the Piloterr autodoc search API
     
     Args:
-        query (str): The search query URL
-        api_key (str): Your API key
-    
+        keyword (str): The search query keyword
     Returns:
         dict: API response as JSON
     """
+    load_dotenv()
+    api_key = os.getenv("PILOTERR_API_KEY")
+
+    query = f"https://www.auto-doc.fr/search?keyword={keyword}"
+
     url = "https://piloterr.com/api/v2/autodoc/search"
     
     headers = {
@@ -40,16 +43,10 @@ def search_autodoc(query, api_key):
 
 # Example usage
 if __name__ == "__main__":
-    # Replace with your actual API key
-    load_dotenv()
-    API_KEY = os.getenv("PILOTERR_API_KEY")
 
-    keyword = "0+986+495+169"
+    keyword = "82B0076"
     
-    # The query from your curl command
-    QUERY = f"https://www.auto-doc.fr/search?keyword={keyword}"
-    
-    result = search_autodoc(QUERY, API_KEY)
+    result = search_autodoc(keyword)
     
     if result:
         print("API Response:")
