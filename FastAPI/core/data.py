@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy import text
 
 from FastAPI.database.database import engine
-from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts
+from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers
 from FastAPI.data.auto_parts.autodoc_search import search_autodoc
 
 # Example TOYOTA RAV 4 V
@@ -72,20 +72,49 @@ def clear_database():
         session.exec(text("TRUNCATE TABLE articlevehiclelink, parts, vehicle, models, manufacturers, articles, suppliers RESTART IDENTITY CASCADE;"))
         session.commit()
 
+def upload_articles_and_suppliers(data):
+    with Session(engine) as session:
+        for item in data:
+            supplier = session.get(Suppliers, item['supplierId'])
+            if not supplier:
+                supplier = Suppliers(
+                    supplierId=item['supplierId'],
+                    supplierName=item['supplierName']
+                )
+                session.add(supplier)
+                session.flush()
+
+            article = Articles(
+                articleNo=item['articleNo'],
+                articleProductName=item['articleProductName'],
+                productId=item['productId'],
+                price=item.get('priceGBP'),
+                supplierId=item['supplierId']
+            )
+            session.add(article)
+        session.commit()
+
+
+
 def automotive_parts():
+    # fetch parts data
     parts = fetch_categories_data(vehicleId, manufacturerId)
 
+    # convert parts data into a pandas dataframe
     parts_dict_list = flatten_leaf_categories(parts['categories'])
     parts_df = pd.DataFrame(parts_dict_list)
     print(parts_df)
 
+    # clear database and upload dummy data for manufacturer, model and vehicle
     clear_database()
     upload_dummy_data()
 
+    # upload parts to the database
     upload_parts_to_db(parts_df)
 
+    # extract relevant information from each of the articles
     all_articles = []
-    for productGroupId in parts_df['productGroupId'].head(1):
+    for productGroupId in parts_df['productGroupId'].head(5):
         article_list = get_article_list(manufacturerId, vehicleId, productGroupId)
         print(article_list)
         articles = article_list['articles']
@@ -99,13 +128,26 @@ def automotive_parts():
             })
 
     print(all_articles)
+
+    # search for pricing information
     for article in all_articles[:1]:
         articleNo = article['articleNo']
-        print(articleNo)
         price_search = search_autodoc(articleNo)
-        print(price_search)
-        first_price = price_search['results'][0]['price']
-        print(first_price)
+        gbp_eur_fx_rate = 1.17
+        if price_search and price_search['results']:
+            first_price = round(price_search['results'][0]['price'] / gbp_eur_fx_rate, 2)
+            article['priceGBP'] = first_price
+            article['priceSource'] = 1
+            print(first_price)
+        else:
+            article['priceGBP'] = None
+        print(article)
+
+    print(all_articles)
+
+    upload_articles_and_suppliers(all_articles)
+
+
 
 
 

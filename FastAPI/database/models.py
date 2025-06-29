@@ -43,10 +43,16 @@ class Articles(SQLModel, table=True):
     articleProductName:str
     productId: int
     price: Optional[float] = None
+    priceSource: Optional[int] = None
+    countryOfOrigin: Optional[str] = None
+    countryOfOriginSource: Optional[str] = None
     supplierId: int = Field(foreign_key="suppliers.supplierId", primary_key=True)
 
 class Suppliers(SQLModel, table=True):
     supplierId: int = Field(primary_key=True)
     supplierName: str
 
+class DataSource(SQLModel, table=True):
+    dataSourceId: int = Field(primary_key=True)
+    dataSourceName: str
 
