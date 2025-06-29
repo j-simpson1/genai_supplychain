@@ -124,6 +124,21 @@ def upload_articles_and_suppliers(data):
         session.commit()
 
 
+def find_all_subcategories(df, category_id):
+
+    descendants = set()
+    frontier = {category_id}
+
+    while frontier:
+        # Find children of any id in the frontier
+        children = df[df["parentId"].isin(frontier)]["categoryId"].tolist()
+        # Add to results
+        descendants.update(children)
+        # Prepare next frontier
+        frontier = set(children)
+
+    return descendants
+
 
 def automotive_parts():
     # fetch parts data
@@ -139,6 +154,10 @@ def automotive_parts():
     category_df = pd.DataFrame(branch_categories)
     print(branch_categories)
     print(category_df)
+
+    target_category = "100006"
+    sub_categories = find_all_subcategories(category_df, "100006")
+    print("Descendants of", target_category, ":", sub_categories)
 
     # clear database and upload dummy data for manufacturer, model and vehicle
     clear_database()
