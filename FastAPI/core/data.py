@@ -3,9 +3,9 @@ from FastAPI.data.auto_parts.tecdoc import fetch_categories_data, get_article_li
 from sqlmodel import Session, select
 from sqlalchemy import text
 
-from FastAPI.database.models import Manufacturers, Vehicle
 from FastAPI.database.database import engine
 from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts
+from FastAPI.data.auto_parts.autodoc_search import search_autodoc
 
 # Example TOYOTA RAV 4 V
 langId = "4" # English (GB)
@@ -44,21 +44,7 @@ def flatten_leaf_categories(categories, parent_id=None):
             rows.extend(flatten_leaf_categories(cata_data['children'], parent_id=cat_id))
     return rows
 
-def clear_database():
-    with Session(engine) as session:
-        session.exec(text("TRUNCATE TABLE articlevehiclelink, parts, vehicle, models, manufacturers, articles, suppliers RESTART IDENTITY CASCADE;"))
-        session.commit()
-
-def automotive_parts():
-    parts = fetch_categories_data(vehicleId, manufacturerId)
-    print(parts)
-
-    parts_dict_list = flatten_leaf_categories(parts['categories'])
-    parts_df = pd.DataFrame(parts_dict_list)
-    print(parts_df)
-
-    clear_database()
-
+def upload_dummy_data():
     with Session(engine) as session:
         manufacturer = Manufacturers(manufacturerId=111, description="TOYOTA")
         session.add(manufacturer)
@@ -80,9 +66,48 @@ def automotive_parts():
 
         session.commit()
 
+
+def clear_database():
+    with Session(engine) as session:
+        session.exec(text("TRUNCATE TABLE articlevehiclelink, parts, vehicle, models, manufacturers, articles, suppliers RESTART IDENTITY CASCADE;"))
+        session.commit()
+
+def automotive_parts():
+    parts = fetch_categories_data(vehicleId, manufacturerId)
+
+    parts_dict_list = flatten_leaf_categories(parts['categories'])
+    parts_df = pd.DataFrame(parts_dict_list)
+    print(parts_df)
+
+    clear_database()
+    upload_dummy_data()
+
     upload_parts_to_db(parts_df)
 
-    print(get_article_list(manufacturerId, vehicleId, productGroupId))
+    all_articles = []
+    for productGroupId in parts_df['productGroupId'].head(1):
+        article_list = get_article_list(manufacturerId, vehicleId, productGroupId)
+        print(article_list)
+        articles = article_list['articles']
+        for a in articles:
+            all_articles.append({
+                'articleNo': a['articleNo'],
+                'supplierName': a['supplierName'],
+                'supplierId': a['supplierId'],
+                'articleProductName': a['articleProductName'],
+                'productId': a['productId']
+            })
+
+    print(all_articles)
+    for article in all_articles[:1]:
+        articleNo = article['articleNo']
+        print(articleNo)
+        price_search = search_autodoc(articleNo)
+        print(price_search)
+        first_price = price_search['results'][0]['price']
+        print(first_price)
+
+
 
 
 if __name__ == "__main__":
