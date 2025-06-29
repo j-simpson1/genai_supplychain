@@ -19,7 +19,7 @@ class Vehicle(SQLModel, table=True):
 
 class Parts(SQLModel, table=True):
     productGroupId: int = Field(primary_key=True)
-    Description: str
+    description: str
     manufacturerId: int = Field(foreign_key="manufacturers.manufacturerId")
     vehicleId: int = Field(foreign_key="vehicle.vehicleId")
 
@@ -58,7 +58,7 @@ class DataSource(SQLModel, table=True):
 
 class Category(SQLModel, table=True):
     categoryId: int = Field(primary_key=True)
-    text: str
+    description: str
     parentId: Optional[int] = Field(default=None, foreign_key="category.categoryId")
     manufacturerId: int = Field(foreign_key="manufacturers.manufacturerId")
     vehicleId: int = Field(foreign_key="vehicle.vehicleId")

@@ -24,7 +24,7 @@ def upload_parts_to_db(parts_df):
         for _, row in parts_df.iterrows():
             part = Parts(
                 productGroupId=int(row['productGroupId']),
-                Description=row['description'],
+                description=row['description'],
                 manufacturerId=int(111),
                 vehicleId=int(140099)
             )
@@ -50,7 +50,7 @@ def extract_branch_categories(categories, parent_id=None):
         if cat_data['children']:
             branch_nodes.append({
                 'categoryId': cat_id,
-                'text': cat_data['text'],
+                'description': cat_data['text'],
                 'parentId': parent_id
             })
             branch_nodes.extend(
@@ -63,7 +63,7 @@ def upload_categories_to_db(category_df):
         for _, row in category_df.iterrows():
             category = Category(
                 categoryId=int(row['categoryId']),
-                text=row['text'],
+                description=row['description'],
                 parentId=int(row['parentId']) if pd.notnull(row['parentId']) else None,
                 manufacturerId=int(111),
                 vehicleId=int(140099)
