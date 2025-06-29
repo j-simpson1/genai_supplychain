@@ -60,4 +60,6 @@ class Category(SQLModel, table=True):
     categoryId: int = Field(primary_key=True)
     text: str
     parentId: Optional[int] = Field(default=None, foreign_key="category.categoryId")
+    manufacturerId: int = Field(foreign_key="manufacturers.manufacturerId")
+    vehicleId: int = Field(foreign_key="vehicle.vehicleId")
 

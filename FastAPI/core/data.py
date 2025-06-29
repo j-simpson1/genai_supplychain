@@ -64,7 +64,9 @@ def upload_categories_to_db(category_df):
             category = Category(
                 categoryId=int(row['categoryId']),
                 text=row['text'],
-                parentId=int(row['parentId']) if pd.notnull(row['parentId']) else None
+                parentId=int(row['parentId']) if pd.notnull(row['parentId']) else None,
+                manufacturerId=int(111),
+                vehicleId=int(140099)
             )
             session.add(category)
         session.commit()
