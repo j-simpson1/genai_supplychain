@@ -25,6 +25,7 @@ def upload_parts_to_db(parts_df):
             part = Parts(
                 productGroupId=int(row['productGroupId']),
                 description=row['description'],
+                categoryId=row['categoryId'],
                 manufacturerId=int(111),
                 vehicleId=int(140099)
             )
@@ -34,14 +35,15 @@ def upload_parts_to_db(parts_df):
 
 def flatten_leaf_categories(categories, parent_id=None):
     rows = []
-    for cat_id, cata_data in categories.items():
-        if not cata_data['children']:
+    for cat_id, cat_data in categories.items():
+        if not cat_data['children']:
             rows.append({
                 'productGroupId': cat_id,
-                'description': cata_data['text']
+                'description': cat_data['text'],
+                'categoryId': parent_id
             })
         else:
-            rows.extend(flatten_leaf_categories(cata_data['children'], parent_id=cat_id))
+            rows.extend(flatten_leaf_categories(cat_data['children'], parent_id=cat_id))
     return rows
 
 def extract_branch_categories(categories, parent_id=None):

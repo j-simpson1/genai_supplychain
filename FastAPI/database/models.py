@@ -20,6 +20,7 @@ class Vehicle(SQLModel, table=True):
 class Parts(SQLModel, table=True):
     productGroupId: int = Field(primary_key=True)
     description: str
+    categoryId: int = Field(foreign_key="category.categoryId")
     manufacturerId: int = Field(foreign_key="manufacturers.manufacturerId")
     vehicleId: int = Field(foreign_key="vehicle.vehicleId")
 
