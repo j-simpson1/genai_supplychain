@@ -168,7 +168,8 @@ def automotive_parts():
     # search for pricing information
     for article in all_articles[:1]:
         articleNo = article['articleNo']
-        price_search = search_autodoc(articleNo)
+        # price_search = search_autodoc(articleNo)
+        price_search = None
         gbp_eur_fx_rate = 1.17
         if price_search and price_search['results']:
             first_price = round(price_search['results'][0]['price'] / gbp_eur_fx_rate, 2)
