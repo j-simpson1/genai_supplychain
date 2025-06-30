@@ -1,6 +1,10 @@
 from typing import Annotated, Sequence, TypedDict
 from dotenv import load_dotenv
 import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import squarify
 
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -67,6 +71,79 @@ model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
 drafting_model = ChatOpenAI(model="gpt-4o")
 search_tool = TavilySearchResults(api_key=os.environ["TAVILY_API_KEY"])
 
+def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
+    """Generate visualisations and return list of image paths."""
+    df = pd.read_csv(csv_path)
+    df['priceSource'] = df['priceSource'].astype(str)
+    sns.set(style="whitegrid")
+    image_paths = []
+
+    output_dir = "visualisations"
+    os.makedirs(output_dir, exist_ok=True)
+    print("Saving visualisations to:", os.path.abspath(output_dir))
+
+    # Box Plot
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(
+        x="countryOfOrigin",
+        y="price",
+        hue="countryOfOrigin",
+        data=df,
+        palette="Set2",
+        legend=False
+    )
+    plt.title("Price Distribution by Country of Origin")
+    plt.xlabel("Country of Origin")
+    plt.ylabel("Price (€)")
+    plt.tight_layout()
+    boxplot_path = os.path.join(output_dir, "boxplot_price_by_country.png")
+    plt.savefig(boxplot_path)
+    plt.close()
+    image_paths.append(boxplot_path)
+
+    # Bar Chart
+    avg_price_supplier = df.groupby("supplierId")["price"].mean().reset_index()
+    plt.figure(figsize=(12, 6))
+    sns.barplot(
+        x="supplierId",
+        y="price",
+        hue="supplierId",
+        data=avg_price_supplier,
+        palette="viridis",
+        legend=False
+    )
+    plt.title("Average Price per Supplier")
+    plt.xlabel("Supplier ID")
+    plt.ylabel("Average Price (€)")
+    plt.tight_layout()
+    bar_chart_path = os.path.join(output_dir, "bar_chart_avg_price_per_supplier.png")
+    plt.savefig(bar_chart_path)
+    plt.close()
+    image_paths.append(bar_chart_path)
+
+    # Treemap
+    product_agg = df.groupby("articleProductName")["price"].sum().reset_index()
+    labels = [
+        f"{row['articleProductName']}\n€{row['price']:.2f}"
+        for _, row in product_agg.iterrows()
+    ]
+    sizes = product_agg["price"].values
+    plt.figure(figsize=(12, 8))
+    squarify.plot(
+        sizes=sizes,
+        label=labels,
+        alpha=0.8
+    )
+    plt.title("Treemap of Total Price by Product Type")
+    plt.axis('off')
+    plt.tight_layout()
+    treemap_path = os.path.join(output_dir, "treemap_product_types.png")
+    plt.savefig(treemap_path)
+    plt.close()
+    image_paths.append(treemap_path)
+
+    return image_paths
+
 
 def researcher(state: AgentState) -> AgentState:
     """Research node - gathers information about tariffs and supply chains"""
@@ -109,6 +186,17 @@ def researcher(state: AgentState) -> AgentState:
         ]
     }
 
+def visualisations(state: AgentState) -> AgentState:
+    """Creating visualisations from the automotive parts data being used in the report and simulation."""
+    print("\n📊 Generating visualisations...")
+    image_paths = generate_visualisations("article_dummy_data.csv")
+    markdown_links = [f"![]({path})" for path in image_paths]
+    print("Visualisations generated:", image_paths)
+    return {
+        "messages": [
+            AIMessage(content="Visualisations generated:\n" + "\n".join(markdown_links))
+        ]
+    }
 
 def initial_drafter(state: AgentState) -> AgentState:
     """Draft the initial report based on research"""
@@ -121,12 +209,20 @@ def initial_drafter(state: AgentState) -> AgentState:
             research_summary = msg.content
             break
 
+    # Generate visualisations and get Markdown links
+    image_paths = generate_visualisations("article_dummy_data.csv")
+    markdown_links = [f"![]({path})" for path in image_paths]
+    visualisations_md = "\n\n".join(markdown_links)
+
     system_prompt = SystemMessage(content=f"""
         You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
         and global supply chains, analyzing the impact on automotive supply chains.
 
         Use the following research summary as your main source:
         {research_summary}
+
+        In a section titled 'Supply Chain Visualisations', include the following visualisations:
+        {visualisations_md}
         """)
 
     user_message = HumanMessage(content="Please generate the draft report now.")
