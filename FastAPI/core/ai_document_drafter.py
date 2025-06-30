@@ -147,7 +147,8 @@ def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
 
 def researcher(state: AgentState) -> AgentState:
     """Research node - gathers information about tariffs and supply chains"""
-    print("\n🔍 Starting research phase...")
+
+    print("\n===== Starting Research Phase... =====\n")
 
     query = (
         "Find recent news about tariffs, sanctions, inflation, "
@@ -172,9 +173,8 @@ def researcher(state: AgentState) -> AgentState:
     summary = summary_response.content
 
     # Log the research results
-    print("\n===== RESEARCH COMPLETED =====")
     print(f"{summary}")
-    print("===== END OF RESEARCH =====\n")
+    print("\n===== End of Research =====\n")
 
     # Create AI message with the research summary
     ai_msg = AIMessage(content=summary)
@@ -186,21 +186,9 @@ def researcher(state: AgentState) -> AgentState:
         ]
     }
 
-def visualisations(state: AgentState) -> AgentState:
-    """Creating visualisations from the automotive parts data being used in the report and simulation."""
-    print("\n📊 Generating visualisations...")
-    image_paths = generate_visualisations("article_dummy_data.csv")
-    markdown_links = [f"![]({path})" for path in image_paths]
-    print("Visualisations generated:", image_paths)
-    return {
-        "messages": [
-            AIMessage(content="Visualisations generated:\n" + "\n".join(markdown_links))
-        ]
-    }
-
 def initial_drafter(state: AgentState) -> AgentState:
     """Draft the initial report based on research"""
-    print("\n📝 Creating initial draft...")
+    print("\n===== Creating initial draft... =====\n")
 
     # Get the research summary from the last AI message
     research_summary = ""
@@ -210,7 +198,7 @@ def initial_drafter(state: AgentState) -> AgentState:
             break
 
     # Generate visualisations and get Markdown links
-    image_paths = generate_visualisations("article_dummy_data.csv")
+    image_paths = generate_visualisations("dummy_data/article_dummy_data.csv")
     markdown_links = [f"![]({path})" for path in image_paths]
     visualisations_md = "\n\n".join(markdown_links)
 
@@ -231,9 +219,8 @@ def initial_drafter(state: AgentState) -> AgentState:
     response = drafting_model.invoke(all_messages)
 
     # Log the draft creation
-    print("\n===== INITIAL DRAFT CREATED =====")
     print(response.content)
-    print("===== END OF INITIAL DRAFT =====\n")
+    print("\n===== End of initial draft =====\n")
 
     # Return the response message AND trigger the update tool
     return {
@@ -253,7 +240,7 @@ def initial_drafter(state: AgentState) -> AgentState:
 
 def report_critic(state: AgentState) -> AgentState:
     """Evaluate and provide feedback on the draft report"""
-    print("\n🔍 Evaluating report quality...")
+    print("\n===== Evaluating report quality... =====")
 
     global document_content
 
@@ -275,13 +262,13 @@ def report_critic(state: AgentState) -> AgentState:
     critique_message = HumanMessage(content=f"Please evaluate this report:\n\n{document_content}")
     response = drafting_model.invoke([system_prompt, critique_message])
 
-    print(f"\n📊 REPORT EVALUATION:\n{response.content}")
+    print(f"\nREPORT EVALUATION:\n\n{response.content}")
 
     return {"messages": [critique_message, response]}
 
 def auto_reviser(state: AgentState) -> AgentState:
     """Automatically revise the report based on critic feedback"""
-    print("\n🔧 Auto-revising report based on feedback...")
+    print("\n\n===== Auto-revising report based on feedback... =====")
 
     global document_content
 
@@ -312,7 +299,7 @@ def auto_reviser(state: AgentState) -> AgentState:
     revision_message = HumanMessage(content="Please revise the report based on the feedback.")
     response = drafting_model.invoke([system_prompt, revision_message])
 
-    print(f"\n📝 REVISED REPORT:\n{response.content}")
+    print(f"\nREVISED REPORT:\n\n{response.content}")
 
     return {
         "messages": [
@@ -330,7 +317,7 @@ def auto_reviser(state: AgentState) -> AgentState:
 
 def revision_drafter_node(state: AgentState) -> AgentState:
     """Interactive agent for document editing"""
-    print("\n💬 Ready for user interaction...")
+    print("\n===== Ready for user interaction... =====")
 
     system_prompt = SystemMessage(content=f"""
         You are Drafter, a helpful writing assistant. You help users update and modify documents.
@@ -347,7 +334,7 @@ def revision_drafter_node(state: AgentState) -> AgentState:
 
     # Get user input
     user_input = input("\nWhat would you like to do with the document? ")
-    print(f"\n👤 USER: {user_input}")
+    print(f"\nUSER: {user_input}")
 
     user_message = HumanMessage(content=user_input)
 
@@ -358,7 +345,7 @@ def revision_drafter_node(state: AgentState) -> AgentState:
     response = model.invoke(all_messages)
 
     # Log the interaction
-    print(f"\n🤖 AI: {response.content}")
+    print(f"\nAI: {response.content}")
     if hasattr(response, "tool_calls") and response.tool_calls:
         print(f"🔧 USING TOOLS: {[tc['name'] for tc in response.tool_calls]}")
 
@@ -503,7 +490,7 @@ def create_graph():
 
 def run_document_agent():
     """Main execution function"""
-    print("\n===== STARTING DOCUMENT AGENT =====")
+    print("\n***** Starting Document Agent *****")
 
     # Create the graph
     app = create_graph()
