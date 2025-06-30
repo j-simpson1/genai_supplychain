@@ -71,6 +71,28 @@ model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
 drafting_model = ChatOpenAI(model="gpt-4o")
 search_tool = TavilySearchResults(api_key=os.environ["TAVILY_API_KEY"])
 
+def get_component_overview():
+    manufacturer_df = pd.read_csv("dummy_data/manufacturers_dummy_data.csv")
+    models_df = pd.read_csv("dummy_data/models_dummy_data.csv")
+    vehicle_df = pd.read_csv("dummy_data/vehicle_dummy_data.csv")
+    parts_df = pd.read_csv("dummy_data/parts_dummy_data.csv")
+    articles_df = pd.read_csv("dummy_data/article_dummy_data.csv")
+
+    component_overview = (
+        f"Manufacturer: {manufacturer_df['description']}, "
+        f"Model: {models_df['description']}, "
+        f"Engine Type: {vehicle_df['description']}, "
+        f"Component: Braking System."
+    )
+
+    selected_parts_df = parts_df[['productGroupId', 'description', 'categoryId']]
+
+    return component_overview, selected_parts_df, articles_df
+
+
+get_component_overview()
+
+
 def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
     """Generate visualisations and return list of image paths."""
     df = pd.read_csv(csv_path)
@@ -197,6 +219,8 @@ def initial_drafter(state: AgentState) -> AgentState:
             research_summary = msg.content
             break
 
+    component_overview, selected_parts_df, articles_df = get_component_overview()
+
     # Generate visualisations and get Markdown links
     image_paths = generate_visualisations("dummy_data/article_dummy_data.csv")
     markdown_links = [f"![]({path})" for path in image_paths]
@@ -204,7 +228,10 @@ def initial_drafter(state: AgentState) -> AgentState:
 
     system_prompt = SystemMessage(content=f"""
         You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
-        and global supply chains, analyzing the impact on automotive supply chains.
+        and global supply chains, analyzing the impact on automotive supply chains focusing on the component chosen.
+
+        Add a dedicated section titled 'Component Overview' with the following details:
+        {component_overview}
 
         Use the following research summary as your main source:
         {research_summary}
