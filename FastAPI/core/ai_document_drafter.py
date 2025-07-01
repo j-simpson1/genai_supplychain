@@ -14,6 +14,11 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_community.tools import TavilySearchResults
 
+import json
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import LETTER
+
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
 load_dotenv()
@@ -36,20 +41,94 @@ def update(content: str) -> str:
 
 @tool
 def save(filename: str) -> str:
-    """Save the current document to a text file and finish the process.
-    Args:
-        filename: Name for the text file.
-    """
+    """Save the current document as a PDF file."""
     global document_content
 
-    if not filename.endswith('.txt'):
-        filename = f"{filename}.txt"
+    if not filename.endswith(".pdf"):
+        filename += ".pdf"
 
     try:
-        with open(filename, 'w') as file:
-            file.write(document_content)
-        print(f"\nDocument has been saved to: {filename}")
-        return f"Document has been saved successfully to '{filename}'."
+        # Try to parse as JSON AST
+        raw_text = document_content.strip()
+
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[len("```json"):].strip()
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3].strip()
+
+        try:
+            parsed = json.loads(raw_text)
+            is_json_ast = True
+        except json.JSONDecodeError:
+            is_json_ast = False
+
+        # Generate PDF
+        doc = SimpleDocTemplate(filename, pagesize=LETTER)
+        styles = getSampleStyleSheet()
+        story = []
+
+        if is_json_ast:
+            # Add title
+            title = parsed.get("title", "Untitled Report")
+            story.append(Paragraph(f"<b>{title}</b>", styles["Title"]))
+            story.append(Spacer(1, 12))
+
+            def add_section(section, level=0):
+                # Choose heading style based on level
+                if level == 0:
+                    heading_style = styles["Heading1"]
+                elif level == 1:
+                    heading_style = styles["Heading2"]
+                else:
+                    heading_style = styles["Heading3"]
+
+                # Heading
+                story.append(Paragraph(section["heading"], heading_style))
+                story.append(Spacer(1, 6))
+
+                # Content
+                content_parts = section["content"].split("\n")
+                for para in content_parts:
+                    if para.strip():
+                        story.append(Paragraph(para.strip(), styles["BodyText"]))
+                        story.append(Spacer(1, 6))
+
+                # Subsections
+                for sub in section.get("subsections", []):
+                    add_section(sub, level + 1)
+
+            # Add each section
+            for s in parsed.get("sections", []):
+                add_section(s)
+
+            # Optionally, handle glossary and sources
+            glossary = parsed.get("glossary")
+            if glossary:
+                story.append(Paragraph("Glossary", styles["Heading1"]))
+                story.append(Spacer(1, 6))
+                for term, definition in glossary.items():
+                    story.append(Paragraph(f"<b>{term}</b>: {definition}", styles["BodyText"]))
+                    story.append(Spacer(1, 4))
+
+            sources = parsed.get("sources")
+            if sources:
+                story.append(Paragraph("Sources", styles["Heading1"]))
+                story.append(Spacer(1, 6))
+                for src in sources:
+                    src_text = ", ".join([f"{k}: {v}" for k, v in src.items()])
+                    story.append(Paragraph(src_text, styles["BodyText"]))
+                    story.append(Spacer(1, 4))
+
+        else:
+            # Plain text mode
+            for para in document_content.strip().split("\n\n"):
+                story.append(Paragraph(para.strip().replace("\n", "<br/>"), styles["BodyText"]))
+                story.append(Spacer(1, 12))
+
+        doc.build(story)
+
+        return f"Document saved successfully as PDF to '{filename}'."
+
     except Exception as e:
         return f"Error saving document: {str(e)}"
 
@@ -227,18 +306,41 @@ def initial_drafter(state: AgentState) -> AgentState:
     visualisations_md = "\n\n".join(markdown_links)
 
     system_prompt = SystemMessage(content=f"""
-        You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
-        and global supply chains, analyzing the impact on automotive supply chains focusing on the component chosen.
+    You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
+    and global supply chains, analyzing the impact on automotive supply chains focusing on the component chosen.
 
-        Add a dedicated section titled 'Component Overview' with the following details:
-        {component_overview}
+    **IMPORTANT:**
+    Instead of plain text, return the report as a JSON Abstract Syntax Tree (AST).
+    The JSON structure should have the following format:
 
-        Use the following research summary as your main source:
-        {research_summary}
+    {{
+      "title": "<Report Title>",
+      "sections": [
+        {{
+          "heading": "<Section Heading>",
+          "content": "<Plain text or markdown content>",
+          "subsections": [
+            {{
+              "heading": "<Subsection Heading>",
+              "content": "<Plain text or markdown content>"
+            }}
+          ]
+        }}
+      ]
+    }}
 
-        In a section titled 'Supply Chain Visualisations', include the following visualisations:
-        {visualisations_md}
-        """)
+    Ensure that all report content is included in this JSON AST format and the output is a as raw JSON, not inside a 
+    code block or Markdown fencing.
+
+    Add a dedicated section titled 'Component Overview' with the following details:
+    {component_overview}
+
+    Use the following research summary as your main source:
+    {research_summary}
+
+    In a section titled 'Supply Chain Visualisations', include the following visualisations:
+    {visualisations_md}
+    """)
 
     user_message = HumanMessage(content="Please generate the draft report now.")
     all_messages = [system_prompt, user_message]
@@ -315,6 +417,8 @@ def auto_reviser(state: AgentState) -> AgentState:
     - Do NOT change any dates, years, or temporal references
     - If dates seem unusual, assume they are correct and leave them unchanged
     - Focus only on improving content quality, structure, and clarity
+    - Return the revised report in the same JSON AST format as the input.
+    - Output raw JSON only, without Markdown code fences or additional commentary.
 
     Critic Feedback:
     {critic_feedback}
