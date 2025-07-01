@@ -65,6 +65,8 @@ def save(filename: str) -> str:
         # Generate PDF
         doc = SimpleDocTemplate(filename, pagesize=LETTER)
         styles = getSampleStyleSheet()
+        styles["Heading2"].fontSize = 14
+        styles["Heading3"].fontSize = 12
         story = []
 
         if is_json_ast:
@@ -591,7 +593,7 @@ def create_graph():
     )
 
     # Auto reviser goes back to tools to update document
-    graph.add_edge("auto_reviser", "tools")
+    graph.add_edge("auto_reviser", "report_critique")
 
     graph.add_conditional_edges(
         "tools",
