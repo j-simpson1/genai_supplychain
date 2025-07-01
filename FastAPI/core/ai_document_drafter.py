@@ -353,18 +353,13 @@ def initial_drafter(state: AgentState) -> AgentState:
     print(response.content)
     print("\n===== End of initial draft =====\n")
 
-    # Return the response message AND trigger the update tool
+    global document_content
+    document_content = response.content
+
     return {
         "messages": [
             user_message,
-            AIMessage(
-                content=response.content,
-                tool_calls=[{
-                    "name": "update",
-                    "args": {"content": response.content},
-                    "id": "update_call_1"
-                }]
-            )
+            AIMessage(content=response.content)
         ]
     }
 
@@ -434,16 +429,24 @@ def auto_reviser(state: AgentState) -> AgentState:
 
     print(f"\nREVISED REPORT:\n\n{response.content}")
 
+    update_result = update(response.content)
+
     return {
         "messages": [
             revision_message,
             AIMessage(
                 content=response.content,
-                tool_calls=[{
-                    "name": "update",
-                    "args": {"content": response.content},
-                    "id": "revision_update_call"
-                }]
+                tool_calls=[
+                    {
+                        "name": "update",
+                        "args": {"content": response.content},
+                        "id": "revision_update_call"
+                    }
+                ]
+            ),
+            ToolMessage(
+                tool_call_id="revision_update_call",
+                content=update_result
             )
         ]
     }
@@ -579,7 +582,7 @@ def create_graph():
 
     # Add edges
     graph.add_edge("researcher", "report_drafter")
-    graph.add_edge("report_drafter", "tools")
+    graph.add_edge("report_drafter", "report_critique")
 
 
     # After critique, decide revision or proceed
@@ -618,7 +621,12 @@ def create_graph():
         }
     )
 
-    return graph.compile()
+    app = graph.compile()
+
+    with open("graph.png", "wb") as f:
+        f.write(app.get_graph().draw_mermaid_png())
+
+    return app
 
 
 def run_document_agent():
