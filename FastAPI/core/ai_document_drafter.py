@@ -451,7 +451,7 @@ def auto_reviser(state: AgentState) -> AgentState:
         ]
     }
 
-def revision_drafter_node(state: AgentState) -> AgentState:
+def user_input_node(state: AgentState) -> AgentState:
     """Interactive agent for document editing"""
     print("\n===== Ready for user interaction... =====")
 
@@ -544,10 +544,6 @@ def route_from_tools(state: AgentState) -> str:
             if any(tc.get('name') == 'save' for tc in message.tool_calls or []):
                 return "end"
 
-    # Check if this is the initial draft (should go to critic)
-    if any("update_call_1" in str(msg) for msg in messages):
-        return "critique"
-
     # Otherwise continue to revision drafter
     return "continue"
 
@@ -574,7 +570,7 @@ def create_graph():
     graph.add_node("report_drafter", initial_drafter)
     graph.add_node("report_critique", report_critic)
     graph.add_node("auto_reviser", auto_reviser)
-    graph.add_node("revision_drafter", revision_drafter_node)
+    graph.add_node("user_input", user_input_node)
     graph.add_node("tools", ToolNode(tools))
 
     # Set entry point
@@ -591,7 +587,7 @@ def create_graph():
         needs_revision,
         {
             "revise": "auto_reviser",
-            "proceed": "revision_drafter"
+            "proceed": "user_input"
         }
     )
 
@@ -602,22 +598,21 @@ def create_graph():
         "tools",
         route_from_tools,
         {
-            "critique": "report_critique",
-            "continue": "revision_drafter",
+            "continue": "user_input",
             "end": END
         }
     )
 
     # Add conditional edges
     graph.add_conditional_edges(
-        "revision_drafter",
+        "user_input",
         lambda state: "tools" if any(
             hasattr(msg, 'tool_calls') and msg.tool_calls
             for msg in state.get("messages", [])[-1:]
         ) else "continue",
         {
             "tools": "tools",
-            "continue": "revision_drafter"
+            "continue": "user_input"
         }
     )
 
