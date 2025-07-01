@@ -135,17 +135,17 @@ def save(filename: str) -> str:
         return f"Error saving document: {str(e)}"
 
 
-@tool
-def retrieve_manufacturers():
-    """Calls the API retrieving the manufacturers by calling the TecDoc API."""
-    result = fetch_manufacturers()
-    brands = [m['brand'] for m in result.get('manufacturers', [])]
-    for brand in brands:
-        print(brand)
-    return f"Retrieved {len(brands)} manufacturers"
+# @tool
+# def retrieve_manufacturers():
+#     """Calls the API retrieving the manufacturers by calling the TecDoc API."""
+#     result = fetch_manufacturers()
+#     brands = [m['brand'] for m in result.get('manufacturers', [])]
+#     for brand in brands:
+#         print(brand)
+#     return f"Retrieved {len(brands)} manufacturers"
 
 
-tools = [update, save, retrieve_manufacturers]
+tools = [update, save]
 
 # Models
 model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
