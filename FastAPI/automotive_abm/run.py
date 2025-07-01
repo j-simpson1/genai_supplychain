@@ -1,10 +1,11 @@
-from .model import SupplyChainModel
+from FastAPI.automotive_abm.model import SupplyChainModel
 import matplotlib.pyplot as plt
-import pandas as pd
+from sqlmodel import SQLModel, Session, create_engine
+from sqlalchemy import text
+
 
 def plot_simulation_results(model, tariff_shock_step=8):
-    """Create the original 2x2 visualization plots"""
-
+    """Create visualization plots for simulation results"""
     steps = len(model.metrics["cost_history"])
 
     # Calculate production failures by step
@@ -14,7 +15,7 @@ def plot_simulation_results(model, tariff_shock_step=8):
 
     failure_values = [failure_counts.get(i, 0) for i in range(steps)]
 
-    # Plot results using 2x2 grid
+    # Create 2x2 plot grid
     plt.figure(figsize=(14, 8))
 
     # Plot 1: Component Cost
@@ -58,10 +59,62 @@ def plot_simulation_results(model, tariff_shock_step=8):
     plt.show()
 
 
-def run_simulation_with_plots(supplier_data, steps=24):
-    """Run simulation with DataFrame input and create plots"""
+def fetch_database_data(engine, query_text=None):
+    """
+    Fetch data from database using the provided query
 
-    model = SupplyChainModel(supplier_data=supplier_data, seed=42)
+    Args:
+        engine: SQLAlchemy engine connected to your database
+        query_text: Custom SQL query text (optional)
+
+    Returns:
+        List of dictionaries containing the query results
+    """
+
+    if query_text is None:
+        # Default query matching your example
+        query_text = """
+        SELECT
+            p."productGroupId",
+            p."description" AS "partDescription",
+            p."categoryId",
+            c."description" AS "categoryDescription",
+            a."articleNo",
+            a."articleProductName",
+            a."price",
+            a."countryOfOrigin",
+            s."supplierId",
+            s."supplierName"
+        FROM
+            "parts" AS p
+        INNER JOIN "articlevehiclelink" AS avl
+            ON p."productGroupId" = avl."productGroupId"
+        INNER JOIN "articles" AS a
+            ON avl."articleNo" = a."articleNo"
+            AND avl."supplierId" = a."supplierId"
+        INNER JOIN "suppliers" AS s
+            ON a."supplierId" = s."supplierId"
+        INNER JOIN "category" AS c
+            ON p."categoryId" = c."categoryId"
+        """
+
+    query = text(query_text)
+
+    with Session(engine) as session:
+        result = session.exec(query)
+        rows = result.fetchall()
+
+        # Convert rows to list of dicts
+        columns = result.keys()
+        data = [dict(zip(columns, row)) for row in rows]
+
+    return data
+
+
+def run_simulation_with_database_data(database_data, steps=24):
+    """Run simulation with database query results and create plots"""
+
+    model = SupplyChainModel(supplier_data=database_data, seed=42)
 
     # Analyze initial supplier setup
     model.analyze_supplier_diversity()
@@ -80,7 +133,8 @@ def run_simulation_with_plots(supplier_data, steps=24):
 
         # Print current inventory levels every 5 steps
         if t % 5 == 0:
-            print(f"Current inventory levels: {dict(list(model.parts_inventory.items())[:3])}...")
+            inventory_sample = dict(list(model.parts_inventory.items())[:3])
+            print(f"Current inventory levels: {inventory_sample}...")
 
     # Final analysis
     print(f"\n=== SIMULATION COMPLETE ===")
@@ -94,25 +148,122 @@ def run_simulation_with_plots(supplier_data, steps=24):
     return model
 
 
-# Example usage
+def run_simulation_from_database(engine, steps=24, custom_query=None):
+    """
+    Complete workflow: fetch data from database and run simulation
+
+    Args:
+        engine: SQLAlchemy engine connected to your database
+        steps: Number of simulation steps to run
+        custom_query: Optional custom SQL query text
+
+    Returns:
+        Completed simulation model
+    """
+
+    print("Fetching data from database...")
+    database_data = fetch_database_data(engine, custom_query)
+
+    print(f"Retrieved {len(database_data)} records from database")
+
+    if not database_data:
+        print("No data retrieved from database. Please check your query and database connection.")
+        return None
+
+    print("Starting simulation...")
+    model = run_simulation_with_database_data(database_data, steps)
+
+    return model
+
+
+# Example usage with sample data (for testing without database)
+def run_simulation_with_sample_data(steps=24):
+    """Run simulation with sample data for testing purposes"""
+
+    # Sample data mimicking your database structure
+    sample_database_data = [
+        {
+            'productGroupId': 100807,
+            'partDescription': 'Brake Caliper Mounting',
+            'categoryId': 100027,
+            'categoryDescription': 'Brake Caliper',
+            'articleNo': '741092',
+            'articleProductName': 'Brake Caliper',
+            'price': 85.0,
+            'countryOfOrigin': 'Germany',
+            'supplierId': 206,
+            'supplierName': 'A.B.S.'
+        },
+        {
+            'productGroupId': 100807,
+            'partDescription': 'Brake Caliper Mounting',
+            'categoryId': 100027,
+            'categoryDescription': 'Brake Caliper',
+            'articleNo': 'CA3407R',
+            'articleProductName': 'Brake Caliper',
+            'price': None,  # Missing price - will be estimated
+            'countryOfOrigin': None,  # Missing country - will use 'Unknown'
+            'supplierId': 381,
+            'supplierName': 'Brake ENGINEERING'
+        },
+        {
+            'productGroupId': 100025,
+            'partDescription': 'Brake Master Cylinder',
+            'categoryId': 100026,
+            'categoryDescription': 'Brake Master Cylinder',
+            'articleNo': 'BMT-155',
+            'articleProductName': 'Brake Master Cylinder',
+            'price': 65.0,
+            'countryOfOrigin': 'Japan',
+            'supplierId': 150,
+            'supplierName': 'AISIN'
+        },
+        {
+            'productGroupId': 100028,
+            'partDescription': 'Wheel Cylinders',
+            'categoryId': 100028,
+            'categoryDescription': 'Wheel Cylinders',
+            'articleNo': 'WCT-039',
+            'articleProductName': 'Wheel Brake Cylinder',
+            'price': 25.0,
+            'countryOfOrigin': 'China',
+            'supplierId': 150,
+            'supplierName': 'AISIN'
+        },
+        {
+            'productGroupId': 100806,
+            'partDescription': 'Brake Caliper Parts',
+            'categoryId': 100027,
+            'categoryDescription': 'Brake Caliper',
+            'articleNo': 'SZ733',
+            'articleProductName': 'Piston, brake caliper',
+            'price': 30.0,
+            'countryOfOrigin': 'Poland',
+            'supplierId': 250,
+            'supplierName': 'TRW'
+        }
+    ]
+
+    print("Running simulation with sample data...")
+    model = run_simulation_with_database_data(sample_database_data, steps)
+
+    return model
+
+
+# Main execution
 if __name__ == "__main__":
-    # Create DataFrame from your brake parts data
-    brake_parts_data = {
-        'categoryId': [100025, 100026, 100806, 100807, 100028],
-        'categoryName': ['Brake Booster', 'Brake Master Cylinder', 'Brake Caliper Parts', 'Brake Caliper Mounting',
-                         'Wheel Cylinders'],
-        'fullPath': ['Braking System > Brake Booster', 'Braking System > Brake Master Cylinder',
-                     'Braking System > Brake Caliper > Brake Caliper...',
-                     'Braking System > Brake Caliper > Brake Caliper...', 'Braking System > Wheel Cylinders'],
-        'articleNo': [None, 'BMT-155', 'SZ733', '0 986 473 202', 'WCT-039'],
-        'supplierName': [None, 'AISIN', 'TRW', 'BOSCH', 'AISIN'],
-        'articleProductName': [None, 'Brake Master Cylinder', 'Piston, brake caliper', 'Brake Caliper',
-                               'Wheel Brake Cylinder'],
-        'estimatedPriceGBP': [70, 45, 12, 85, 18],
-        'likelyManufacturingOrigin': ['China', 'Japan', 'Poland', 'Germany', 'Japan']
-    }
+    # Option 1: Run with sample data (for testing)
+    print("=== Running with Sample Data ===")
+    model = run_simulation_with_sample_data(steps=24)
 
-    df = pd.DataFrame(brake_parts_data)
+    # Option 2: Run with actual database (uncomment when ready)
+    # from your_database_config import engine  # Import your database engine
+    # print("=== Running with Database Data ===")
+    # model = run_simulation_from_database(engine, steps=24)
 
-    # Run simulation with DataFrame and create plots
-    model = run_simulation_with_plots(df, steps=24)
+    # Option 3: Use custom query (uncomment and modify as needed)
+    # custom_query = """
+    # SELECT
+    #     your_custom_query_here
+    # """
+    # model = run_simulation_from_database(engine, steps=24, custom_query=custom_query)
