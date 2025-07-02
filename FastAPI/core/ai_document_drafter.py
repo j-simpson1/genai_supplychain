@@ -2,6 +2,7 @@ from typing import Annotated, Sequence, TypedDict
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import squarify
@@ -16,7 +17,6 @@ from langchain_community.tools import TavilySearchResults
 
 import json
 import re
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.colors import Color
 from reportlab.lib.units import inch
@@ -243,74 +243,159 @@ def get_component_overview():
 get_component_overview()
 
 
+def apply_corporate_theme():
+    """Apply corporate styling to all plots"""
+    plt.style.use('seaborn-v0_8-whitegrid')
+
+    # Corporate colors
+    primary_blue = "#003366"    # Deep Blue
+    secondary_blue = "#0072CE"  # Light Blue
+
+    # Extended palette with more variety
+    corporate_palette = [
+        primary_blue,
+        secondary_blue,
+        "#4A99D8",  # Lighter blue variant
+        "#001F3D",  # Darker blue variant
+        "#7FB2E5",  # Very light blue
+        "#00509E", # Medium blue
+        "#B3D7FF", # Very pale blue
+        "#5F9BD1", # Sky blue
+        "#2A4E76", # Navy blue
+        "#A4C8E1", # Pastel blue
+        "#1F5C9D", # Royal blue
+        "#6CA2D4"  # Steel blue
+    ]
+
+    # Apply common styling
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+    plt.rcParams['axes.labelsize'] = 12
+    plt.rcParams['axes.titlesize'] = 14
+    plt.rcParams['xtick.labelsize'] = 10
+    plt.rcParams['ytick.labelsize'] = 10
+    plt.rcParams['axes.spines.top'] = False
+    plt.rcParams['axes.spines.right'] = False
+
+    return corporate_palette
+
 def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
-    """Generate visualisations and return list of image paths."""
+    """Generate professional visualisations and return list of image paths."""
     df = pd.read_csv(csv_path)
     df['priceSource'] = df['priceSource'].astype(str)
-    sns.set(style="whitegrid")
     image_paths = []
 
     output_dir = "visualisations"
     os.makedirs(output_dir, exist_ok=True)
     print("Saving visualisations to:", os.path.abspath(output_dir))
 
-    # Box Plot
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(
+    # Apply corporate theme and get color palette
+    corporate_palette = apply_corporate_theme()
+
+    # Box Plot with enhanced styling
+    plt.figure(figsize=(12, 7))
+    ax = sns.boxplot(
         x="countryOfOrigin",
         y="price",
-        hue="countryOfOrigin",
+        hue="countryOfOrigin",  # Fix deprecation warning
         data=df,
-        palette="Set2",
-        legend=False
+        palette=corporate_palette,
+        width=0.6,
+        linewidth=1.2,
+        legend=False  # Hide redundant legend
     )
-    plt.title("Price Distribution by Country of Origin")
-    plt.xlabel("Country of Origin")
-    plt.ylabel("Price (€)")
+    ax.set_title("Price Distribution by Country of Origin", fontweight='bold', pad=20)
+    ax.set_xlabel("Country of Origin", fontweight='bold')
+    ax.set_ylabel("Price (€)", fontweight='bold')
+
+    # Add value labels to median lines
+    medians = df.groupby('countryOfOrigin')['price'].median().values
+    for i, median in enumerate(medians):
+        ax.text(i, median + 0.1, f'€{median:.2f}', ha='center', fontsize=9)
+
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
     boxplot_path = os.path.join(output_dir, "boxplot_price_by_country.png")
-    plt.savefig(boxplot_path)
+    plt.savefig(boxplot_path, dpi=300, bbox_inches='tight')
     plt.close()
     image_paths.append(boxplot_path)
 
-    # Bar Chart
-    avg_price_supplier = df.groupby("supplierId")["price"].mean().reset_index()
-    plt.figure(figsize=(12, 6))
-    sns.barplot(
+    # Bar Chart with enhanced styling
+    avg_price_supplier = df.groupby("supplierId")["price"].mean().sort_values(ascending=False).reset_index()
+    plt.figure(figsize=(12, 7))
+
+    # Create dynamic color palette for suppliers
+    num_suppliers = len(avg_price_supplier)
+    if num_suppliers > len(corporate_palette):
+        # Create a more varied color gradient
+        supplier_palette = sns.color_palette([
+            "#003366",  # Primary blue
+            "#0072CE",  # Secondary blue
+            "#4A99D8",  # Lighter blue
+            "#7FB2E5",  # Very light blue
+            "#001F3D"  # Darker blue
+        ], n_colors=num_suppliers)
+    else:
+        supplier_palette = corporate_palette[:num_suppliers]
+
+    ax = sns.barplot(
         x="supplierId",
         y="price",
-        hue="supplierId",
+        hue="supplierId",  # Fix deprecation warning
         data=avg_price_supplier,
-        palette="viridis",
-        legend=False
+        palette=supplier_palette,
+        edgecolor='black',
+        linewidth=0.8,
+        legend=False  # Hide redundant legend
     )
-    plt.title("Average Price per Supplier")
-    plt.xlabel("Supplier ID")
-    plt.ylabel("Average Price (€)")
+    ax.set_title("Average Price per Supplier", fontweight='bold', pad=20)
+    ax.set_xlabel("Supplier ID", fontweight='bold')
+    ax.set_ylabel("Average Price (€)", fontweight='bold')
+
+    # Add value labels on top of bars
+    for i, p in enumerate(ax.patches):
+        ax.annotate(f'€{p.get_height():.2f}',
+                    (p.get_x() + p.get_width() / 2., p.get_height()),
+                    ha='center', va='bottom',
+                    fontsize=9, rotation=0)
+
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
     bar_chart_path = os.path.join(output_dir, "bar_chart_avg_price_per_supplier.png")
-    plt.savefig(bar_chart_path)
+    plt.savefig(bar_chart_path, dpi=300, bbox_inches='tight')
     plt.close()
     image_paths.append(bar_chart_path)
 
-    # Treemap
-    product_agg = df.groupby("articleProductName")["price"].sum().reset_index()
+    # Treemap with enhanced styling
+    product_agg = df.groupby("articleProductName")["price"].sum().reset_index().sort_values("price", ascending=False)
     labels = [
         f"{row['articleProductName']}\n€{row['price']:.2f}"
         for _, row in product_agg.iterrows()
     ]
     sizes = product_agg["price"].values
+
+    # Use corporate colors for treemap
+    colors = plt.cm.Blues(np.linspace(0.3, 0.9, len(sizes)))  # Blue gradient
+
     plt.figure(figsize=(12, 8))
     squarify.plot(
         sizes=sizes,
         label=labels,
-        alpha=0.8
+        color=colors,
+        alpha=0.9,
+        pad=0.02,
+        text_kwargs={'fontsize': 11, 'fontweight': 'bold'}
     )
-    plt.title("Treemap of Total Price by Product Type")
+    plt.title("Treemap of Total Price by Product Type", fontsize=16, fontweight='bold', pad=20)
     plt.axis('off')
+
+    # Add footer with data source info
+    plt.figtext(0.01, 0.01, f"Data source: {csv_path}", fontsize=8, ha='left')
+    plt.figtext(0.99, 0.01, "Generated: " + pd.Timestamp.now().strftime("%Y-%m-%d"), fontsize=8, ha='right')
+
     plt.tight_layout()
     treemap_path = os.path.join(output_dir, "treemap_product_types.png")
-    plt.savefig(treemap_path)
+    plt.savefig(treemap_path, dpi=300, bbox_inches='tight')
     plt.close()
     image_paths.append(treemap_path)
 
@@ -457,7 +542,9 @@ def report_critic(state: AgentState) -> AgentState:
     4. Factual accuracy and sourcing (NOTE: Do NOT comment on dates - assume all dates are correct)
     5. Professional formatting
 
-    IMPORTANT: Do NOT flag dates or temporal references as issues. Assume all dates in the report are accurate.
+    IMPORTANT: 
+    - Do NOT flag dates or temporal references as issues. Assume all dates in the report are accurate.
+    - Do NOT suggest changing image paths in your feedback
 
     Provide specific, actionable feedback and end with a quality score (1-10).
     Format your final line as: "QUALITY SCORE: X/10"
@@ -492,6 +579,8 @@ def auto_reviser(state: AgentState) -> AgentState:
     - PRESERVE ALL DATES EXACTLY as they appear in the original report
     - Do NOT change any dates, years, or temporal references
     - If dates seem unusual, assume they are correct and leave them unchanged
+    - DO NOT CHANGE ANY IMAGE PATHS - keep them exactly as "visualisations/filename.png"
+    - You may add descriptions to images but maintain original paths
     - Focus only on improving content quality, structure, and clarity
     - Return the revised report in the same JSON AST format as the input.
     - Output raw JSON only, without Markdown code fences or additional commentary.
