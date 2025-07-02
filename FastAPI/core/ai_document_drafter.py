@@ -17,7 +17,11 @@ from langchain_community.tools import TavilySearchResults
 import json
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.colors import Color
+from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import LETTER
+from reportlab.platypus.frames import Frame
+from reportlab.platypus.doctemplate import PageTemplate
 
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
@@ -65,13 +69,47 @@ def save(filename: str) -> str:
         # Generate PDF
         doc = SimpleDocTemplate(filename, pagesize=LETTER)
         styles = getSampleStyleSheet()
-        styles["Heading2"].fontSize = 14
-        styles["Heading3"].fontSize = 12
+        styles["Heading2"].fontSize = 12
+        styles["Heading3"].fontSize = 10
+        navy_blue = Color(19 / 255, 52 / 255, 92 / 255)  # Convert RGB to 0-1 scale
+        styles["Title"].textColor = navy_blue
+        styles["Heading1"].textColor = navy_blue
+        styles["Heading2"].textColor = navy_blue
+        styles["Heading3"].textColor = navy_blue
+
+        # Create a function to add the logo to each page
+        def add_logo(canvas, doc):
+            import os
+            logo_path = os.path.abspath("Alvarez_and_Marsal.png")
+            try:
+                width = 1.5 * inch
+                height = 0.75 * inch
+                # (0,0) is bottom-left; y = page height - top margin - image height
+                x = doc.pagesize[0] - doc.rightMargin - width
+                y = doc.pagesize[1] - doc.topMargin - height
+                canvas.drawImage(
+                    logo_path,
+                    x,
+                    y,
+                    width=width,
+                    height=height,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+            except Exception as e:
+                print(f"Error adding logo: {str(e)}")
+
+        # Create a custom page template with the logo
+        frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+        template = PageTemplate(id='main_template', frames=[frame], onPage=add_logo)
+        doc.addPageTemplates([template])
+
         story = []
 
         if is_json_ast:
             # Add title
             title = parsed.get("title", "Untitled Report")
+            story.append(Spacer(1, 64))
             story.append(Paragraph(f"<b>{title}</b>", styles["Title"]))
             story.append(Spacer(1, 12))
 
@@ -330,7 +368,12 @@ def initial_drafter(state: AgentState) -> AgentState:
         }}
       ]
     }}
-
+    
+    Section Order:
+    1. Component Overview
+    2. Executive Summary
+    3. Other sections in logical order
+    
     Ensure that all report content is included in this JSON AST format and the output is a as raw JSON, not inside a 
     code block or Markdown fencing.
 
