@@ -15,6 +15,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_community.tools import TavilySearchResults
 
 import json
+import re
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.colors import Color
@@ -22,6 +23,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import LETTER
 from reportlab.platypus.frames import Frame
 from reportlab.platypus.doctemplate import PageTemplate
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
@@ -84,7 +86,6 @@ def save(filename: str) -> str:
             try:
                 width = 1.5 * inch
                 height = 0.75 * inch
-                # (0,0) is bottom-left; y = page height - top margin - image height
                 x = doc.pagesize[0] - doc.rightMargin - width
                 y = doc.pagesize[1] - doc.topMargin - height
                 canvas.drawImage(
@@ -106,6 +107,42 @@ def save(filename: str) -> str:
 
         story = []
 
+        # Function to process content and extract images
+        def process_content(content):
+            elements = []
+            # Match markdown image syntax: ![alt text](path/to/image.png)
+            img_pattern = re.compile(r'!\[(.*?)\]\((.*?)\)')
+
+            # Split by image references
+            parts = img_pattern.split(content)
+
+            for i in range(0, len(parts)):
+                # Text parts (even indices)
+                if i % 3 == 0 and parts[i].strip():
+                    paragraphs = parts[i].strip().split('\n')
+                    for para in paragraphs:
+                        if para.strip():
+                            elements.append(Paragraph(para.strip(), styles["BodyText"]))
+                            elements.append(Spacer(1, 6))
+
+                # Image parts (paths are at indices 1, 4, 7, etc.)
+                if i % 3 == 2:
+                    img_path = parts[i]
+                    try:
+                        if os.path.exists(img_path):
+                            img = Image(img_path, width=6 * inch, height=4 * inch, kind='proportional')
+                            elements.append(img)
+                            elements.append(Spacer(1, 12))
+                            # Add caption if available (at indices 0, 3, 6, etc.)
+                            if i > 0 and parts[i - 1].strip():
+                                elements.append(Paragraph(f"<i>{parts[i - 1]}</i>", styles["Italic"]))
+                                elements.append(Spacer(1, 12))
+                    except Exception as e:
+                        elements.append(Paragraph(f"[Error loading image: {img_path}]", styles["BodyText"]))
+                        elements.append(Spacer(1, 6))
+
+            return elements
+
         if is_json_ast:
             # Add title
             title = parsed.get("title", "Untitled Report")
@@ -126,12 +163,9 @@ def save(filename: str) -> str:
                 story.append(Paragraph(section["heading"], heading_style))
                 story.append(Spacer(1, 6))
 
-                # Content
-                content_parts = section["content"].split("\n")
-                for para in content_parts:
-                    if para.strip():
-                        story.append(Paragraph(para.strip(), styles["BodyText"]))
-                        story.append(Spacer(1, 6))
+                # Process content with image handling
+                content_elements = process_content(section["content"])
+                story.extend(content_elements)
 
                 # Subsections
                 for sub in section.get("subsections", []):
@@ -160,13 +194,10 @@ def save(filename: str) -> str:
                     story.append(Spacer(1, 4))
 
         else:
-            # Plain text mode
-            for para in document_content.strip().split("\n\n"):
-                story.append(Paragraph(para.strip().replace("\n", "<br/>"), styles["BodyText"]))
-                story.append(Spacer(1, 12))
+            # Plain text mode with image handling
+            story.extend(process_content(document_content))
 
         doc.build(story)
-
         return f"Document saved successfully as PDF to '{filename}'."
 
     except Exception as e:
@@ -292,9 +323,14 @@ def researcher(state: AgentState) -> AgentState:
     print("\n===== Starting Research Phase... =====\n")
 
     query = (
-        "Find recent news about tariffs, sanctions, inflation, "
-        "and automotive supply chains. Summarize in 3-5 bullet points "
-        "with publication dates and URLs."
+        "Find the most recent and relevant news articles (from the past 6 months) about tariffs, sanctions, inflation, "
+        "and their impact on global automotive supply chains. Focus on major developments, policy changes, or disruptions. "
+        "For each article, provide:\n"
+        "- Publication date\n"
+        "- Headline\n"
+        "- 1-2 sentence summary\n"
+        "- Source URL\n"
+        "Return 3-5 key articles in bullet point format."
     )
 
     # Use search tool directly
@@ -370,8 +406,8 @@ def initial_drafter(state: AgentState) -> AgentState:
     }}
     
     Section Order:
-    1. Component Overview
-    2. Executive Summary
+    1. Executive Summary
+    2. Component Overview
     3. Other sections in logical order
     
     Ensure that all report content is included in this JSON AST format and the output is a as raw JSON, not inside a 
