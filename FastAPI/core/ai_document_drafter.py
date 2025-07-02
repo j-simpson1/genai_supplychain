@@ -419,7 +419,13 @@ def researcher(state: AgentState) -> AgentState:
     )
 
     # Use search tool directly
-    search_results = search_tool.invoke({"query": query})
+    search_results = search_tool.invoke({
+        "query": query,
+        "max_results": 5,
+        "source_depth": "advanced",
+        "include_raw_content": True,
+        "time_range": "month"
+    })
 
     # Create a prompt for the model to summarize the results
     summary_prompt = f"""
