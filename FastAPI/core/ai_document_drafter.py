@@ -467,12 +467,16 @@ def initial_drafter(state: AgentState) -> AgentState:
     visualisations_md = "\n\n".join(markdown_links)
 
     system_prompt = SystemMessage(content=f"""
-    You are a report generator. Create a draft of a report on recent news regarding tariffs, sanctions, inflation,
-    and global supply chains, analyzing the impact on automotive supply chains focusing on the component chosen.
+    You are a highly structured **supply chain report generator**.
 
-    **IMPORTANT:**
-    Instead of plain text, return the report as a JSON Abstract Syntax Tree (AST).
-    The JSON structure should have the following format:
+    **Objective:** 
+    Create a draft report on recent news and analysis regarding tariffs, sanctions, inflation, and global supply chains, focusing on the automotive component specified.
+
+    **IMPORTANT INSTRUCTIONS:**
+
+    - **Format:** 
+      Return the report strictly as a **raw JSON Abstract Syntax Tree (AST)**, without any additional commentary, explanations, or Markdown code fencing.
+    - **Output structure:**
 
     {{
       "title": "<Report Title>",
@@ -489,23 +493,57 @@ def initial_drafter(state: AgentState) -> AgentState:
         }}
       ]
     }}
-    
-    Section Order:
-    1. Executive Summary
-    2. Component Overview
-    3. Other sections in logical order
-    
-    Ensure that all report content is included in this JSON AST format and the output is a as raw JSON, not inside a 
-    code block or Markdown fencing.
 
-    Add a dedicated section titled 'Component Overview' with the following details:
-    {component_overview}
+    - Ensure **all sections listed below are included in this exact order.** Each section must have a `heading` and `content`. Subsections can be empty if not applicable.
 
-    Use the following research summary as your main source:
+    **Sections and Content Requirements:**
+
+    1. **Executive Summary**
+       - High-level summary of the report’s purpose, findings, and implications.
+
+    2. **Introduction**
+       - Concise overview of the component/vehicle being modeled and analyzed.
+       - Use the following details as the basis: {component_overview}
+
+    3. **Methodology**
+       - Describe how the research and analysis were conducted.
+
+    4. **Current Supply Chain Overview**
+       - Summarize the most relevant points from the researcher.
+       - Focus on key developments, policy changes, and disruptions affecting the supply chain.
+
+    5. **Risk and Vulnerability Analysis**
+       - Analyze potential risks and vulnerabilities.
+
+    6. **Simulation of Tariff Shocks and Sanctions**
+       - Describe simulation scenarios and results.
+
+    7. **Mitigation Strategies**
+       - Recommend actions to reduce risks.
+
+    8. **Supply Chain Visualisations**
+       - Embed the following visualizations (as markdown image references or descriptions):
+       {visualisations_md}
+
+    9. **Conclusion and Recommendations**
+       - Summarize key takeaways and propose next steps.
+
+    10. **Appendices**
+        - Any supplementary information.
+
+    11. **References**
+        - List all data sources and references.
+
+    **Source Material:**
+
+    Use the following research summary as your primary input data:
     {research_summary}
 
-    In a section titled 'Supply Chain Visualisations', include the following visualisations:
-    {visualisations_md}
+    **Formatting Rules:**
+
+    - Output must be valid JSON (no trailing commas).
+    - Do NOT wrap the JSON in Markdown code blocks or triple backticks.
+    - Do NOT include any additional commentary or explanation text before or after the JSON.
     """)
 
     user_message = HumanMessage(content="Please generate the draft report now.")
