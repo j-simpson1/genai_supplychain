@@ -71,8 +71,10 @@ def save(filename: str) -> str:
         # Generate PDF
         doc = SimpleDocTemplate(filename, pagesize=LETTER)
         styles = getSampleStyleSheet()
-        styles["Heading2"].fontSize = 12
-        styles["Heading3"].fontSize = 10
+        styles["Title"].fontSize = 20
+        styles["Heading1"].fontSize = 16
+        styles["Heading2"].fontSize = 14
+        styles["Heading3"].fontSize = 12
         navy_blue = Color(19 / 255, 52 / 255, 92 / 255)  # Convert RGB to 0-1 scale
         styles["Title"].textColor = navy_blue
         styles["Heading1"].textColor = navy_blue
@@ -130,7 +132,7 @@ def save(filename: str) -> str:
                     img_path = parts[i]
                     try:
                         if os.path.exists(img_path):
-                            img = Image(img_path, width=4 * inch, height=3 * inch, kind='proportional')
+                            img = Image(img_path, width=3 * inch, height=2.2 * inch, kind='proportional')
                             elements.append(img)
                             elements.append(Spacer(1, 12))
                             # Add caption if available (at indices 0, 3, 6, etc.)
@@ -407,33 +409,58 @@ def researcher(state: AgentState) -> AgentState:
 
     print("\n===== Starting Research Phase... =====\n")
 
-    query = (
-        "Find the most recent and relevant news articles (from the past 6 months) about tariffs, sanctions, inflation, "
-        "and their impact on global automotive supply chains. Focus on major developments, policy changes, or disruptions. "
-        "For each article, provide:\n"
-        "- Publication date\n"
-        "- Headline\n"
-        "- 1-2 sentence summary\n"
-        "- Source URL\n"
-        "Return 3-5 key articles in bullet point format."
+    query1 = (
+        "Retrieve the most recent and authoritative information (published in the past year) describing the supply "
+        "chain of the braking system in the Toyota RAV4, including details of major suppliers, manufacturing locations, "
+        "component sourcing, and logistics routes."
+    )
+
+    query2 = (
+        "Retrieve the most recent news and analyses published in the past 90 days regarding tariffs, sanctions, and "
+        "trade restrictions affecting the supply chain of automotive braking systems, with a focus on Toyota and a "
+        "factory based in the UK."
     )
 
     # Use search tool directly
-    search_results = search_tool.invoke({
-        "query": query,
+    search_results1 = search_tool.invoke({
+        "query": query1,
         "max_results": 5,
         "source_depth": "advanced",
         "include_raw_content": True,
-        "time_range": "month"
+        "time_range": "year"
+    })
+
+    # Use search tool directly
+    search_results2 = search_tool.invoke({
+        "query": query2,
+        "max_results": 5,
+        "source_depth": "advanced",
+        "include_raw_content": True,
+        "time_range": "3month"
     })
 
     # Create a prompt for the model to summarize the results
     summary_prompt = f"""
-    Based on the following search results, create a summary about recent news regarding tariffs, sanctions, inflation, and automotive supply chains. 
-    Summarize in 3-5 bullet points with publication dates and URLs where available.
+    You are compiling a report on the Toyota RAV4 braking system supply chain.
 
-    Search Results:
-    {search_results}
+    **Part 1: Supply Chain Overview**
+    From the first search results, summarize:
+    - Major suppliers
+    - Manufacturing locations
+    - Component sourcing
+    - Logistics routes
+    Provide 3–5 concise bullet points with publication dates and URLs.
+
+    **Part 2: Tariffs and Sanctions Impact**
+    From the second search results, summarize:
+    - Recent news on tariffs, sanctions, or trade restrictions affecting Toyota’s braking system supply chain, especially UK operations.
+    Provide 3–5 concise bullet points with publication dates and URLs.
+
+    Search Results – Part 1:
+    {search_results1}
+
+    Search Results – Part 2:
+    {search_results2}
     """
 
     # Get summary from the model
@@ -449,7 +476,7 @@ def researcher(state: AgentState) -> AgentState:
 
     return {
         "messages": [
-            HumanMessage(content=query),
+            HumanMessage(content=f"{query1}\n\n{query2}"),
             ai_msg
         ]
     }
@@ -482,6 +509,7 @@ def initial_drafter(state: AgentState) -> AgentState:
 
     - **Format:** 
       Return the report strictly as a **raw JSON Abstract Syntax Tree (AST)**, without any additional commentary, explanations, or Markdown code fencing.
+
     - **Output structure:**
 
     {{
@@ -509,36 +537,28 @@ def initial_drafter(state: AgentState) -> AgentState:
 
     2. **Introduction**
        - Concise overview of the component/vehicle being modeled and analyzed.
+       - Describe the methodology used to gather research and conduct the analysis.
        - Use the following details as the basis: {component_overview}
 
-    3. **Methodology**
-       - Describe how the research and analysis were conducted.
-
-    4. **Current Supply Chain Overview**
+    3. **Current Supply Chain Overview**
        - Summarize the most relevant points from the researcher.
        - Focus on key developments, policy changes, and disruptions affecting the supply chain.
-
-    5. **Risk and Vulnerability Analysis**
-       - Analyze potential risks and vulnerabilities.
-
-    6. **Simulation of Tariff Shocks and Sanctions**
-       - Describe simulation scenarios and results.
-
-    7. **Mitigation Strategies**
-       - Recommend actions to reduce risks.
-
-    8. **Supply Chain Visualisations**
-       - Embed the following visualizations (as markdown image references or descriptions):
+       - Embed any visualizations relevant to this overview (as markdown image references or descriptions):
        {visualisations_md}
 
-    9. **Conclusion and Recommendations**
-       - Summarize key takeaways and propose next steps.
+    4. **Simulation of Tariff Shocks and Sanctions**
+       - Describe the simulation scenarios and results.
+       - Analyze potential risks and vulnerabilities demonstrated by the simulations.
 
-    10. **Appendices**
-        - Any supplementary information.
+    5. **Conclusion and Recommendations**
+       - Summarize key takeaways.
+       - Propose actionable mitigation strategies to reduce risks.
 
-    11. **References**
-        - List all data sources and references.
+    6. **References**
+       - List all data sources and references, including URLs where possible.
+
+    7. **Appendices**
+       - Include any supplementary information or supporting data tables, if applicable.
 
     **Source Material:**
 
