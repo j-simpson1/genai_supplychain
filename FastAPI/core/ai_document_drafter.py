@@ -130,7 +130,7 @@ def save(filename: str) -> str:
                     img_path = parts[i]
                     try:
                         if os.path.exists(img_path):
-                            img = Image(img_path, width=6 * inch, height=4 * inch, kind='proportional')
+                            img = Image(img_path, width=4 * inch, height=3 * inch, kind='proportional')
                             elements.append(img)
                             elements.append(Spacer(1, 12))
                             # Add caption if available (at indices 0, 3, 6, etc.)
