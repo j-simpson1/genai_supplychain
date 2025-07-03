@@ -4,8 +4,10 @@ from sqlmodel import Session, select
 from sqlalchemy import text
 
 from FastAPI.database.database import engine
-from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers, Category
+from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers, Category, ArticleVehicleLink
 from FastAPI.data.auto_parts.autodoc_search import search_autodoc
+
+from FastAPI.data.auto_parts.ebay_api import get_ebay_access_token, ebay_search_car_parts
 
 # Example TOYOTA RAV 4 V
 langId = "4" # English (GB)
@@ -59,6 +61,19 @@ def extract_branch_categories(categories, parent_id=None):
                 extract_branch_categories(cat_data['children'], parent_id=cat_id)
             )
     return branch_nodes
+
+def upload_article_vehicle_links(links):
+    with Session(engine) as session:
+        for link in links:
+            avl = ArticleVehicleLink(
+                articleNo=link['articleNo'],
+                supplierId=link['supplierId'],
+                manufacturerId=int(111),
+                vehicleId=int(140099),
+                productGroupId=link['productGroupId']
+            )
+            session.add(avl)
+        session.commit()
 
 def upload_categories_to_db(category_df):
     with Session(engine) as session:
@@ -160,6 +175,7 @@ def automotive_parts():
     print("Descendants of", target_category, ":", sub_categories)
 
     filtered_parts_df = parts_df[parts_df['categoryId'].isin(sub_categories)]
+    print("Filtered parts dataframe: ", filtered_parts_df)
 
     # clear database and upload dummy data for manufacturer, model and vehicle
     clear_database()
@@ -171,7 +187,7 @@ def automotive_parts():
 
     # extract relevant information from each of the articles
     all_articles = []
-    for productGroupId in parts_df['productGroupId'].head(5):
+    for productGroupId in filtered_parts_df['productGroupId']:
         article_list = get_article_list(manufacturerId, vehicleId, productGroupId)
         print(article_list)
         articles = article_list['articles']
@@ -181,10 +197,11 @@ def automotive_parts():
                 'supplierName': a['supplierName'],
                 'supplierId': a['supplierId'],
                 'articleProductName': a['articleProductName'],
-                'productId': a['productId']
+                'productId': a['productId'],
+                'productGroupId': productGroupId
             })
 
-    print(all_articles)
+    print("All articles: ",all_articles)
 
     # search for pricing information
     for article in all_articles[:1]:
@@ -204,6 +221,7 @@ def automotive_parts():
     print(all_articles)
 
     upload_articles_and_suppliers(all_articles)
+    upload_article_vehicle_links(all_articles)
 
 
 
