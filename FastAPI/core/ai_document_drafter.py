@@ -490,7 +490,8 @@ def researcher(state: AgentState) -> AgentState:
         "messages": [
             HumanMessage(content=f"{query1}\n\n{query2}"),
             ai_msg
-        ]
+        ],
+        "component_info": state.get("component_info", {})
     }
 
 def initial_drafter(state: AgentState) -> AgentState:
@@ -503,8 +504,6 @@ def initial_drafter(state: AgentState) -> AgentState:
         if isinstance(msg, AIMessage):
             research_summary = msg.content
             break
-
-    component_overview, selected_parts_df, articles_df = get_component_overview()
 
     # Generate visualisations and get Markdown links
     image_paths = generate_visualisations("dummy_data/article_dummy_data.csv")
@@ -557,7 +556,7 @@ def initial_drafter(state: AgentState) -> AgentState:
     2. **Introduction**
        - Concise overview of the component/vehicle being modeled and analyzed.
        - Describe the methodology used to gather research and conduct the analysis.
-       - Use the following details as the basis: {component_overview}
+       - Use the following details as the basis: {manufacturer}, {model}, {vehicle}
 
     3. **Current Supply Chain Overview**
        - Summarize the most relevant points from the researcher.
@@ -607,7 +606,8 @@ def initial_drafter(state: AgentState) -> AgentState:
         "messages": [
             user_message,
             AIMessage(content=response.content)
-        ]
+        ],
+        "component_info": state.get("component_info", {})
     }
 
 
@@ -639,7 +639,10 @@ def report_critic(state: AgentState) -> AgentState:
 
     print(f"\nREPORT EVALUATION:\n\n{response.content}")
 
-    return {"messages": [critique_message, response]}
+    return {
+        "messages": [critique_message, response],
+        "component_info": state.get("component_info", {})
+    }
 
 def auto_reviser(state: AgentState) -> AgentState:
     """Automatically revise the report based on critic feedback"""
@@ -699,7 +702,8 @@ def auto_reviser(state: AgentState) -> AgentState:
                 tool_call_id="revision_update_call",
                 content=update_result
             )
-        ]
+        ],
+        "component_info": state.get("component_info", {})
     }
 
 def user_input_node(state: AgentState) -> AgentState:
@@ -736,7 +740,10 @@ def user_input_node(state: AgentState) -> AgentState:
     if hasattr(response, "tool_calls") and response.tool_calls:
         print(f"🔧 USING TOOLS: {[tc['name'] for tc in response.tool_calls]}")
 
-    return {"messages": [user_message, response]}
+    return {
+        "messages": [user_message, response],
+        "component_info": state.get("component_info", {})
+    }
 
 
 def should_continue(state: AgentState) -> str:
