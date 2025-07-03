@@ -26,7 +26,7 @@ from reportlab.platypus.doctemplate import PageTemplate
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 from FastAPI.database.database import engine
-from FastAPI.core.db_queries import vehicle_summary
+from FastAPI.core.db_queries import vehicle_summary, categories_modelled
 
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
@@ -43,6 +43,7 @@ class ComponentInfo(TypedDict):
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     component_info: ComponentInfo
+    categories_modelled: list
 
 
 @tool
@@ -418,13 +419,14 @@ def researcher(state: AgentState) -> AgentState:
     manufacturer = component.get("manufacturer", "Unknown Manufacturer").capitalize()
     model = component.get("model", "Unknown Model")
     vehicle = component.get("vehicle", "Unknown Vehicle")
+    categories = state.get("categories_modelled", [])
 
     print("\n===== Starting Research Phase... =====\n")
 
     query1 = (
         "Retrieve the most recent and authoritative information (published in the past year) describing the supply "
-        f"chain of the braking system in the {manufacturer}, {model}, {vehicle}, including details of major suppliers, "
-        f"manufacturing locations, component sourcing, and logistics routes."
+        f"chain of the following categories ({categories}) for the following vehicle: {manufacturer}, {model}, {vehicle}, "
+        f"including details of major suppliers, manufacturing locations, component sourcing, and logistics routes."
     )
 
     query2 = (
@@ -491,7 +493,8 @@ def researcher(state: AgentState) -> AgentState:
             HumanMessage(content=f"{query1}\n\n{query2}"),
             ai_msg
         ],
-        "component_info": state.get("component_info", {})
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", [])
     }
 
 def initial_drafter(state: AgentState) -> AgentState:
@@ -607,7 +610,8 @@ def initial_drafter(state: AgentState) -> AgentState:
             user_message,
             AIMessage(content=response.content)
         ],
-        "component_info": state.get("component_info", {})
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", [])
     }
 
 
@@ -641,7 +645,8 @@ def report_critic(state: AgentState) -> AgentState:
 
     return {
         "messages": [critique_message, response],
-        "component_info": state.get("component_info", {})
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", [])
     }
 
 def auto_reviser(state: AgentState) -> AgentState:
@@ -703,7 +708,8 @@ def auto_reviser(state: AgentState) -> AgentState:
                 content=update_result
             )
         ],
-        "component_info": state.get("component_info", {})
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", [])
     }
 
 def user_input_node(state: AgentState) -> AgentState:
@@ -742,7 +748,8 @@ def user_input_node(state: AgentState) -> AgentState:
 
     return {
         "messages": [user_message, response],
-        "component_info": state.get("component_info", {})
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", [])
     }
 
 
@@ -892,7 +899,8 @@ def run_document_agent():
     # Initial state
     state = {
         "messages": [],
-        "component_info": vehicle_summary(engine)[0]
+        "component_info": vehicle_summary(engine)[0],
+        "categories_modelled": categories_modelled
     }
 
     # Run the graph
