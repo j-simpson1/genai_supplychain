@@ -108,6 +108,7 @@ def top_5_parts_by_price(engine, query_text=None):
 
     return data
 
+
 def vehicle_summary(engine, query_text=None):
 
     if query_text is None:
@@ -141,5 +142,41 @@ def vehicle_summary(engine, query_text=None):
 
     return data
 
-print(vehicle_summary(engine))
 
+def categories_modelled(engine, query_text=None):
+
+    if query_text is None:
+        # Default query matching your example
+        query_text = """
+        SELECT
+          c."description" AS categoryDescription,
+          COUNT(DISTINCT a."articleNo") AS num_articles
+        FROM
+          "articles" a
+        INNER JOIN "articlevehiclelink" avl
+          ON a."articleNo" = avl."articleNo"
+          AND a."supplierId" = avl."supplierId"
+        INNER JOIN "parts" p
+          ON avl."productGroupId" = p."productGroupId"
+        INNER JOIN "category" c
+          ON p."categoryId" = c."categoryId"
+        GROUP BY
+          c."description"
+        ORDER BY
+          num_articles DESC;
+        """
+
+    query = text(query_text)
+
+    with Session(engine) as session:
+        result = session.exec(query)
+        rows = result.fetchall()
+
+        # Convert rows to list of dicts
+        columns = result.keys()
+        data = [dict(zip(columns, row)) for row in rows]
+
+    return data
+
+
+print(vehicle_summary(engine))

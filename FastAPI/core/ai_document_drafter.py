@@ -25,6 +25,9 @@ from reportlab.platypus.frames import Frame
 from reportlab.platypus.doctemplate import PageTemplate
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
+from FastAPI.database.database import engine
+from FastAPI.core.db_queries import vehicle_summary
+
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
 load_dotenv()
@@ -32,9 +35,14 @@ load_dotenv()
 # Global variable to store document content
 document_content = ""
 
+class ComponentInfo(TypedDict):
+    manufacturer: str
+    model: str
+    vehicle: str
 
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
+    component_info: ComponentInfo
 
 
 @tool
@@ -406,13 +414,17 @@ def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
 
 def researcher(state: AgentState) -> AgentState:
     """Research node - gathers information about tariffs and supply chains"""
+    component = state.get("component_info", {})
+    manufacturer = component.get("manufacturer", "Unknown Manufacturer").capitalize()
+    model = component.get("model", "Unknown Model")
+    vehicle = component.get("vehicle", "Unknown Vehicle")
 
     print("\n===== Starting Research Phase... =====\n")
 
     query1 = (
         "Retrieve the most recent and authoritative information (published in the past year) describing the supply "
-        "chain of the braking system in the Toyota RAV4, including details of major suppliers, manufacturing locations, "
-        "component sourcing, and logistics routes."
+        f"chain of the braking system in the {manufacturer}, {model}, {vehicle}, including details of major suppliers, "
+        f"manufacturing locations, component sourcing, and logistics routes."
     )
 
     query2 = (
@@ -499,11 +511,18 @@ def initial_drafter(state: AgentState) -> AgentState:
     markdown_links = [f"![]({path})" for path in image_paths]
     visualisations_md = "\n\n".join(markdown_links)
 
+    # getting the vehicle manufacturer, model and vehicle
+    component = state.get("component_info", {})
+    manufacturer = component.get("manufacturer", "Unknown Manufacturer").capitalize()
+    model = component.get("model", "Unknown Model")
+    vehicle = component.get("vehicle", "Unknown Vehicle")
+
     system_prompt = SystemMessage(content=f"""
     You are a highly structured **supply chain report generator**.
 
     **Objective:** 
-    Create a draft report on recent news and analysis regarding tariffs, sanctions, inflation, and global supply chains, focusing on the automotive component specified.
+    Create a draft report on recent news and analysis regarding tariffs, sanctions, inflation, and global supply chains, 
+    focusing on the following automotive component: {manufacturer}, {model}, {vehicle}.
 
     **IMPORTANT INSTRUCTIONS:**
 
@@ -864,7 +883,10 @@ def run_document_agent():
     app = create_graph()
 
     # Initial state
-    state = {"messages": []}
+    state = {
+        "messages": [],
+        "component_info": vehicle_summary(engine)[0]
+    }
 
     # Run the graph
     try:
