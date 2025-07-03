@@ -9,16 +9,12 @@ CLIENT_ID = os.getenv("EBAY_APP_ID")
 CLIENT_SECRET = os.getenv("EBAY_CERT_ID")
 # --------------------
 
-# eBay OAuth token endpoint for Production
-TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
-
-# eBay Browse API endpoint for Production
-SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
-
 def get_access_token(client_id, client_secret):
     """
     Get OAuth access token from eBay
     """
+    TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+
     credentials = f"{client_id}:{client_secret}"
     encoded_credentials = base64.b64encode(credentials.encode()).decode()
 
@@ -38,10 +34,26 @@ def get_access_token(client_id, client_secret):
     print(token)
     return token
 
-def search_car_parts(access_token, query, limit=5):
+def safe_get(url, headers=None, params=None):
     """
-    Search for car parts by keyword with marketplace and affiliate tracking
+    Wrapper for GET requests with safeguards:
+    - Enforce GET method
+    - Allow only Browse API URLs
     """
+    BROWSE_API_BASE = "https://api.ebay.com/buy/browse"
+
+    assert url.startswith(BROWSE_API_BASE), f"Blocked request: URL {url} is outside Browse API."
+    response = requests.get(url, headers=headers, params=params)
+    return response
+
+def ebay_search_car_parts(access_token, query, limit=5):
+    """
+    Search for car parts by keyword with marketplace and affiliate tracking.
+    Only allows Browse API GET calls.
+    """
+
+    SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -54,7 +66,8 @@ def search_car_parts(access_token, query, limit=5):
         "limit": str(limit)
     }
 
-    response = requests.get(SEARCH_URL, headers=headers, params=params)
+    # Use safe_get instead of requests.get directly
+    response = safe_get(SEARCH_URL, headers=headers, params=params)
     response.raise_for_status()
     return response.json()
 
@@ -70,7 +83,7 @@ def main():
     print("Searching for car parts...")
     query = "53012145282"
     limit = 5
-    results = search_car_parts(token, query, limit)
+    results = ebay_search_car_parts(token, query, limit)
 
     print("\nResults:")
     items = results.get("itemSummaries", [])
