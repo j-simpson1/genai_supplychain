@@ -2,6 +2,72 @@ from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy import text
 from FastAPI.database.database import engine
 
+def parts_summary(engine):
+
+    query_text = """
+    WITH part_article_data AS (
+        SELECT
+            p."productGroupId",
+            p."description" AS "partDescription",
+            a."price",
+            a."countryOfOrigin",
+            s."supplierId"
+        FROM
+            "parts" AS p
+        INNER JOIN "articlevehiclelink" AS avl
+            ON p."productGroupId" = avl."productGroupId"
+        INNER JOIN "articles" AS a
+            ON avl."articleNo" = a."articleNo"
+            AND avl."supplierId" = a."supplierId"
+        INNER JOIN "suppliers" AS s
+            ON a."supplierId" = s."supplierId"
+    )
+    ,
+    country_counts AS (
+        SELECT
+            pad."productGroupId",
+            pad."countryOfOrigin",
+            COUNT(DISTINCT pad."supplierId") AS supplier_count,
+            ROW_NUMBER() OVER (
+                PARTITION BY pad."productGroupId"
+                ORDER BY COUNT(DISTINCT pad."supplierId") DESC
+            ) AS rn
+        FROM part_article_data pad
+        GROUP BY
+            pad."productGroupId",
+            pad."countryOfOrigin"
+    )
+    SELECT
+        pad."productGroupId",
+        MAX(pad."partDescription") AS "partDescription",
+        ROUND(CAST(AVG(pad."price") AS numeric), 2)::float AS "averagePrice",
+        COUNT(pad."price") AS "numArticles",
+        cc."countryOfOrigin" AS "mostCommonCountryOfOrigin"
+    FROM
+        part_article_data pad
+    LEFT JOIN
+        country_counts cc
+        ON pad."productGroupId" = cc."productGroupId" AND cc.rn = 1
+    GROUP BY
+        pad."productGroupId",
+        cc."countryOfOrigin"
+    ORDER BY
+        pad."productGroupId";
+    """
+
+    query = text(query_text)
+
+    with Session(engine) as session:
+        result = session.exec(query)
+        rows = result.fetchall()
+
+        # Convert rows to list of dicts
+        columns = result.keys()
+        data = [dict(zip(columns, row)) for row in rows]
+
+    return data
+
+
 def fetch_parts_count_by_supplier(engine):
 
     query_text = """
@@ -171,4 +237,4 @@ def categories_modelled(engine, query_text=None):
     return data
 
 
-print(vehicle_summary(engine))
+print(parts_summary(engine))

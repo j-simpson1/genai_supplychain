@@ -26,7 +26,7 @@ from reportlab.platypus.doctemplate import PageTemplate
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 from FastAPI.database.database import engine
-from FastAPI.core.db_queries import vehicle_summary, categories_modelled
+from FastAPI.core.db_queries import vehicle_summary, categories_modelled, parts_summary
 
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 
@@ -40,10 +40,18 @@ class ComponentInfo(TypedDict):
     model: str
     vehicle: str
 
+class PartSummary(TypedDict):
+    productGroupId: int
+    partDescription: str
+    averagePrice: float
+    numArticles: int
+    mostCommonCountryOfOrigin: str
+
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     component_info: ComponentInfo
     categories_modelled: list
+    part_summary: list[PartSummary]
 
 
 @tool
@@ -431,8 +439,8 @@ def researcher(state: AgentState) -> AgentState:
 
     query2 = (
         "Retrieve the most recent news and analyses published in the past 90 days regarding tariffs, sanctions, and "
-        "trade restrictions affecting the supply chain of automotive braking systems, with a focus on Toyota and a "
-        "factory based in the UK."
+        f"trade restrictions affecting the supply chain of automotive braking systems, with a focus on {manufacturer} "
+        f"and a factory based in the UK."
     )
 
     # Use search tool directly
@@ -494,7 +502,8 @@ def researcher(state: AgentState) -> AgentState:
             ai_msg
         ],
         "component_info": state.get("component_info", {}),
-        "categories_modelled": state.get("categories_modelled", [])
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": state.get("part_summary", [])
     }
 
 def initial_drafter(state: AgentState) -> AgentState:
@@ -518,13 +527,20 @@ def initial_drafter(state: AgentState) -> AgentState:
     manufacturer = component.get("manufacturer", "Unknown Manufacturer").capitalize()
     model = component.get("model", "Unknown Model")
     vehicle = component.get("vehicle", "Unknown Vehicle")
+    categories = state.get("categories_modelled", [])
+    part_summary = state.get("part_summary", [])
+    parts_table = "\n".join(
+        f"- **{p['partDescription']}** | Avg Price: €{p['averagePrice']:.2f} | "
+        f"Articles: {p['numArticles']} | Common Origin: {p['mostCommonCountryOfOrigin']}"
+        for p in part_summary
+    )
 
     system_prompt = SystemMessage(content=f"""
     You are a highly structured **supply chain report generator**.
 
     **Objective:** 
     Create a draft report on recent news and analysis regarding tariffs, sanctions, inflation, and global supply chains, 
-    focusing on the following automotive component: {manufacturer}, {model}, {vehicle}.
+    focusing on the following automotive component: {manufacturer}, {model}, {vehicle}, {categories}.
 
     **IMPORTANT INSTRUCTIONS:**
 
@@ -560,12 +576,15 @@ def initial_drafter(state: AgentState) -> AgentState:
        - Concise overview of the component/vehicle being modeled and analyzed.
        - Describe the methodology used to gather research and conduct the analysis.
        - Use the following details as the basis: {manufacturer}, {model}, {vehicle}
+       - As well as a parts summary of the component being modelled {parts_table}.
 
     3. **Current Supply Chain Overview**
        - Summarize the most relevant points from the researcher.
        - Focus on key developments, policy changes, and disruptions affecting the supply chain.
+       - Include the following parts summary:
+         
        - Embed any visualizations relevant to this overview (as markdown image references or descriptions):
-       {visualisations_md}
+         {visualisations_md}.
 
     4. **Simulation of Tariff Shocks and Sanctions**
        - Describe the simulation scenarios and results.
@@ -611,7 +630,8 @@ def initial_drafter(state: AgentState) -> AgentState:
             AIMessage(content=response.content)
         ],
         "component_info": state.get("component_info", {}),
-        "categories_modelled": state.get("categories_modelled", [])
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": state.get("part_summary", [])
     }
 
 
@@ -646,7 +666,8 @@ def report_critic(state: AgentState) -> AgentState:
     return {
         "messages": [critique_message, response],
         "component_info": state.get("component_info", {}),
-        "categories_modelled": state.get("categories_modelled", [])
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": state.get("part_summary", [])
     }
 
 def auto_reviser(state: AgentState) -> AgentState:
@@ -709,7 +730,8 @@ def auto_reviser(state: AgentState) -> AgentState:
             )
         ],
         "component_info": state.get("component_info", {}),
-        "categories_modelled": state.get("categories_modelled", [])
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": state.get("part_summary", [])
     }
 
 def user_input_node(state: AgentState) -> AgentState:
@@ -749,7 +771,8 @@ def user_input_node(state: AgentState) -> AgentState:
     return {
         "messages": [user_message, response],
         "component_info": state.get("component_info", {}),
-        "categories_modelled": state.get("categories_modelled", [])
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": state.get("part_summary", [])
     }
 
 
@@ -900,7 +923,8 @@ def run_document_agent():
     state = {
         "messages": [],
         "component_info": vehicle_summary(engine)[0],
-        "categories_modelled": categories_modelled
+        "categories_modelled": categories_modelled,
+        "part_summary": parts_summary(engine)
     }
 
     # Run the graph
