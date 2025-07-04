@@ -35,7 +35,8 @@ class ArticleVehicleLink(SQLModel, table=True):
         # Composite foreign key to articles
         ForeignKeyConstraint(
             ["articleNo", "supplierId"],
-            ["articles.articleNo", "articles.supplierId"]
+            ["articles.articleNo", "articles.supplierId"],
+            ondelete="CASCADE"
         ),
     )
 
