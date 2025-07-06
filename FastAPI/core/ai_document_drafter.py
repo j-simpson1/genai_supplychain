@@ -298,6 +298,31 @@ def apply_corporate_theme():
 
     return corporate_palette
 
+def parts_summary_table_generator(parts_summary):
+    headers = [
+        "Product Group ID",
+        "Description",
+        "Average Price (€)",
+        "Number of Articles",
+        "Most Common Country"
+    ]
+    header_row = "| " + " | ".join(headers) + " |"
+    separator_row = "| " + " | ".join(["---"] * len(headers)) + " |"
+
+    rows = []
+    for p in parts_summary:
+        row = (
+            f"| {p['productGroupId']} "
+            f"| {p['partDescription']} "
+            f"| {p['averagePrice']:.2f} "
+            f"| {p['numArticles']} "
+            f"| {p['mostCommonCountryOfOrigin']} |"
+        )
+        rows.append(row)
+
+    table = "\n".join([header_row, separator_row] + rows)
+    return table
+
 def generate_visualisations(csv_path: str = "article_dummy_data.csv") -> list:
     """Generate professional visualisations and return list of image paths."""
     df = pd.read_csv(csv_path)
@@ -534,6 +559,7 @@ def initial_drafter(state: AgentState) -> AgentState:
         f"Articles: {p['numArticles']} | Common Origin: {p['mostCommonCountryOfOrigin']}"
         for p in part_summary
     )
+    parts_summary_table = parts_summary_table_generator(part_summary)
 
     system_prompt = SystemMessage(content=f"""
     You are a highly structured **supply chain report generator**.
@@ -581,8 +607,8 @@ def initial_drafter(state: AgentState) -> AgentState:
     3. **Current Supply Chain Overview**
        - Summarize the most relevant points from the researcher.
        - Focus on key developments, policy changes, and disruptions affecting the supply chain.
-       - Include the following parts summary:
-         
+       - Include the following parts summary table:
+         {parts_summary_table}
        - Embed any visualizations relevant to this overview (as markdown image references or descriptions):
          {visualisations_md}.
 
