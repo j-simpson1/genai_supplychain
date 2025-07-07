@@ -465,7 +465,7 @@ def researcher(state: AgentState) -> AgentState:
     query2 = (
         "Retrieve the most recent news and analyses published in the past 90 days regarding tariffs, sanctions, and "
         f"trade restrictions affecting the supply chain of automotive braking systems, with a focus on {manufacturer} "
-        f"and a factory based in the UK."
+        f"and a factory based in Ontario, Canada."
     )
 
     # Use search tool directly
@@ -531,6 +531,52 @@ def researcher(state: AgentState) -> AgentState:
         "part_summary": state.get("part_summary", [])
     }
 
+def data_insights(state: AgentState) -> AgentState:
+    """Analyse parts data in the relational database and update state."""
+    print("\n===== Analysing the database... =====\n")
+    parts = parts_summary(engine)
+
+    print(parts)
+
+    # 1. Handle empty results
+    if not parts:
+        print("No parts returned from parts_summary query.")
+        return {
+            "messages": state.get("messages", []),
+            "component_info": state.get("component_info", {}),
+            "categories_modelled": state.get("categories_modelled", []),
+            "part_summary": []
+        }
+
+    # 2. Validate keys
+    required_keys = {
+        "productGroupId",
+        "partDescription",
+        "averagePrice",
+        "numArticles",
+        "mostCommonCountryOfOrigin"
+    }
+
+    for i, p in enumerate(parts):
+        missing = required_keys - p.keys()
+        if missing:
+            raise ValueError(f"Part record at index {i} is missing keys: {missing}")
+
+    # 3. Normalize types
+    for p in parts:
+        p["averagePrice"] = float(p["averagePrice"])
+        p["numArticles"] = int(p["numArticles"])
+
+    # 4. Sort by numArticles descending
+    parts = sorted(parts, key=lambda x: x["numArticles"], reverse=True)
+
+    return {
+        "messages": state.get("messages", []),
+        "component_info": state.get("component_info", {}),
+        "categories_modelled": state.get("categories_modelled", []),
+        "part_summary": parts,
+    }
+
 def initial_drafter(state: AgentState) -> AgentState:
     """Draft the initial report based on research"""
     print("\n===== Creating initial draft... =====\n")
@@ -554,6 +600,29 @@ def initial_drafter(state: AgentState) -> AgentState:
     vehicle = component.get("vehicle", "Unknown Vehicle")
     categories = state.get("categories_modelled", [])
     part_summary = state.get("part_summary", [])
+    if part_summary:
+        highest_value_part = max(part_summary, key=lambda p: p["averagePrice"])
+        most_articles_part = max(part_summary, key=lambda p: p["numArticles"])
+        num_parts = len(part_summary)
+
+        highest_value_info = (
+            f"**Highest Value Part:** {highest_value_part['partDescription']} "
+            f"(€{highest_value_part['averagePrice']:.2f} average price, "
+        )
+
+        most_articles_info = (
+            f"**Most Suppliers Part:** {most_articles_part['partDescription']} "
+            f"({most_articles_part['numArticles']} compatible parts, "
+        )
+
+        number_of_parts = (
+            f"**Number of Parts:** {num_parts}"
+        )
+
+    else:
+        highest_value_info = "No parts data available."
+        most_articles_info = "No parts data available."
+        number_of_parts = "No parts data available."
     parts_table = "\n".join(
         f"- **{p['partDescription']}** | Avg Price: €{p['averagePrice']:.2f} | "
         f"Articles: {p['numArticles']} | Common Origin: {p['mostCommonCountryOfOrigin']}"
@@ -607,8 +676,10 @@ def initial_drafter(state: AgentState) -> AgentState:
     3. **Current Supply Chain Overview**
        - Summarize the most relevant points from the researcher.
        - Focus on key developments, policy changes, and disruptions affecting the supply chain.
-       - Include the following parts summary table:
-         {parts_summary_table}
+       - Highlight the following key parts insights in a narrative style:
+         - {highest_value_info}
+         - {most_articles_info}
+         - {number_of_parts}
        - Embed any visualizations relevant to this overview (as markdown image references or descriptions):
          {visualisations_md}.
 
@@ -881,6 +952,7 @@ def create_graph():
 
     # Add nodes
     graph.add_node("researcher", researcher)
+    graph.add_node("data_insights", data_insights)
     graph.add_node("report_drafter", initial_drafter)
     graph.add_node("report_critique", report_critic)
     graph.add_node("auto_reviser", auto_reviser)
@@ -891,7 +963,8 @@ def create_graph():
     graph.set_entry_point("researcher")
 
     # Add edges
-    graph.add_edge("researcher", "report_drafter")
+    graph.add_edge("researcher", "data_insights")
+    graph.add_edge("data_insights", "report_drafter")
     graph.add_edge("report_drafter", "report_critique")
 
 
@@ -950,7 +1023,7 @@ def run_document_agent():
         "messages": [],
         "component_info": vehicle_summary(engine)[0],
         "categories_modelled": categories_modelled,
-        "part_summary": parts_summary(engine)
+        "part_summary": []
     }
 
     # Run the graph
