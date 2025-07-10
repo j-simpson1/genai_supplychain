@@ -138,8 +138,13 @@ def research_plan_node(state: AgentState):
     content = state['content'] or []
     # loop over the queries and search for them in Tavily
     for q in queries.queries:
-        with tracer.start_as_current_span("TavilySearch", attributes={"query": q}):
+        with tracer.start_as_current_span(
+                "TavilySearch",
+                openinference_span_kind="tool",
+                attributes={"query": q}
+        ) as span:
             response = tavily.search(query=q, max_results=2)
+            span.set_output(value=response)
             for r in response['results']:
                 # get the list of results and append them to the content
                 content.append(r['content'])
