@@ -9,6 +9,26 @@ import operator
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, AIMessage, ChatMessage
 
+import phoenix as px
+import os
+from phoenix.otel import register
+from openinference.instrumentation.openai import OpenAIInstrumentor
+from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import Status, StatusCode
+from openinference.instrumentation import TracerProvider
+
+import os
+
+load_dotenv()
+pheonix_key = os.getenv("PHOENIX_API_KEY")
+pheonix_collector_endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")
+
+# configure the Phoenix tracer
+tracer_provider = register(
+  project_name="my-llm-app", # Default is 'default'
+  auto_instrument=True, # See 'Trace all calls made to a library' below
+)
+tracer = tracer_provider.get_tracer(__name__)
 
 # setup inmemory sqlite checkpointers
 import sqlite3
@@ -93,6 +113,7 @@ tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
+@tracer.chain
 def plan_node(state: AgentState):
     messages = [
         SystemMessage(content=PLAN_PROMPT),
@@ -104,6 +125,7 @@ def plan_node(state: AgentState):
     return {"plan": response.content}
 
 # takes in the plan and does some research
+@tracer.chain
 def research_plan_node(state: AgentState):
     # response with what we will invoke this with is the
     # response will be pydantic model which has the list of queries
@@ -116,13 +138,15 @@ def research_plan_node(state: AgentState):
     content = state['content'] or []
     # loop over the queries and search for them in Tavily
     for q in queries.queries:
-        response = tavily.search(query=q, max_results=2)
-        for r in response['results']:
-            # get the list of results and append them to the content
-            content.append(r['content'])
+        with tracer.start_as_current_span("TavilySearch", attributes={"query": q}):
+            response = tavily.search(query=q, max_results=2)
+            for r in response['results']:
+                # get the list of results and append them to the content
+                content.append(r['content'])
     # return the content key which is equal to the original content plus the accumulated content
     return {"content": content}
 
+@tracer.chain
 def generation_node(state: AgentState):
     # prepare the content - list of strings and join them into one big one
     content = "\n\n".join(state['content'] or [])
@@ -145,6 +169,7 @@ def generation_node(state: AgentState):
         "revision_number": state.get("revision_number", 1) + 1
     }
 
+@tracer.chain
 def reflection_node(state: AgentState):
     messages = [
         # take the reflection node and the draft
@@ -155,6 +180,7 @@ def reflection_node(state: AgentState):
     # going to generate the critique
     return {"critique": response.content}
 
+@tracer.chain
 def research_critique_node(state: AgentState):
     queries = model.with_structured_output(Queries).invoke([
         SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
@@ -208,14 +234,46 @@ graph = builder.compile(checkpointer=memory)
 #
 # Image(graph.get_graph().draw_png())
 
-# adding in graph.stream so can see all the steps
-thread = {"configurable": {"thread_id": "1"}}
-for s in graph.stream({
-    'task': "Write me a report on the Toyota RAV4",
-    "max_revisions": 2,
-    "revision_number": 1,
-    "content": [],
-}, thread):
-    print(s)
+
+def run_agent(messages):
+    with (tracer.start_as_current_span(
+            "LangGraphExecution",
+            openinference_span_kind="chain")
+    as span):
+        span.set_input(value=messages)
+
+        # adding in graph.stream so can see all the steps
+        thread = {"configurable": {"thread_id": "1"}}
+        for s in graph.stream({
+            'task': messages,
+            "max_revisions": 2,
+            "revision_number": 1,
+            "content": [],
+        }, thread):
+            print(s)
+        span.set_status(StatusCode.OK)
+
+
+# start from the outermost layer and work your way down so you capture the right info
+# only just calling this run_agent span and calls to add tracing
+def start_main_span(messages):
+    print("Starting main span with messages:", messages)
+
+    # span_kind maps to colors etc...
+    # anything in the with cause block will be treated as part of that span
+    with tracer.start_as_current_span(
+            "AgentRun", openinference_span_kind="agent"
+    ) as span:
+        # setting the input
+        span.set_input(value=messages)
+        ret = run_agent(messages)
+        print("Main span completed with return value:", ret)
+        # setting the output
+        span.set_output(value=ret)
+        # set status call - called correctly
+        span.set_status(StatusCode.OK)
+        return ret
+
+start_main_span("Write me a report on the Toyota RAV4")
 
 
