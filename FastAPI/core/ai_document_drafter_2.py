@@ -73,9 +73,28 @@ outline of the essay along with any relevant notes or instructions for the secti
 """
 
 # writing the essay given the information that was researched
-WRITER_PROMPT = """You are a research analyst tasked with writing an 800 word report\
+WRITER_PROMPT = """You are a research analyst tasked with writing a report of at least 600 words with a maximum of \
+800 word report. \
 Generate the best report possible for the user's request and the initial outline. \
 If the user provides critique, respond with a revised version of your previous attempts. \
+Provide the output in a JSON format using the structure below. \
+
+{{
+      "title": "<Report Title>",
+      "sections": [
+        {{
+          "heading": "<Section Heading>",
+          "content": "<Plain text or markdown content>",
+          "subsections": [
+            {{
+              "heading": "<Subsection Heading>",
+              "content": "<Plain text or markdown content>"
+            }}
+          ]
+        }}
+      ]
+    }}
+
 Utilize all the information below as needed: 
 
 
@@ -143,6 +162,7 @@ def research_plan_node(state: AgentState):
                 openinference_span_kind="tool",
                 attributes={"query": q}
         ) as span:
+            span.set_input(value=q)
             response = tavily.search(query=q, max_results=2)
             span.set_output(value=response)
             for r in response['results']:
@@ -194,16 +214,31 @@ def research_critique_node(state: AgentState):
     # get the original content and append with new queries
     content = state['content'] or []
     for q in queries.queries:
-        response = tavily.search(query=q, max_results=2)
-        for r in response['results']:
-            content.append(r['content'])
+        with tracer.start_as_current_span(
+                "TavilySearch",
+                openinference_span_kind="tool",
+                attributes={"query": q}
+        ) as span:
+            span.set_input(value=q)
+            response = tavily.search(query=q, max_results=2)
+            span.set_output(value=response)
+            for r in response['results']:
+                content.append(r['content'])
     return {"content": content}
 
 # look at the revision number - if greater than the max revisions will then end.
 def should_continue(state):
-    if state["revision_number"] > state["max_revisions"]:
-        return END
-    return "reflect"
+    with tracer.start_as_current_span(
+            "ShouldContinueCheck",
+            openinference_span_kind="chain"
+    ) as span:
+        span.set_input(value=state)
+        if state["revision_number"] > state["max_revisions"]:
+            result = END
+        else:
+            result = "reflect"
+        span.set_output(value=result)
+        return result
 
 # initialise the graph with the agent state
 builder = StateGraph(AgentState)
