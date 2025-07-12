@@ -17,6 +17,8 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import Status, StatusCode
 from openinference.instrumentation import TracerProvider
 
+from FastAPI.core.pdf_creator import save_to_pdf
+
 import os
 
 load_dotenv()
@@ -73,8 +75,8 @@ outline of the essay along with any relevant notes or instructions for the secti
 """
 
 # writing the essay given the information that was researched
-WRITER_PROMPT = """You are a research analyst tasked with writing a report of at least 600 words with a maximum of \
-800 word report. \
+WRITER_PROMPT = """You are a research analyst tasked with writing a report of at least 800 words with a maximum of \
+1000 word report. \
 Generate the best report possible for the user's request and the initial outline. \
 If the user provides critique, respond with a revised version of your previous attempts. \
 Provide the output in a JSON format using the structure below. \
@@ -234,6 +236,7 @@ def should_continue(state):
     ) as span:
         span.set_input(value=state)
         if state["revision_number"] > state["max_revisions"]:
+            save_to_pdf(content=state["draft"], filename="../reports_and_graphs/12_07_25/12_07_25_v2_report.pdf")
             result = END
         else:
             result = "reflect"
@@ -273,6 +276,11 @@ graph = builder.compile(checkpointer=memory)
 # from IPython.display import Image
 #
 # Image(graph.get_graph().draw_png())
+
+# save the graph
+output_graph_path = "../reports_and_graphs/12_07_25/12_07_25_v2_graph.png"
+with open(output_graph_path, "wb") as f:
+    f.write(graph.get_graph().draw_mermaid_png())
 
 
 def run_agent(messages):
