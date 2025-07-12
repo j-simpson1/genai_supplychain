@@ -124,7 +124,7 @@ agent_executor = create_sql_agent(
 )
 
 # Use `.invoke()` instead of `.run()`
-query = "Can you retrieve all the articles in the database?"
+query = "Can you retrieve me the average price by productGroupId?"
 
 response = agent_executor.invoke({"input": query})
 print(response["output"])
