@@ -10,18 +10,18 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, AIMessage, ChatMessage
 
 import phoenix as px
-import os
 from phoenix.otel import register
 from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import Status, StatusCode
 from openinference.instrumentation import TracerProvider
 
-from FastAPI.core.database_agent import agent_executor
 from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.database_agent_2 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country
 
 import os
+import json
+from openai import AzureOpenAI
 
 load_dotenv()
 pheonix_key = os.getenv("PHOENIX_API_KEY")
@@ -52,7 +52,9 @@ class AgentState(TypedDict):
     # critique agent will populate this key
     critique: str
     # documents tavily has come back with
-    content: List[str]
+    web_content: List[str]
+    # information from the database
+    db_content: List[str]
     # keep track of how many times we've gone through the loop
     revision_number: int
     max_revisions: int
@@ -112,6 +114,11 @@ REFLECTION_PROMPT = """You are a manager reviewing the analysts report. \
 Generate critique and recommendations for the analysts submission. \
 Provide detailed recommendations, including requests for length, depth, style, etc."""
 
+DATABASE_PLAN_INSTRUCTIONS = """ You are a supply chain data analyst with access to several \
+database tools. Your role is to extract relevant automotive part insights that will inform a \
+detailed written report. Do not hallucinate numbers. Only use tool outputs.
+"""
+
 # given a plan will generate a bunch of queries and pass to tavily
 RESEARCH_PLAN_PROMPT = """You are a researcher charged with providing information that can \
 be used when writing the following essay. Generate a list of search queries that will gather \
@@ -152,28 +159,20 @@ def plan_node(state: AgentState):
 
 @tracer.chain
 def database_plan_node(state: AgentState):
-    from openai import AzureOpenAI
-    import json
 
-    # Setup OpenAI client
     client = AzureOpenAI(
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         api_version="2024-05-01-preview"
     )
 
-    # Prepare tool schema
-    tools_sql = [
+    tools = [
         {
             "type": "function",
             "function": {
                 "name": "parts_summary",
                 "description": "Summarizes product groups by price, count, and origin.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             }
         },
         {
@@ -181,11 +180,7 @@ def database_plan_node(state: AgentState):
             "function": {
                 "name": "top_5_parts_by_price",
                 "description": "Top 5 product groups by average price.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             }
         },
         {
@@ -193,75 +188,58 @@ def database_plan_node(state: AgentState):
             "function": {
                 "name": "top_5_part_distrubution_by_country",
                 "description": "Top 5 countries by part distribution.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
+                "parameters": {"type": "object", "properties": {}, "required": []}
             }
         }
     ]
 
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a data analyst with access to an automotive parts database for the vehicle being "
-                       "analysed. Choose the most appropriate database function to support the user's task. "
-                       "Only choose two of the predefined tools and do not speculate beyond the database content."
-        },
-        {
-            "role": "user",
-            "content": state["task"]
-        }
-    ]
     available_functions = {
         "parts_summary": parts_summary,
         "top_5_parts_by_price": top_5_parts_by_price,
         "top_5_part_distrubution_by_country": top_5_part_distrubution_by_country
     }
 
-    # First call to decide which tool to use
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        tools=tools_sql,
-        tool_choice="auto",
+    assistant = client.beta.assistants.create(
+        name="DB Assistant",
+        instructions=DATABASE_PLAN_INSTRUCTIONS,
+        tools=tools,
+        model="gpt-4o"
     )
 
-    response_message = response.choices[0].message
-    tool_calls = response_message.tool_calls
+    thread = client.beta.threads.create()
 
-    content = state["content"] or []
-
-    if tool_calls:
-        messages.append(response_message)
-
-        for tool_call in tool_calls:
-            function_name = tool_call.function.name
-            function_to_call = available_functions.get(function_name)
-
-            try:
-                function_response = function_to_call()
-                tool_output = json.dumps(function_response, indent=2)
-                messages.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": tool_output
-                })
-                content.append(tool_output)
-            except Exception as e:
-                error_msg = f"Function {function_name} failed: {str(e)}"
-                content.append(error_msg)
-
-    # second response allows completion of the reasoning process once the data has been recieved.
-    second_response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
+    # Responses API: create_and_poll
+    run = client.beta.threads.runs.create_and_poll(
+        thread_id=thread.id,
+        assistant_id=assistant.id,
+        instructions=state["task"],
+        tool_choice="auto"
     )
-    content.append(second_response.choices[0].message.content)
 
-    return {"content": content}
+    # If the assistant called tools, handle it
+    if run.status == "requires_action":
+        tool_outputs = []
+        for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+            fn = available_functions.get(tool_call.function.name)
+            args = json.loads(tool_call.function.arguments)
+            output = fn(**args) if args else fn()
+            tool_outputs.append({
+                "tool_call_id": tool_call.id,
+                "output": json.dumps(output)
+            })
+
+        # Submit outputs and get final result
+        run = client.beta.threads.runs.submit_tool_outputs_and_poll(
+            thread_id=thread.id,
+            run_id=run.id,
+            tool_outputs=tool_outputs
+        )
+
+    # Fetch the final response from the thread
+    messages = client.beta.threads.messages.list(thread_id=thread.id)
+    final_message = messages.data[0].content[0].text.value
+
+    return {"db_content": state.get("db_content", []) + [final_message]}
 
 # takes in the plan and does some research
 @tracer.chain
@@ -274,7 +252,7 @@ def research_plan_node(state: AgentState):
         HumanMessage(content=state['task'])
     ])
     # original content
-    content = state['content'] or []
+    content = state['web_content'] or []
     # loop over the queries and search for them in Tavily
     for q in queries.queries:
         with tracer.start_as_current_span(
@@ -289,12 +267,14 @@ def research_plan_node(state: AgentState):
                 # get the list of results and append them to the content
                 content.append(r['content'])
     # return the content key which is equal to the original content plus the accumulated content
-    return {"content": content}
+    return {"web_content": content}
 
 @tracer.chain
 def generation_node(state: AgentState):
     # prepare the content - list of strings and join them into one big one
-    content = "\n\n".join(state['content'] or [])
+    db = "\n\n".join(state.get("db_content", []))
+    web = "\n\n".join(state.get("web_content", []))
+    combined = f"# Database Insights:\n\n{db}\n\n---\n\n# Web Research:\n\n{web}"
     # create user message which combines the task and the plan
     user_message = HumanMessage(
         # task and plan
@@ -302,7 +282,7 @@ def generation_node(state: AgentState):
     messages = [
         # format in documents which has been fetched
         SystemMessage(
-            content=WRITER_PROMPT.format(content=content)
+            content=WRITER_PROMPT.format(content=combined)
         ),
         # task and the plan
         user_message
@@ -332,7 +312,7 @@ def research_critique_node(state: AgentState):
         HumanMessage(content=state['critique'])
     ])
     # get the original content and append with new queries
-    content = state['content'] or []
+    content = state['web_content'] or []
     for q in queries.queries:
         with tracer.start_as_current_span(
                 "TavilySearch",
@@ -344,7 +324,7 @@ def research_critique_node(state: AgentState):
             span.set_output(value=response)
             for r in response['results']:
                 content.append(r['content'])
-    return {"content": content}
+    return {"web_content": content}
 
 # look at the revision number - if greater than the max revisions will then end.
 def should_continue(state):
@@ -398,7 +378,7 @@ graph = builder.compile(checkpointer=memory)
 # Image(graph.get_graph().draw_png())
 
 # save the graph
-output_graph_path = "langgraph.png"
+output_graph_path = "graph.png"
 with open(output_graph_path, "wb") as f:
     f.write(graph.get_graph().draw_mermaid_png())
 
@@ -416,7 +396,8 @@ def run_agent(messages):
             'task': messages,
             "max_revisions": 2,
             "revision_number": 1,
-            "content": [],
+            "db_content": [],
+            "web_content": [],
         }, thread):
             print(s)
         span.set_status(StatusCode.OK)
