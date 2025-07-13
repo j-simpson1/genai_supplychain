@@ -19,6 +19,7 @@ from openinference.instrumentation import TracerProvider
 
 from FastAPI.core.database_agent import agent_executor
 from FastAPI.core.pdf_creator import save_to_pdf
+from FastAPI.core.database_agent_2 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country
 
 import os
 
@@ -116,13 +117,6 @@ RESEARCH_PLAN_PROMPT = """You are a researcher charged with providing informatio
 be used when writing the following essay. Generate a list of search queries that will gather \
 any relevant information. Only generate 3 queries max."""
 
-DB_QUERY_PLANNER_PROMPT = """You are a data analyst with access to a structured automotive parts database. \
-Given the following report task, suggest up to 3 useful **technical questions** that could be answered from the SQL database. \
-Only generate questions and leave the sql generation to the agent. Do not include speculative or high-level questions. \
-Only generate 3 queries max. \
-The database has the following tables: articles, articlevehiclelink, category, datasource, manufacturers, models, \
-parts, suppliers, vehicle."""
-
 # after we've made the critique will pass the list of queries to pass to tavily
 RESEARCH_CRITIQUE_PROMPT = """You are a researcher charged with providing information that can \
 be used when making any requested revisions (as outlined below). \
@@ -158,31 +152,114 @@ def plan_node(state: AgentState):
 
 @tracer.chain
 def database_plan_node(state: AgentState):
-    messages = [
-        SystemMessage(content=DB_QUERY_PLANNER_PROMPT.format(task=state["task"])),
-        HumanMessage(content=state["task"])
+    from openai import AzureOpenAI
+    import json
+
+    # Setup OpenAI client
+    client = AzureOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version="2024-05-01-preview"
+    )
+
+    # Prepare tool schema
+    tools_sql = [
+        {
+            "type": "function",
+            "function": {
+                "name": "parts_summary",
+                "description": "Summarizes product groups by price, count, and origin.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "top_5_parts_by_price",
+                "description": "Top 5 product groups by average price.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "top_5_part_distrubution_by_country",
+                "description": "Top 5 countries by part distribution.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        }
     ]
 
-    # Generate structured SQL-like questions
-    generated = model.with_structured_output(DBQueries).invoke(messages)
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a data analyst with access to an automotive parts database for the vehicle being "
+                       "analysed. Choose the most appropriate database function to support the user's task. "
+                       "Only choose two of the predefined tools and do not speculate beyond the database content."
+        },
+        {
+            "role": "user",
+            "content": state["task"]
+        }
+    ]
+    available_functions = {
+        "parts_summary": parts_summary,
+        "top_5_parts_by_price": top_5_parts_by_price,
+        "top_5_part_distrubution_by_country": top_5_part_distrubution_by_country
+    }
+
+    # First call to decide which tool to use
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        tools=tools_sql,
+        tool_choice="auto",
+    )
+
+    response_message = response.choices[0].message
+    tool_calls = response_message.tool_calls
 
     content = state["content"] or []
 
-    for q in generated.queries:
-        with tracer.start_as_current_span(
-            "SQLQuery",
-            openinference_span_kind="tool",
-            attributes={"query": q}
-        ) as span:
-            span.set_input(value=q)
+    if tool_calls:
+        messages.append(response_message)
+
+        for tool_call in tool_calls:
+            function_name = tool_call.function.name
+            function_to_call = available_functions.get(function_name)
+
             try:
-                result = agent_executor.invoke({"input": q})
-                span.set_output(value=result["output"])
-                content.append(result["output"])
+                function_response = function_to_call()
+                tool_output = json.dumps(function_response, indent=2)
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": tool_output
+                })
+                content.append(tool_output)
             except Exception as e:
-                span.set_output(value=str(e))
-                span.set_status(StatusCode.ERROR, str(e))
-                content.append(f"SQL query failed: {e}")
+                error_msg = f"Function {function_name} failed: {str(e)}"
+                content.append(error_msg)
+
+    # second response allows completion of the reasoning process once the data has been recieved.
+    second_response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+    )
+    content.append(second_response.choices[0].message.content)
 
     return {"content": content}
 
@@ -365,6 +442,6 @@ def start_main_span(messages):
         span.set_status(StatusCode.OK)
         return ret
 
-start_main_span("Write me a report on the Toyota RAV4")
+start_main_span("Write me a report on the supply chain of the Toyota RAV4 braking system")
 
 
