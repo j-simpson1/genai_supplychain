@@ -17,6 +17,7 @@ from openinference.semconv.trace import SpanAttributes
 from opentelemetry.trace import Status, StatusCode
 from openinference.instrumentation import TracerProvider
 
+from FastAPI.core.database_agent import agent_executor
 from FastAPI.core.pdf_creator import save_to_pdf
 
 import os
@@ -115,6 +116,13 @@ RESEARCH_PLAN_PROMPT = """You are a researcher charged with providing informatio
 be used when writing the following essay. Generate a list of search queries that will gather \
 any relevant information. Only generate 3 queries max."""
 
+DB_QUERY_PLANNER_PROMPT = """You are a data analyst with access to a structured automotive parts database. \
+Given the following report task, suggest up to 3 useful **technical questions** that could be answered from the SQL database. \
+Only generate questions and leave the sql generation to the agent. Do not include speculative or high-level questions. \
+Only generate 3 queries max. \
+The database has the following tables: articles, articlevehiclelink, category, datasource, manufacturers, models, \
+parts, suppliers, vehicle."""
+
 # after we've made the critique will pass the list of queries to pass to tavily
 RESEARCH_CRITIQUE_PROMPT = """You are a researcher charged with providing information that can \
 be used when making any requested revisions (as outlined below). \
@@ -124,7 +132,10 @@ Generate a list of search queries that will gather any relevant information. Onl
 # from tavily
 from pydantic import BaseModel
 
-class Queries(BaseModel):
+class ResearchQueries(BaseModel):
+    queries: List[str]
+
+class DBQueries(BaseModel):
     queries: List[str]
 
 # importing taviliy as using it in a slightly unconventional way
@@ -145,12 +156,42 @@ def plan_node(state: AgentState):
     # get the content of the messages and pass to the plan key
     return {"plan": response.content}
 
+@tracer.chain
+def database_plan_node(state: AgentState):
+    messages = [
+        SystemMessage(content=DB_QUERY_PLANNER_PROMPT.format(task=state["task"])),
+        HumanMessage(content=state["task"])
+    ]
+
+    # Generate structured SQL-like questions
+    generated = model.with_structured_output(DBQueries).invoke(messages)
+
+    content = state["content"] or []
+
+    for q in generated.queries:
+        with tracer.start_as_current_span(
+            "SQLQuery",
+            openinference_span_kind="tool",
+            attributes={"query": q}
+        ) as span:
+            span.set_input(value=q)
+            try:
+                result = agent_executor.invoke({"input": q})
+                span.set_output(value=result["output"])
+                content.append(result["output"])
+            except Exception as e:
+                span.set_output(value=str(e))
+                span.set_status(StatusCode.ERROR, str(e))
+                content.append(f"SQL query failed: {e}")
+
+    return {"content": content}
+
 # takes in the plan and does some research
 @tracer.chain
 def research_plan_node(state: AgentState):
     # response with what we will invoke this with is the
     # response will be pydantic model which has the list of queries
-    queries = model.with_structured_output(Queries).invoke([
+    queries = model.with_structured_output(ResearchQueries).invoke([
         # researching planning prompt and planning prompt
         SystemMessage(content=RESEARCH_PLAN_PROMPT),
         HumanMessage(content=state['task'])
@@ -209,7 +250,7 @@ def reflection_node(state: AgentState):
 
 @tracer.chain
 def research_critique_node(state: AgentState):
-    queries = model.with_structured_output(Queries).invoke([
+    queries = model.with_structured_output(ResearchQueries).invoke([
         SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
         HumanMessage(content=state['critique'])
     ])
@@ -236,7 +277,7 @@ def should_continue(state):
     ) as span:
         span.set_input(value=state)
         if state["revision_number"] > state["max_revisions"]:
-            save_to_pdf(content=state["draft"], filename="../reports_and_graphs/12_07_25/12_07_25_v2_report.pdf")
+            save_to_pdf(content=state["draft"], filename="report.pdf")
             result = END
         else:
             result = "reflect"
@@ -251,6 +292,7 @@ builder.add_node("planner", plan_node)
 builder.add_node("generate", generation_node)
 builder.add_node("reflect", reflection_node)
 builder.add_node("research_plan", research_plan_node)
+builder.add_node("db_plan", database_plan_node)
 builder.add_node("research_critique", research_critique_node)
 
 # set entry point
@@ -264,7 +306,8 @@ builder.add_conditional_edges(
 )
 
 # add in basic edges
-builder.add_edge("planner", "research_plan")
+builder.add_edge("planner", "db_plan")
+builder.add_edge("db_plan", "research_plan")
 builder.add_edge("research_plan", "generate")
 
 builder.add_edge("reflect", "research_critique")
@@ -278,7 +321,7 @@ graph = builder.compile(checkpointer=memory)
 # Image(graph.get_graph().draw_png())
 
 # save the graph
-output_graph_path = "../reports_and_graphs/12_07_25/12_07_25_v2_graph.png"
+output_graph_path = "langgraph.png"
 with open(output_graph_path, "wb") as f:
     f.write(graph.get_graph().draw_mermaid_png())
 
