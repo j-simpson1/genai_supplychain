@@ -151,6 +151,38 @@ def top_5_part_distrubution_by_country():
         print(e)
         return np.nan
 
+def parts_average_price():
+    try:
+        query = f"""
+        SELECT
+            p."productGroupId",
+            p."description" AS "partDescription",
+            ROUND(AVG(a."price")::numeric, 2)::float AS "averagePrice"
+        FROM
+            "parts" AS p
+        INNER JOIN "articlevehiclelink" AS avl
+            ON p."productGroupId" = avl."productGroupId"
+        INNER JOIN "articles" AS a
+            ON avl."articleNo" = a."articleNo"
+            AND avl."supplierId" = a."supplierId"
+        GROUP BY
+            p."productGroupId",
+            p."description"
+        ORDER BY
+            "averagePrice" DESC;
+        """
+        query = text(query)
+
+        with engine.connect() as connection:
+            result = pd.read_sql_query(query, connection)
+        if not result.empty:
+            return result.to_dict('records')
+        else:
+            return np.nan
+    except Exception as e:
+        print(e)
+        return np.nan
+
 messages = [
     {"role": "user",
      "content": """ can I summary of all the automotive parts?"""

@@ -1,6 +1,7 @@
 import json
 import re
 import os
+from typing import List, Dict
 
 from langchain.tools import tool
 
@@ -13,7 +14,7 @@ from reportlab.platypus.doctemplate import PageTemplate
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 
-def save_to_pdf(content: str, filename: str = "report.pdf") -> str:
+def save_to_pdf(content: str, filename: str = "14_07_25_v6_report.pdf", chart_metadata: List[Dict[str, str]] = []) -> str:
     """Save the current document as a PDF file."""
 
     if not filename.endswith(".pdf"):
@@ -75,8 +76,21 @@ def save_to_pdf(content: str, filename: str = "report.pdf") -> str:
 
         story = []
 
+        def replace_figure_placeholders(text, chart_metadata):
+            def replacement(match):
+                chart_id = match.group(1)
+                for item in chart_metadata:
+                    if item["id"] == chart_id and os.path.exists(item["path"]):
+                        return f"![{chart_id}]({item['path']})"
+                return f"[Missing chart: {chart_id}]"
+
+            return re.sub(r"\[\[FIGURE:([a-zA-Z0-9_\-]+)\]\]", replacement, text)
+
         # Function to process content and extract images
-        def process_content(content):
+        def process_content(content, chart_metadata):
+
+            content = replace_figure_placeholders(content, chart_metadata)
+
             elements = []
             # Match markdown image syntax: ![alt text](path/to/image.png)
             img_pattern = re.compile(r'!\[(.*?)\]\((.*?)\)')
@@ -132,7 +146,8 @@ def save_to_pdf(content: str, filename: str = "report.pdf") -> str:
                 story.append(Spacer(1, 6))
 
                 # Process content with image handling
-                content_elements = process_content(section["content"])
+                content_text = section.get("content", "")
+                content_elements = process_content(content_text, chart_metadata)
                 story.extend(content_elements)
 
                 # Subsections
@@ -163,7 +178,7 @@ def save_to_pdf(content: str, filename: str = "report.pdf") -> str:
 
         else:
             # Plain text mode with image handling
-            story.extend(process_content(content))
+            story.extend(process_content(content, chart_metadata))
 
         doc.build(story)
         return f"Document saved successfully as PDF to '{filename}'."
