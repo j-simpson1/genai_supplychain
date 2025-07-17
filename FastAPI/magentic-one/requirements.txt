@@ -1,0 +1,8 @@
+autogen-agentchat
+autogen-ext[magentic-one,openai]
+playwright
+python-dotenv
+arize-phoenix
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+openinference-instrumentation
