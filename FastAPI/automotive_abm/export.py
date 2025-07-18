@@ -26,7 +26,7 @@ def export_simulation_data(model, output_path="key_simulation_data.csv"):
     total_steps = model.current_step
 
     for step in range(total_steps):
-        # Get core metrics for this step
+        # Get autogen metrics for this step
         cost = model.metrics["cost_history"][step] if step < len(model.metrics["cost_history"]) else 0
         components_built = model.metrics["components_built"][step] if step < len(
             model.metrics["components_built"]) else 0
