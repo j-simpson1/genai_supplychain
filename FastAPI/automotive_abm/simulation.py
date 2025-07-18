@@ -7,14 +7,35 @@ from datetime import datetime
 
 
 class TariffSimulation:
-    """Simplified tariff simulation using real brake parts data"""
+    """Enhanced tariff simulation with current tariff rates"""
 
     def __init__(self, suppliers_data, part_requirements):
         self.suppliers_data = suppliers_data
         self.part_requirements = part_requirements
+        self.cost_history = []
+
+        # Current tariff rates by country (as of 2025) - initialize first
+        self.current_tariff_rates = {
+            'Germany': 0.025,  # EU standard automotive tariffs
+            'Netherlands': 0.025,  # EU standard automotive tariffs
+            'Denmark': 0.025,  # EU standard automotive tariffs
+            'Italy': 0.025,  # EU standard automotive tariffs
+            'Japan': 0.12,  # US-Japan trade agreement rates
+            'China': 0.27,  # Current US-China trade tensions
+            'South Korea': 0.08,  # KORUS agreement
+            'Mexico': 0.0,  # USMCA agreement
+            'Canada': 0.0,  # USMCA agreement
+            'India': 0.15,  # Recent trade negotiations
+            'Brazil': 0.18,  # Mercosur rates
+            'United Kingdom': 0.035,  # Post-Brexit rates
+            'Taiwan': 0.095,  # Recent semiconductor-related adjustments
+            'Thailand': 0.065,  # ASEAN trade rates
+            'Turkey': 0.055,  # EU customs union adjustments
+        }
+
+        # Now initialize suppliers after tariff rates are set
         self.suppliers_by_product = self._group_suppliers()
         self.current_suppliers = self._get_cheapest_suppliers()
-        self.cost_history = []
 
     def _group_suppliers(self):
         """Group suppliers by product ID"""
@@ -26,7 +47,7 @@ class TariffSimulation:
     def _get_cheapest_suppliers(self, tariffs=None):
         """Find cheapest supplier for each required product"""
         if tariffs is None:
-            tariffs = {}
+            tariffs = self.current_tariff_rates
 
         suppliers = {}
         for product_id in self.part_requirements:
@@ -41,7 +62,7 @@ class TariffSimulation:
     def get_total_cost(self, tariffs=None):
         """Calculate total cost with current suppliers"""
         if tariffs is None:
-            tariffs = {}
+            tariffs = self.current_tariff_rates
 
         total = 0
         for product_id, quantity in self.part_requirements.items():
@@ -55,10 +76,12 @@ class TariffSimulation:
     def run_simulation(self, steps=25, shock_step=10, target_country='Germany', tariff_rate=0.30):
         """Run tariff shock simulation"""
         self.cost_history = []
-        current_tariffs = {}
+        # Start with current tariff rates
+        current_tariffs = self.current_tariff_rates.copy()
 
         for step in range(steps):
             if step == shock_step:
+                # Apply tariff shock to target country
                 current_tariffs[target_country] = tariff_rate
                 self.current_suppliers = self._get_cheapest_suppliers(current_tariffs)
 
@@ -70,6 +93,41 @@ class TariffSimulation:
             'final_cost': self.cost_history[-1],
             'cost_increase': self.cost_history[-1] - self.cost_history[0]
         }
+
+    def get_current_tariff_info(self):
+        """Return current tariff rates for all countries"""
+        return self.current_tariff_rates.copy()
+
+    def analyze_current_costs(self):
+        """Analyze costs with current tariff rates"""
+        cost_breakdown = {}
+        total_cost = 0
+
+        for product_id, quantity in self.part_requirements.items():
+            if product_id in self.current_suppliers:
+                supplier = self.current_suppliers[product_id]
+                country = supplier['countryOfOrigin']
+                tariff_rate = self.current_tariff_rates.get(country, 0)
+
+                base_cost = supplier['price'] * quantity
+                tariff_cost = base_cost * tariff_rate
+                total_product_cost = base_cost + tariff_cost
+
+                cost_breakdown[product_id] = {
+                    'product_name': supplier.get('articleProductName', 'Unknown'),
+                    'supplier': supplier['supplierName'],
+                    'country': country,
+                    'quantity': quantity,
+                    'unit_price': supplier['price'],
+                    'tariff_rate': tariff_rate,
+                    'base_cost': base_cost,
+                    'tariff_cost': tariff_cost,
+                    'total_cost': total_product_cost
+                }
+
+                total_cost += total_product_cost
+
+        return cost_breakdown, total_cost
 
 
 def load_sample_data():
@@ -115,17 +173,23 @@ def load_sample_data():
     return suppliers_data, part_requirements
 
 
-def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=False, output_dir='./charts'):
-    """Analyze 10%, 30%, and 60% tariff impact and return JSON"""
+def analyze_tariff_impact_with_current_rates(target_country='Germany', show_plots=True, save_plots=False,
+                                             output_dir='./charts'):
+    """Analyze tariff impact using current rates as baseline"""
 
     suppliers_data, part_requirements = load_sample_data()
-    tariff_rates = [0.10, 0.30, 0.60]
+    sim = TariffSimulation(suppliers_data, part_requirements)
 
+    # Get current tariff information
+    current_tariffs = sim.get_current_tariff_info()
+    current_cost_breakdown, current_total_cost = sim.analyze_current_costs()
+
+    # Test different shock scenarios
+    tariff_rates = [0.10, 0.30, 0.60]
     results = []
     price_distributions = []
 
     for rate in tariff_rates:
-        sim = TariffSimulation(suppliers_data, part_requirements)
         result = sim.run_simulation(target_country=target_country, tariff_rate=rate)
 
         # Calculate affected suppliers and prices
@@ -138,13 +202,18 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
                 affected_suppliers.append({
                     'supplier_name': supplier['supplierName'],
                     'article_no': supplier['articleNo'],
+                    'current_tariff': current_tariffs.get(target_country, 0),
+                    'shock_tariff': rate,
                     'original_price': supplier['price'],
                     'adjusted_price': adjusted_price,
                     'price_increase': adjusted_price - supplier['price']
                 })
                 all_prices.append(adjusted_price)
             else:
-                all_prices.append(supplier['price'])
+                # Use current tariff rates for other countries
+                current_rate = current_tariffs.get(supplier['countryOfOrigin'], 0)
+                adjusted_price = supplier['price'] * (1 + current_rate)
+                all_prices.append(adjusted_price)
 
         price_distributions.append(all_prices)
 
@@ -187,6 +256,15 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
             'severity': 'medium'
         })
 
+    # Add recommendation about current tariff exposure
+    high_tariff_countries = [country for country, rate in current_tariffs.items() if rate > 0.10]
+    if high_tariff_countries:
+        recommendations.append({
+            'type': 'current_exposure',
+            'message': f"Currently exposed to high tariffs in: {', '.join(high_tariff_countries)}",
+            'severity': 'medium'
+        })
+
     # Initialize saved file path
     saved_chart_path = None
 
@@ -197,11 +275,11 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
         # Cost progression
         colors = ['blue', 'green', 'red']
         for i, result in enumerate(results):
-            ax1.plot(result['cost_progression'], label=f"{result['tariff_rate']:.0%}",
+            ax1.plot(result['cost_progression'], label=f"Shock to {result['tariff_rate']:.0%}",
                      color=colors[i], linewidth=2, marker='o', markersize=3)
 
         ax1.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock')
-        ax1.set_title(f'Cost Impact - {target_country} Tariff', fontweight='bold')
+        ax1.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Starting from current rates)', fontweight='bold')
         ax1.set_xlabel('Time Step')
         ax1.set_ylabel('Total Cost (USD)')
         ax1.legend()
@@ -216,7 +294,9 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        ax2.set_title(f'Price Distribution - {target_country} Tariff', fontweight='bold')
+        ax2.set_title(
+            f'Price Distribution - {target_country} Tariff Shock\n(Including current rates for other countries)',
+            fontweight='bold')
         ax2.set_xlabel('Tariff Rate')
         ax2.set_ylabel('Article Price (USD)')
         ax2.grid(True, alpha=0.3)
@@ -225,28 +305,28 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
 
         # Save plots if requested
         if save_plots:
-            # Create output directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
-
-            # Generate filename with timestamp
             filename = f"tariff_analysis_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             filepath = os.path.join(output_dir, filename)
-
-            # Save with high DPI for quality
             plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
-            saved_chart_path = os.path.abspath(filepath)  # Get absolute path
+            saved_chart_path = os.path.abspath(filepath)
             print(f"Chart saved as: {saved_chart_path}")
 
         if show_plots:
             plt.show()
         else:
-            plt.close()  # Close the figure to free memory if not showing
+            plt.close()
 
     # Return JSON response
     response = {
-        'analysis_type': 'tariff_impact_analysis',
+        'analysis_type': 'tariff_impact_analysis_with_current_rates',
         'target_country': target_country,
-        'timestamp': '2025-07-18T16:24:22.000Z',
+        'timestamp': datetime.now().isoformat(),
+        'current_tariff_rates': current_tariffs,
+        'current_cost_analysis': {
+            'total_cost': current_total_cost,
+            'cost_breakdown': current_cost_breakdown
+        },
         'summary': {
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
@@ -280,14 +360,22 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=
 
 
 if __name__ == "__main__":
-    # Analysis with plots saved as PNG
-    print("Running tariff impact analysis with PNG export...")
-    result = analyze_tariff_impact('Germany', show_plots=True, save_plots=True, output_dir='./output_charts')
+    # Analysis with current tariff rates
+    print("Running tariff impact analysis with current rates...")
+    result = analyze_tariff_impact_with_current_rates('Germany', show_plots=True, save_plots=True,
+                                                      output_dir='./output_charts')
 
-    # LangGraph JSON output
+    # Print current tariff rates
+    print("\nCurrent Tariff Rates:")
+    suppliers_data, part_requirements = load_sample_data()
+    sim = TariffSimulation(suppliers_data, part_requirements)
+    current_rates = sim.get_current_tariff_info()
+    for country, rate in sorted(current_rates.items()):
+        print(f"{country}: {rate:.1%}")
+
+    # JSON output
     print("\n" + "=" * 50)
-    print("JSON OUTPUT FOR LANGGRAPH:")
+    print("JSON OUTPUT:")
     print("=" * 50)
-
-    json_output = analyze_tariff_impact('Germany', show_plots=False, save_plots=False)
-    print(json.dumps(json_output, indent=2))
+    json_output = analyze_tariff_impact_with_current_rates('Germany', show_plots=False, save_plots=False)
+    print(json.dumps(json_output, indent=2, default=str))
