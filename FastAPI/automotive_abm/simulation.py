@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 from collections import defaultdict
+import os
+from datetime import datetime
 
 
 class TariffSimulation:
@@ -113,7 +115,7 @@ def load_sample_data():
     return suppliers_data, part_requirements
 
 
-def analyze_tariff_impact(target_country='Germany', show_plots=True):
+def analyze_tariff_impact(target_country='Germany', show_plots=True, save_plots=False, output_dir='./charts'):
     """Analyze 10%, 30%, and 60% tariff impact and return JSON"""
 
     suppliers_data, part_requirements = load_sample_data()
@@ -185,8 +187,11 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True):
             'severity': 'medium'
         })
 
+    # Initialize saved file path
+    saved_chart_path = None
+
     # Create visualization if requested
-    if show_plots:
+    if show_plots or save_plots:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
         # Cost progression
@@ -204,7 +209,7 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True):
 
         # Box plot
         box_colors = ['lightblue', 'lightgreen', 'lightcoral']
-        box_plot = ax2.boxplot(price_distributions, labels=[f'{r:.0%}' for r in tariff_rates],
+        box_plot = ax2.boxplot(price_distributions, tick_labels=[f'{r:.0%}' for r in tariff_rates],
                                patch_artist=True)
 
         for patch, color in zip(box_plot['boxes'], box_colors):
@@ -217,10 +222,28 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True):
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plt.show()
+
+        # Save plots if requested
+        if save_plots:
+            # Create output directory if it doesn't exist
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Generate filename with timestamp
+            filename = f"tariff_analysis_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            filepath = os.path.join(output_dir, filename)
+
+            # Save with high DPI for quality
+            plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
+            saved_chart_path = os.path.abspath(filepath)  # Get absolute path
+            print(f"Chart saved as: {saved_chart_path}")
+
+        if show_plots:
+            plt.show()
+        else:
+            plt.close()  # Close the figure to free memory if not showing
 
     # Return JSON response
-    return {
+    response = {
         'analysis_type': 'tariff_impact_analysis',
         'target_country': target_country,
         'timestamp': '2025-07-18T16:24:22.000Z',
@@ -237,16 +260,34 @@ def analyze_tariff_impact(target_country='Germany', show_plots=True):
         'recommendations': recommendations
     }
 
+    # Add saved chart information if plots were saved
+    if saved_chart_path:
+        response['output_files'] = {
+            'chart_saved': True,
+            'chart_path': saved_chart_path,
+            'chart_filename': os.path.basename(saved_chart_path),
+            'output_directory': os.path.dirname(saved_chart_path)
+        }
+    else:
+        response['output_files'] = {
+            'chart_saved': False,
+            'chart_path': None,
+            'chart_filename': None,
+            'output_directory': None
+        }
+
+    return response
+
 
 if __name__ == "__main__":
-    # Standard analysis with plots
-    print("Running tariff impact analysis...")
-    result = analyze_tariff_impact('Germany', show_plots=True)
+    # Analysis with plots saved as PNG
+    print("Running tariff impact analysis with PNG export...")
+    result = analyze_tariff_impact('Germany', show_plots=True, save_plots=True, output_dir='./output_charts')
 
     # LangGraph JSON output
     print("\n" + "=" * 50)
     print("JSON OUTPUT FOR LANGGRAPH:")
     print("=" * 50)
 
-    json_output = analyze_tariff_impact('Germany', show_plots=False)
+    json_output = analyze_tariff_impact('Germany', show_plots=False, save_plots=False)
     print(json.dumps(json_output, indent=2))
