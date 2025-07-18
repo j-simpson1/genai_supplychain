@@ -173,7 +173,7 @@ def load_sample_data():
     return suppliers_data, part_requirements
 
 
-def analyze_tariff_impact_with_current_rates(target_country='Germany', show_plots=True, save_plots=False,
+def analyze_tariff_impact_with_current_rates(target_country='Germany', tariff_rates = [0.10, 0.30, 0.60], show_plots=True, save_plots=False,
                                              output_dir='./charts'):
     """Analyze tariff impact using current rates as baseline"""
 
@@ -185,7 +185,6 @@ def analyze_tariff_impact_with_current_rates(target_country='Germany', show_plot
     current_cost_breakdown, current_total_cost = sim.analyze_current_costs()
 
     # Test different shock scenarios
-    tariff_rates = [0.10, 0.30, 0.60]
     results = []
     price_distributions = []
 
@@ -362,7 +361,7 @@ def analyze_tariff_impact_with_current_rates(target_country='Germany', show_plot
 if __name__ == "__main__":
     # Analysis with current tariff rates
     print("Running tariff impact analysis with current rates...")
-    result = analyze_tariff_impact_with_current_rates('Germany', show_plots=True, save_plots=True,
+    result = analyze_tariff_impact_with_current_rates('Germany', [0.10, 0.30, 0.60], show_plots=True, save_plots=True,
                                                       output_dir='./output_charts')
 
     # Print current tariff rates
