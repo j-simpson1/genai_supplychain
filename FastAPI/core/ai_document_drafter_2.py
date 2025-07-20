@@ -17,7 +17,7 @@ from phoenix.otel import register
 from opentelemetry.trace import StatusCode
 
 from FastAPI.core.pdf_creator import save_to_pdf
-from FastAPI.core.database_agent_2 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country, parts_average_price
+from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country, parts_average_price
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import summarize_simulation_content, convert_numpy
@@ -112,7 +112,7 @@ of your previous attempts. Provide the output in a JSON format using the structu
 The charts should be included using placeholders like [[FIGURE:<chart_id>]] in part of the report where the chart \
 should appear. These placeholders will be replaced with the actual figures in the final report. \
 
-Referencing should use Harvard Style. 
+Please can you reference all external sources using Harvard referencing style. 
 
 Only include sections and subsections in the report. Do not include subsubsections or any headings nested deeper \
 than two levels.
@@ -432,9 +432,7 @@ def generation_node(state: AgentState):
         [f"Include these chart in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
     if simulation_content:
-        print("Simulation already run!")
         simulation_content_summary = summarize_simulation_content(simulation_content)
-        print("Simulation summary 1: ", simulation_content_summary)
         combined = (f"### Database Insights:\n\n{db}\n\n---\n\n### Web Research:\n\n{web}\n\n---\n\n### Charts:\n\n{charts}"
                 f"#\n\n---\n\n### Simulation Results:\n\n{simulation_content_summary}")
 
@@ -443,9 +441,6 @@ def generation_node(state: AgentState):
 
         print("Skipping automotive_tariff_simulation tool — already cached.")
         initial_response = model.invoke([system_msg, user_msg])
-
-        print("Simulation Content CHECK", simulation_content)
-        print("Chart Metadata CHECK", chart_metadata)
 
         return {
             "draft": initial_response.content,
@@ -462,7 +457,6 @@ def generation_node(state: AgentState):
 
     # Step 1: invoke model with tools bound
     initial_response = model_with_tools.invoke([system_msg, user_msg])
-    print("Initial response: ", initial_response)
 
     # Step 2: If tool was called, run it and return tool result to model
     if hasattr(initial_response, "tool_calls") and initial_response.tool_calls:
@@ -481,11 +475,9 @@ def generation_node(state: AgentState):
             raise ValueError(f"Unknown tool called: {tool_name}")
 
         tool_output = tool_fn.invoke(args)
-        print("Tool output: ", tool_output)
 
         simulation_content = tool_output
         simulation_content_summary = summarize_simulation_content(tool_output)
-        print("Simulation summary 2: ", simulation_content_summary)
 
         combined2 = (
             f"### Database Insights:\n\n{db}\n\n---\n\n### Web Research:\n\n{web}\n\n---\n\n"
@@ -649,7 +641,23 @@ def start_main_span(messages):
         span.set_status(StatusCode.OK)
         return ret
 
-start_main_span("Write me a report on the supply chain of the Toyota RAV4 braking system. Including a "
-                "tariff shock simulation for Germany with rates of 10%, 30% and 60%.")
+def auto_supplychain_prompt_template(manufacturer, model, component, country, rates):
+    rates_str = ", ".join(f"{r}%" for r in rates)
+    return (
+        f"Write me a report on the supply chain of the {manufacturer} {model} {component}. Including a "
+        f"tariff shock simulation for {country} with rates of {rates_str}."
+    )
+
+prompt = auto_supplychain_prompt_template(
+    manufacturer="Toyota",
+    model="RAV4",
+    component="braking system",
+    country="Japan",
+    rates=[20, 50, 80]
+)
+
+print(prompt)
+
+start_main_span(prompt)
 
 
