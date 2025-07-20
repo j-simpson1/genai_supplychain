@@ -115,7 +115,8 @@ Only include sections and subsections in the report. Do not include subsubsectio
 than two levels.
 
 If the task ask for information about tariff impacts then make sure to call the automotive_tariff_simulation tool. \
-And include all charts generated from the tool call.
+Please include all charts generated from the tool call in the report. Don't split the scenarios into different \
+sections. 
 
 Utilize all the information below as needed: 
 

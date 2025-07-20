@@ -112,7 +112,7 @@ def save_to_pdf(content: str, filename: str = "14_07_25_v6_report.pdf", chart_me
                     img_path = parts[i]
                     try:
                         if os.path.exists(img_path):
-                            img = Image(img_path, width=3 * inch, height=2.2 * inch, kind='proportional')
+                            img = Image(img_path, width=3.75 * inch, height=2.75 * inch, kind='proportional')
                             elements.append(img)
                             elements.append(Spacer(1, 12))
                             # Add caption if available (at indices 0, 3, 6, etc.)

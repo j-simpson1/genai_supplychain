@@ -180,15 +180,19 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     colors = ['blue', 'green', 'red']
     for i, result in enumerate(results):
         ax.plot(result['cost_progression'], label=f"Shock to {result['tariff_rate']:.0%}",
-                color=colors[i], linewidth=2, marker='o', markersize=3)
+                color=colors[i], linewidth=3, marker='o', markersize=6)
 
-    ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock')
+    ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock', linewidth=2)
     ax.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Starting from current rates)', fontweight='bold',
-                 fontsize=14)
-    ax.set_xlabel('Time Step', fontsize=12)
-    ax.set_ylabel('Total Cost (USD)', fontsize=12)
-    ax.legend()
+                 fontsize=18)
+    ax.set_xlabel('Time Step', fontsize=16)
+    ax.set_ylabel('Total Cost (USD)', fontsize=16)
+    ax.legend(fontsize=14)
     ax.grid(True, alpha=0.3)
+
+    # Increase tick label sizes
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.tick_params(axis='both', which='minor', labelsize=12)
 
     plt.tight_layout()
 
@@ -224,10 +228,14 @@ def create_price_distribution_chart(price_distributions, tariff_rates, target_co
 
     ax.set_title(
         f'Price Distribution - {target_country} Tariff Shock\n(Including current rates for other countries)',
-        fontweight='bold', fontsize=14)
-    ax.set_xlabel('Tariff Rate', fontsize=12)
-    ax.set_ylabel('Article Price (USD)', fontsize=12)
+        fontweight='bold', fontsize=18)
+    ax.set_xlabel('Tariff Rate', fontsize=16)
+    ax.set_ylabel('Article Price (USD)', fontsize=16)
     ax.grid(True, alpha=0.3)
+
+    # Increase tick label sizes
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.tick_params(axis='both', which='minor', labelsize=12)
 
     plt.tight_layout()
 
