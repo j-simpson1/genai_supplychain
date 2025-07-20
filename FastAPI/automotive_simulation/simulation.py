@@ -173,9 +173,17 @@ def load_sample_data():
     return suppliers_data, part_requirements
 
 
-def analyze_tariff_impact_with_current_rates(target_country='Germany', tariff_rates = [0.10, 0.30, 0.60], show_plots=True, save_plots=False,
-                                             output_dir='./charts'):
+def analyze_tariff_impact_with_current_rates(
+    target_country='Germany',
+    tariff_rates=None,
+    show_plots=False,
+    save_plots=True,
+    output_dir='./charts'
+):
     """Analyze tariff impact using current rates as baseline"""
+
+    if tariff_rates is None:
+        tariff_rates = [0.10, 0.30, 0.60]
 
     suppliers_data, part_requirements = load_sample_data()
     sim = TariffSimulation(suppliers_data, part_requirements)
