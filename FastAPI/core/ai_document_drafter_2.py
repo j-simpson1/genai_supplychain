@@ -8,7 +8,8 @@ import json
 from pydantic import BaseModel
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict
-from langchain_core.messages import SystemMessage, HumanMessage
+from pydantic import BaseModel, Field
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from openai import AzureOpenAI
 
 from tavily import TavilyClient
@@ -18,6 +19,8 @@ from opentelemetry.trace import StatusCode
 from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.database_agent_2 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country, parts_average_price
 
+from FastAPI.automotive_simulation.simulation import analyze_tariff_impact_with_current_rates
+from langchain.agents import tool
 
 
 load_dotenv()
@@ -72,10 +75,11 @@ outline of the essay along with any relevant notes or instructions for the secti
     2. Introduction
     3. Overview of the braking system component
     4. Supply chain structure
-    5. Risk Assessment
-    6. Conclusion and Recommendations
-    7. References
-    8. Appendices
+    5. Tariff simulation scenarios
+    6. Risk Assessment
+    7. Conclusion and Recommendations
+    8. References
+    9. Appendices
 
 """
 
@@ -105,7 +109,13 @@ of your previous attempts. Provide the output in a JSON format using the structu
 The charts should be included using placeholders like [[FIGURE:<chart_id>]] in part of the report where the chart \
 should appear. These placeholders will be replaced with the actual figures in the final report. \
 
-Referencing should use Harvard Style. \
+Referencing should use Harvard Style. 
+
+Only include sections and subsections in the report. Do not include subsubsections or any headings nested deeper \
+than two levels.
+
+If the task ask for information about tariff impacts then make sure to call the automotive_tariff_simulation tool. \
+And include all charts generated from the tool call.
 
 Utilize all the information below as needed: 
 
@@ -146,6 +156,27 @@ class DBQueries(BaseModel):
 
 # importing taviliy as using it in a slightly unconventional way
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+
+class simulation_inputs(BaseModel):
+    target_country: str = Field(..., description="Country to simulate tariff shock for")
+    tariff_rates: List[int] = Field(description="tariff rates to use in the tariff shock simulation.")
+
+@tool(args_schema=simulation_inputs)
+def automotive_tariff_simulation(target_country: str, tariff_rates: List[float]) -> dict:
+    """
+    Run an automotive simulation on the component/vehicle showing the impact of tariff shocks of a certain country
+    on the component/vehicle.
+
+    Accepts either decimals (e.g., 0.1 for 10%) or integers (e.g., 10 for 10%) and normalizes all to decimals.
+    """
+    # Normalize rates: if any rate > 1, treat it as a percentage (e.g., 10 becomes 0.10)
+    normalized_rates = [
+        r / 100 if r > 1 else r
+        for r in tariff_rates
+    ]
+
+    response = analyze_tariff_impact_with_current_rates(target_country, normalized_rates)
+    return response
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
@@ -385,29 +416,60 @@ def research_plan_node(state: AgentState):
     # return the content key which is equal to the original content plus the accumulated content
     return {"web_content": content}
 
+model_with_tools = model.bind_tools([automotive_tariff_simulation])
+
 @tracer.chain
 def generation_node(state: AgentState):
-    # prepare the content - list of strings and join them into one big one
     db = "\n\n".join(state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
-    charts = "\n\n".join([f"Include these chart in the report: \n[[FIGURE:{item['id']}]]" for item in state.get("chart_metadata", [])])
+    chart_metadata = state.get("chart_metadata", [])  # <--- Move this here
+    charts = "\n\n".join(
+        [f"Include these chart in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
     combined = f"### Database Insights:\n\n{db}\n\n---\n\n### Web Research:\n\n{web}\n\n---\n\n# Charts: \n\n{charts}"
-    # create user message which combines the task and the plan
-    user_message = HumanMessage(
-        # task and plan
-        content=f"{state['task']}\n\nHere is my plan:\n\n{state['plan']}")
-    messages = [
-        # format in documents which has been fetched
-        SystemMessage(
-            content=WRITER_PROMPT.format(content=combined)
-        ),
-        # task and the plan
-        user_message
-        ]
-    response = model.invoke(messages)
+
+    system_msg = SystemMessage(content=WRITER_PROMPT.format(content=combined))
+    user_msg = HumanMessage(content=f"{state['task']}\n\nHere is my plan:\n\n{state['plan']}")
+
+    # Step 1: invoke model with tools bound
+    initial_response = model_with_tools.invoke([system_msg, user_msg])
+
+    # Step 2: If tool was called, run it and return tool result to model
+    if hasattr(initial_response, "tool_calls") and initial_response.tool_calls:
+        tool_call = initial_response.tool_calls[0]
+        tool_name = tool_call["name"]
+        args = tool_call["args"]
+        tool_call_id = tool_call["id"]
+
+        # Dispatch map for tools
+        available_tools = {
+            "automotive_tariff_simulation": automotive_tariff_simulation
+        }
+
+        tool_fn = available_tools.get(tool_name)
+        if not tool_fn:
+            raise ValueError(f"Unknown tool called: {tool_name}")
+
+        tool_output = tool_fn.invoke(args)
+
+        # Step 3: Pass tool result back into model
+        tool_msg = ToolMessage(tool_call_id=tool_call_id, content=json.dumps(tool_output))
+        follow_up = model_with_tools.invoke([system_msg, user_msg, initial_response, tool_msg])
+        content = follow_up.content
+
+        # Add chart metadata if available
+        if "output_files" in tool_output and tool_output["output_files"].get("chart_saved"):
+            chart_id = os.path.splitext(tool_output["output_files"]["chart_filename"])[0]
+            chart_metadata.append({
+                "id": chart_id,
+                "path": tool_output["output_files"]["chart_path"]
+            })
+
+    else:
+        content = initial_response.content
+
     return {
-        # update the draft with response and add 1 to the current revision number in the state
-        "draft": response.content,
+        "draft": content,
+        "chart_metadata": chart_metadata,
         "revision_number": state.get("revision_number", 1) + 1
     }
 
@@ -540,6 +602,7 @@ def start_main_span(messages):
         span.set_status(StatusCode.OK)
         return ret
 
-start_main_span("Write me a report on the supply chain of the Toyota RAV4 braking system")
+start_main_span("Write me a report on the supply chain of the Toyota RAV4 braking system. Including a "
+                "tariff shock simulation for Germany with rates of 10%, 30% and 60%.")
 
 
