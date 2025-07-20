@@ -173,14 +173,89 @@ def load_sample_data():
     return suppliers_data, part_requirements
 
 
-def analyze_tariff_impact_with_current_rates(
-    target_country='Germany',
-    tariff_rates=None,
-    show_plots=False,
-    save_plots=True,
-    output_dir='./charts'
+def create_cost_progression_chart(results, target_country, show_plot=False, save_plot=True, output_dir='./charts'):
+    """Create the cost progression chart separately"""
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+    colors = ['blue', 'green', 'red']
+    for i, result in enumerate(results):
+        ax.plot(result['cost_progression'], label=f"Shock to {result['tariff_rate']:.0%}",
+                color=colors[i], linewidth=2, marker='o', markersize=3)
+
+    ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock')
+    ax.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Starting from current rates)', fontweight='bold',
+                 fontsize=14)
+    ax.set_xlabel('Time Step', fontsize=12)
+    ax.set_ylabel('Total Cost (USD)', fontsize=12)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    saved_path = None
+    if save_plot:
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"cost_progression_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
+        saved_path = os.path.abspath(filepath)
+        print(f"Cost progression chart saved as: {saved_path}")
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
+    return saved_path
+
+
+def create_price_distribution_chart(price_distributions, tariff_rates, target_country, show_plot=False, save_plot=True,
+                                    output_dir='./charts'):
+    """Create the price distribution boxplot chart separately"""
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+
+    box_colors = ['lightblue', 'lightgreen', 'lightcoral']
+    box_plot = ax.boxplot(price_distributions, tick_labels=[f'{r:.0%}' for r in tariff_rates],
+                          patch_artist=True)
+
+    for patch, color in zip(box_plot['boxes'], box_colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+
+    ax.set_title(
+        f'Price Distribution - {target_country} Tariff Shock\n(Including current rates for other countries)',
+        fontweight='bold', fontsize=14)
+    ax.set_xlabel('Tariff Rate', fontsize=12)
+    ax.set_ylabel('Article Price (USD)', fontsize=12)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    saved_path = None
+    if save_plot:
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"price_distribution_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
+        saved_path = os.path.abspath(filepath)
+        print(f"Price distribution chart saved as: {saved_path}")
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
+    return saved_path
+
+
+def analyze_tariff_impact(
+        target_country='Germany',
+        tariff_rates=None,
+        show_plots=False,
+        save_plots=True,
+        output_dir='./charts'
 ):
-    """Analyze tariff impact using current rates as baseline"""
+    """Analyze tariff impact and create charts separately"""
 
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
@@ -272,61 +347,27 @@ def analyze_tariff_impact_with_current_rates(
             'severity': 'medium'
         })
 
-    # Initialize saved file path
-    saved_chart_path = None
+    # Create charts separately
+    chart_paths = {}
 
-    # Create visualization if requested
     if show_plots or save_plots:
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+        # Create cost progression chart
+        cost_chart_path = create_cost_progression_chart(
+            results, target_country, show_plots, save_plots, output_dir
+        )
+        if cost_chart_path:
+            chart_paths['cost_progression'] = cost_chart_path
 
-        # Cost progression
-        colors = ['blue', 'green', 'red']
-        for i, result in enumerate(results):
-            ax1.plot(result['cost_progression'], label=f"Shock to {result['tariff_rate']:.0%}",
-                     color=colors[i], linewidth=2, marker='o', markersize=3)
-
-        ax1.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock')
-        ax1.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Starting from current rates)', fontweight='bold')
-        ax1.set_xlabel('Time Step')
-        ax1.set_ylabel('Total Cost (USD)')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-
-        # Box plot
-        box_colors = ['lightblue', 'lightgreen', 'lightcoral']
-        box_plot = ax2.boxplot(price_distributions, tick_labels=[f'{r:.0%}' for r in tariff_rates],
-                               patch_artist=True)
-
-        for patch, color in zip(box_plot['boxes'], box_colors):
-            patch.set_facecolor(color)
-            patch.set_alpha(0.7)
-
-        ax2.set_title(
-            f'Price Distribution - {target_country} Tariff Shock\n(Including current rates for other countries)',
-            fontweight='bold')
-        ax2.set_xlabel('Tariff Rate')
-        ax2.set_ylabel('Article Price (USD)')
-        ax2.grid(True, alpha=0.3)
-
-        plt.tight_layout()
-
-        # Save plots if requested
-        if save_plots:
-            os.makedirs(output_dir, exist_ok=True)
-            filename = f"tariff_analysis_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            filepath = os.path.join(output_dir, filename)
-            plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
-            saved_chart_path = os.path.abspath(filepath)
-            print(f"Chart saved as: {saved_chart_path}")
-
-        if show_plots:
-            plt.show()
-        else:
-            plt.close()
+        # Create price distribution chart
+        price_chart_path = create_price_distribution_chart(
+            price_distributions, tariff_rates, target_country, show_plots, save_plots, output_dir
+        )
+        if price_chart_path:
+            chart_paths['price_distribution'] = price_chart_path
 
     # Return JSON response
     response = {
-        'analysis_type': 'tariff_impact_analysis_with_current_rates',
+        'analysis_type': 'tariff_impact_analysis',
         'target_country': target_country,
         'timestamp': datetime.now().isoformat(),
         'current_tariff_rates': current_tariffs,
@@ -344,33 +385,27 @@ def analyze_tariff_impact_with_current_rates(
             }
         },
         'scenarios': results,
-        'recommendations': recommendations
+        'recommendations': recommendations,
+        'output_files': {
+            'charts_saved': bool(chart_paths),
+            'chart_paths': chart_paths,
+            'output_directory': output_dir if chart_paths else None
+        }
     }
-
-    # Add saved chart information if plots were saved
-    if saved_chart_path:
-        response['output_files'] = {
-            'chart_saved': True,
-            'chart_path': saved_chart_path,
-            'chart_filename': os.path.basename(saved_chart_path),
-            'output_directory': os.path.dirname(saved_chart_path)
-        }
-    else:
-        response['output_files'] = {
-            'chart_saved': False,
-            'chart_path': None,
-            'chart_filename': None,
-            'output_directory': None
-        }
 
     return response
 
 
 if __name__ == "__main__":
-    # Analysis with current tariff rates
-    print("Running tariff impact analysis with current rates...")
-    result = analyze_tariff_impact_with_current_rates('Germany', [0.10, 0.30, 0.60], show_plots=True, save_plots=True,
-                                                      output_dir='./output_charts')
+    # Analysis with separated charts
+    print("Running tariff impact analysis with separated charts...")
+    result = analyze_tariff_impact(
+        'Germany',
+        [0.10, 0.30, 0.60],
+        show_plots=True,
+        save_plots=True,
+        output_dir='./output_charts'
+    )
 
     # Print current tariff rates
     print("\nCurrent Tariff Rates:")
@@ -384,5 +419,5 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("JSON OUTPUT:")
     print("=" * 50)
-    json_output = analyze_tariff_impact_with_current_rates('Germany', show_plots=False, save_plots=False)
+    json_output = analyze_tariff_impact('Germany', show_plots=False, save_plots=False)
     print(json.dumps(json_output, indent=2, default=str))

@@ -19,7 +19,7 @@ from opentelemetry.trace import StatusCode
 from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.database_agent_2 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country, parts_average_price
 
-from FastAPI.automotive_simulation.simulation import analyze_tariff_impact_with_current_rates
+from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from langchain.agents import tool
 
 
@@ -175,7 +175,7 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
         for r in tariff_rates
     ]
 
-    response = analyze_tariff_impact_with_current_rates(target_country, normalized_rates)
+    response = analyze_tariff_impact(target_country, normalized_rates)
     return response
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
@@ -457,12 +457,13 @@ def generation_node(state: AgentState):
         content = follow_up.content
 
         # Add chart metadata if available
-        if "output_files" in tool_output and tool_output["output_files"].get("chart_saved"):
-            chart_id = os.path.splitext(tool_output["output_files"]["chart_filename"])[0]
-            chart_metadata.append({
-                "id": chart_id,
-                "path": tool_output["output_files"]["chart_path"]
-            })
+        if "output_files" in tool_output and tool_output["output_files"].get("charts_saved"):
+            chart_paths = tool_output["output_files"].get("chart_paths", {})
+            for chart_id, chart_path in chart_paths.items():
+                chart_metadata.append({
+                    "id": os.path.splitext(os.path.basename(chart_path))[0],
+                    "path": chart_path
+                })
 
     else:
         content = initial_response.content
