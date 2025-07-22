@@ -1,8 +1,10 @@
-# import environment variables
 from dotenv import load_dotenv
 _ = load_dotenv()
 import os
 import json
+import uuid
+import traceback
+import re
 
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict
@@ -59,6 +61,12 @@ class AgentState(TypedDict):
     # keep track of how many times we've gone through the loop
     revision_number: int
     max_revisions: int
+    # chart generation
+    chart_code: str
+    chart_generation_success: bool
+    chart_generation_error: str
+    chart_retry_count: int
+    max_chart_retries: int
 
 from langchain_openai import ChatOpenAI
 # creating model
@@ -86,8 +94,8 @@ outline of the essay along with any relevant notes or instructions for the secti
 WRITER_PROMPT = """You are a research analyst tasked with writing a report of at least 800 words with a maximum of \
 1000 word report. \
 Generate the best report possible for the user's request and the initial outline. Making sure to include any \
-charts available in the body of the report. If the user provides critique, respond with a revised version \
-of your previous attempts. Provide the output in a JSON format using the structure below. \
+charts available in the body of the report in their relevant sections. If the user provides critique, respond with a \
+revised version of your previous attempts. Provide the output in a JSON format using the structure below. \
 
 {{
       "title": "<Report Title>",
@@ -113,9 +121,9 @@ Please can you reference all external sources using Harvard referencing style.
 Only include sections and subsections in the report. Do not include subsubsections or any headings nested deeper \
 than two levels.
 
-If the task ask for information about tariff impacts then make sure to call the automotive_tariff_simulation tool. \
-Please include all charts generated from the tool call in the report. Don't split the scenarios into different \
-sections. 
+If the task asks for information about tariff impacts then make sure to call the automotive_tariff_simulation tool. \
+Please include all charts generated from the tool call in the report in the tariff simulation section without \
+splitting them into sub sections. Don't include any other charts in the tariff simulation section. 
 
 Utilize all the information below as needed: 
 
@@ -267,13 +275,84 @@ def research_plan_node(state: AgentState):
 model_with_tools = model.bind_tools([automotive_tariff_simulation])
 
 @tracer.chain
+def generate_chart_code_node(state: AgentState):
+    prompt = f"""You are a data visualization expert. Based on the data below, generate a Python script using matplotlib
+that creates a useful chart for our supply chain report. Save the chart using `plt.savefig(chart_path)` — assume 
+`chart_path` is a variable passed into the environment. Do not use `plt.show()`.
+
+Data:
+{state['db_content']}
+
+Requirements:
+- Chart should be informative and visually clear
+"""
+
+    response = model.invoke([SystemMessage(content=prompt)])
+
+    match = re.search(r"```(?:python)?\n(.*?)```", response.content, re.DOTALL)
+    chart_code = match.group(1).strip() if match else response.content.strip()
+
+    return {"chart_code": chart_code}
+
+@tracer.chain
+def execute_chart_code_node(state: AgentState):
+    try:
+        os.makedirs("./charts", exist_ok=True)
+
+        code = state["chart_code"]
+        chart_path = f"./charts/chart_{uuid.uuid4().hex}.png"
+
+        exec_globals = {
+            "__file__": chart_path,
+            "chart_path": chart_path
+        }
+
+        exec(code, exec_globals)
+
+        return {
+            "chart_metadata": [{
+                "id": os.path.splitext(os.path.basename(chart_path))[0],
+                "path": chart_path
+            }],
+            "chart_generation_success": True
+        }
+    except Exception as e:
+        return {
+            "chart_generation_success": False,
+            "chart_generation_error": traceback.format_exc(),
+            "chart_code": state["chart_code"]
+        }
+
+@tracer.chain
+def reflect_chart_node(state: AgentState):
+    error = state["chart_generation_error"]
+    previous_code = state["chart_code"]
+
+    prompt = f"""The previous chart code failed with this error:
+{error}
+
+Here is the failed code:
+{previous_code}
+
+Please revise the code so it avoids the error and still meets the requirements.
+"""
+
+    response = model.invoke([SystemMessage(content=prompt)])
+    return {
+        "chart_code": response.content,
+        "chart_retry_count": state.get("chart_retry_count", 0) + 1,
+        "chart_generation_success": False,
+        "chart_generation_error": ""
+    }
+
+@tracer.chain
 def generation_node(state: AgentState):
     db = "\n\n".join(state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
     chart_metadata = state.get("chart_metadata", [])
     simulation_content = state.get("simulation_content")
     charts = "\n\n".join(
-        [f"Include these chart in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
+        [f"Include these charts in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
     if simulation_content:
         simulation_content_summary = summarize_simulation_content(simulation_content)
@@ -401,6 +480,15 @@ def should_continue(state):
         span.set_output(value=result)
         return result
 
+def code_should_continue(state: AgentState) -> str:
+    if not state["chart_generation_success"]:
+        if state["chart_retry_count"] < state["max_chart_retries"]:
+            return "reflect_chart"
+        else:
+            print("Max chart retries reached — skipping chart generation retry.")
+            return "research_plan"
+    return "research_plan"
+
 # initialise the graph with the agent state
 builder = StateGraph(AgentState)
 
@@ -410,6 +498,9 @@ builder.add_node("generate", generation_node)
 builder.add_node("reflect", reflection_node)
 builder.add_node("research_plan", research_plan_node)
 builder.add_node("db_plan", database_plan_node)
+builder.add_node("generate_chart_code", generate_chart_code_node)
+builder.add_node("execute_chart_code", execute_chart_code_node)
+builder.add_node("reflect_chart", reflect_chart_node)
 builder.add_node("research_critique", research_critique_node)
 
 # set entry point
@@ -424,7 +515,18 @@ builder.add_conditional_edges(
 
 # add in basic edges
 builder.add_edge("planner", "db_plan")
-builder.add_edge("db_plan", "research_plan")
+builder.add_edge("db_plan", "generate_chart_code")
+builder.add_edge("generate_chart_code", "execute_chart_code")
+builder.add_conditional_edges(
+    "execute_chart_code",
+    code_should_continue,
+    {
+        "reflect_chart": "reflect_chart",
+        "research_plan": "research_plan"
+    }
+)
+
+builder.add_edge("reflect_chart", "generate_chart_code")
 builder.add_edge("research_plan", "generate")
 
 builder.add_edge("reflect", "research_critique")
@@ -454,12 +556,20 @@ def run_agent(messages):
         thread = {"configurable": {"thread_id": "1"}}
         for s in graph.stream({
             'task': messages,
-            "max_revisions": 2,
-            "revision_number": 1,
-            "db_content": [],
-            "web_content": [],
-            "simulation_content": {},
-            "chart_metadata": []
+            'max_revisions': 2,
+            'revision_number': 1,
+            'db_content': [],
+            'web_content': [],
+            'simulation_content': {},
+            'chart_metadata': [],
+            'plan': '',
+            'draft': '',
+            'critique': '',
+            'chart_code': '',
+            'chart_generation_success': False,
+            'chart_generation_error': '',
+            'chart_retry_count': 0,
+            'max_chart_retries': 2
         }, thread):
             print(s)
         span.set_status(StatusCode.OK)
