@@ -1,15 +1,15 @@
+from langchain.agents import tool
 import pandas as pd
-
 
 # Load data
 articles_df = pd.read_csv("Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 quantities_df = pd.read_csv("Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
-
-def parts_summary():
+@tool
+def parts_summary() -> list:
+    """Summarizes product groups by price, count, and country of origin."""
     try:
         grouped = articles_df.groupby('productGroupId')
-
         results = []
         for productGroupId, group in grouped:
             partDescription = group['articleProductName'].mode()[0]
@@ -24,27 +24,27 @@ def parts_summary():
                 "numArticles": numArticles,
                 "mostCommonCountryOfOrigin": mostCommonCountry
             })
-
         return results
     except Exception as e:
         print(e)
-        return None
+        return []
 
-def top_5_parts_by_price():
+@tool
+def top_5_parts_by_price() -> list:
+    """Returns the top 5 parts by average price."""
     try:
         grouped = articles_df.groupby(['productGroupId', 'articleProductName'])
-
         summary_df = grouped['price'].agg(['mean', 'count']).reset_index()
         summary_df.columns = ['productGroupId', 'partDescription', 'avg_price', 'num_articles']
-
         top5 = summary_df.sort_values(by='avg_price', ascending=False).head(5)
-
         return top5.to_dict(orient='records')
     except Exception as e:
         print(e)
-        return None
+        return []
 
-def top_5_part_distrubution_by_country():
+@tool
+def top_5_part_distribution_by_country() -> list:
+    """Returns the top 5 countries by number of unique parts."""
     try:
         distribution = articles_df.groupby('countryOfOrigin')['articleNo'].nunique().reset_index()
         distribution.columns = ['countryOfOrigin', 'parts_count']
@@ -52,9 +52,11 @@ def top_5_part_distrubution_by_country():
         return top5.to_dict(orient='records')
     except Exception as e:
         print(e)
-        return None
+        return []
 
-def parts_average_price():
+@tool
+def parts_average_price() -> list:
+    """Returns average price of each part grouped by productGroupId."""
     try:
         avg_prices = articles_df.groupby(['productGroupId', 'articleProductName'])['price'].mean().reset_index()
         avg_prices.columns = ['productGroupId', 'partDescription', 'averagePrice']
@@ -62,5 +64,4 @@ def parts_average_price():
         return avg_prices.sort_values(by="averagePrice", ascending=False).to_dict(orient='records')
     except Exception as e:
         print(e)
-        return None
-
+        return []

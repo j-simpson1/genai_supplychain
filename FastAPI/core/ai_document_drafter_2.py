@@ -4,25 +4,21 @@ _ = load_dotenv()
 import os
 import json
 
-# standard imports
-from pydantic import BaseModel
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from openai import AzureOpenAI
 
 from tavily import TavilyClient
 from phoenix.otel import register
 from opentelemetry.trace import StatusCode
 
 from FastAPI.core.pdf_creator import save_to_pdf
-from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distrubution_by_country, parts_average_price
+from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import summarize_simulation_content, convert_numpy
 from langchain.agents import tool
-
 
 load_dotenv()
 pheonix_key = os.getenv("PHOENIX_API_KEY")
@@ -136,7 +132,8 @@ Provide detailed recommendations, including requests for length, depth, style, e
 
 DATABASE_PLAN_INSTRUCTIONS = """ You are a supply chain data analyst with access to several \
 database tools. Your role is to extract relevant automotive part insights that will inform a \
-detailed written report. Do not hallucinate numbers. Only use tool outputs.
+detailed written report. Do not hallucinate numbers. Only use tool outputs. Please use two or \
+three of the most appropriate tools.
 """
 
 # given a plan will generate a bunch of queries and pass to tavily
@@ -195,202 +192,49 @@ def plan_node(state: AgentState):
     # get the content of the messages and pass to the plan key
     return {"plan": response.content}
 
+db_model = ChatOpenAI(
+    model="gpt-4o",
+    api_key=os.getenv("OPENAI_API_KEY"),
+    temperature=0
+)
+
+db_model_with_tools = db_model.bind_tools([
+    parts_summary,
+    top_5_parts_by_price,
+    top_5_part_distribution_by_country,
+    parts_average_price
+])
+
 @tracer.chain
 def database_plan_node(state: AgentState):
+    system_prompt = DATABASE_PLAN_INSTRUCTIONS
+    user_prompt = state["task"]
 
-    client = AzureOpenAI(
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        api_version="2024-05-01-preview"
-    )
+    response = db_model_with_tools.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt)
+    ])
 
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "parts_summary",
-                "description": "Summarizes product groups by price, count, and origin.",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "top_5_parts_by_price",
-                "description": "Top 5 product groups by average price.",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "top_5_part_distrubution_by_country",
-                "description": "Top 5 countries by part distribution.",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "parts_average_price",
-                "description": "Returns average price of each part grouped by productGroupId.",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        }
-    ]
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        outputs = []
+        for call in response.tool_calls:
+            tool_name = call["name"]
+            args = call.get("args", {})
 
-    available_functions = {
-        "parts_summary": parts_summary,
-        "top_5_parts_by_price": top_5_parts_by_price,
-        "top_5_part_distrubution_by_country": top_5_part_distrubution_by_country,
-        "parts_average_price": parts_average_price
-    }
+            tool_fn = {
+                "parts_summary": parts_summary,
+                "top_5_parts_by_price": top_5_parts_by_price,
+                "top_5_part_distribution_by_country": top_5_part_distribution_by_country,
+                "parts_average_price": parts_average_price
+            }.get(tool_name)
 
-    assistant = client.beta.assistants.create(
-        name="DB Assistant",
-        instructions=DATABASE_PLAN_INSTRUCTIONS,
-        tools=tools,
-        model="gpt-4o"
-    )
+            if tool_fn:
+                result = tool_fn.invoke(input=args)
+                outputs.append(result)
 
-    thread = client.beta.threads.create()
-
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant.id,
-        instructions=state["task"],
-        tool_choice="auto"
-    )
-
-    tool_outputs = []
-    collected_outputs = []
-
-    if run.status == "requires_action":
-        print("Assistant requested tools:", [
-            tool_call.function.name for tool_call in run.required_action.submit_tool_outputs.tool_calls
-        ])
-        for tool_call in run.required_action.submit_tool_outputs.tool_calls:
-            with tracer.start_as_current_span(
-                    f"ToolCall: {tool_call.function.name}",
-                    openinference_span_kind="tool",
-                    attributes={"tool_name": tool_call.function.name}
-            ) as span:
-                fn = available_functions.get(tool_call.function.name)
-                args = json.loads(tool_call.function.arguments)
-                span.set_input(value=args)
-                output = fn(**args) if args else fn()
-                span.set_output(value={
-                    "rows": len(output) if isinstance(output, list) else 0,
-                    "type": type(output).__name__
-                })
-
-            collected_outputs.append({
-                "tool_call_id": tool_call.id,
-                "name": tool_call.function.name,
-                "data": output
-            })
-
-            tool_outputs.append({
-                "tool_call_id": tool_call.id,
-                "output": json.dumps(output)
-            })
-
-        run = client.beta.threads.runs.submit_tool_outputs_and_poll(
-            thread_id=thread.id,
-            run_id=run.id,
-            tool_outputs=tool_outputs
-        )
-
-    # Try to find parts_summary output for graphing
-    target_output = next((t for t in collected_outputs if t["name"] == "parts_average_price"), None)
-
-    if target_output:
-
-        formatted_json = json.dumps(target_output["data"], indent=2)
-
-        # Create chart assistant
-        chart_assistant = client.beta.assistants.create(
-            name="ChartPlotter",
-            instructions="You are a data assistant who generates Python code to plot data.",
-            tools=[{"type": "code_interpreter"}],
-            model="gpt-4o"
-        )
-
-        # Start thread and send message
-        thread_chart = client.beta.threads.create()
-
-        client.beta.threads.messages.create(
-            thread_id=thread_chart.id,
-            role="user",
-            content=f"""Here is a list of average part prices in JSON format:
-
-            {formatted_json}
-
-            Use matplotlib to plot a bar chart using this data.
-            The x-axis should be partDescription and the y-axis should be averagePrice.
-            Return the chart as a PNG image. 
-            """
-        )
-
-        run = client.beta.threads.runs.create_and_poll(
-            thread_id=thread_chart.id,
-            assistant_id=chart_assistant.id
-        )
-
-        # Extract image
-        image_file_id = None
-        messages = client.beta.threads.messages.list(thread_id=thread_chart.id)
-        print("IMG messages: ", messages)
-        image_file_id = None
-
-        for msg in messages.data:
-            # Option 1: Check for 'image_file' block type (if it exists in future responses)
-            for content in getattr(msg, "content", []):
-                if getattr(content, "type", None) == "image_file":
-                    image_file_id = content.image_file.file_id
-                    break
-
-            # Option 2: Check for attachments (your actual scenario)
-            if not image_file_id:
-                for attachment in getattr(msg, "attachments", []):
-                    if hasattr(attachment, "file_id"):
-                        image_file_id = attachment.file_id
-                        break
-
-            if image_file_id:
-                break
-
-        print("Image file id: ", image_file_id)
-        if image_file_id:
-            # Save image locally
-            image_bytes = client.files.with_raw_response.retrieve_content(image_file_id)
-            plot_path = "parts_plot.png"
-            with open(plot_path, "wb") as f:
-                f.write(image_bytes.content)
-            absolute_path = os.path.abspath(plot_path)
-            graph_output = f"Chart generated and saved to {absolute_path}"
-        else:
-            graph_output = "(Chart generation failed: no image file returned)"
+        return {"db_content": [json.dumps(result) for result in outputs]}
     else:
-        graph_output = "(No parts_average_price output to visualize)"
-
-    try:
-        messages = client.beta.threads.messages.list(thread_id=thread.id)
-        final_message = messages.data[0].content[0].text.value
-    except (IndexError, AttributeError):
-        final_message = "(No database output)"
-
-    chart_metadata = []
-    if target_output and image_file_id:
-        chart_metadata.append({
-            "id": "parts_average_price",
-            "path": absolute_path,
-        })
-
-    return {
-        "db_content": state.get("db_content", []) + [final_message, graph_output],
-        "chart_metadata": state.get("chart_metadata", []) + chart_metadata
-    }
+        return {"db_content": ["(No tool call made)"]}
 
 # takes in the plan and does some research
 @tracer.chain
