@@ -1,9 +1,16 @@
 from langchain.agents import tool
 import pandas as pd
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Build full paths
+articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+quantities_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
 # Load data
-articles_df = pd.read_csv("Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-quantities_df = pd.read_csv("Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+articles_df = pd.read_csv(articles_path)
+quantities_df = pd.read_csv(quantities_path)
 
 @tool
 def parts_summary() -> list:

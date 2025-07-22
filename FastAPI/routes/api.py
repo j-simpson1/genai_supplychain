@@ -1,11 +1,20 @@
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_suppliers, fetch_countries
 from FastAPI.data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from FastAPI.services.article_selector import select_preferred_article
-from FastAPI.automotive_abm.run import run_simulation_with_plots
-from FastAPI.automotive_abm.export import export_simulation_data
-from FastAPI.automotive_abm.powerBi_upload import upload_to_powerbi
+from FastAPI.automotive_simulation.powerBi_upload import upload_to_powerbi
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 from FastAPI.actions.handle_action import handle_actions
+
+from FastAPI.core.ai_document_drafter_2 import start_main_span, auto_supplychain_prompt_template
+
+from fastapi import UploadFile, File, Form
+from io import StringIO
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest, Message, ChatRequest
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -111,6 +120,7 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
         print("Updated parts dataframe with parts and estimated prices:")
         print(parts_df)
+        parts_df.to_csv('exports/parts_data.csv', index=False)
 
         ai_result = {
             "status": "success",
@@ -134,60 +144,102 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
 
 @router.post("/run_simulation")
-async def run_simulation(request: SimulationRequest):
+async def run_simulation(
+        vehicle_details: str = Form(..., description="JSON string containing vehicle details"),
+        category_filter: str = Form(..., description="Parts category filter"),
+        manufacturing_location: str = Form(..., description="Manufacturing location country"),
+        tariff_shock_country: str = Form(..., description="Country for tariff shock simulation"),
+        parts_data_file: UploadFile = File(..., description="CSV file with parts data"),
+        articles_data_file: UploadFile = File(..., description="CSV file with articles data")
+):
+    """
+    Run vehicle simulation with uploaded data and form parameters.
+
+    This endpoint receives:
+    - Vehicle details (engine, manufacturer, model info)
+    - Category filter for parts
+    - Manufacturing location
+    - Tariff shock simulation country
+    - Parts data CSV file
+    - Articles data CSV file
+    """
+
     try:
-        # Add debug logging
-        print(f"Starting simulation with data: {request.dict()}")
-
-        parts_data = request.aiProcessingResult
-        if not parts_data or 'parts_data' not in parts_data:
-            raise ValueError("Missing parts_data in aiProcessingResult")
-
-        parts_df = pd.DataFrame(parts_data['parts_data'])
-        parts_df = parts_df.drop(['level', 'supplierTier'], axis=1)
-
-        print(f"Running simulation with DataFrame shape: {parts_df.shape}")
-
-        # Run simulation
-        model = run_simulation_with_plots(parts_df, steps=24)
-
-        # Create exports directory with explicit permissions
+        # Parse vehicle details JSON
         try:
-            os.makedirs("exports", exist_ok=True)
-            print(f"Exports directory created/exists at {os.path.abspath('exports')}")
-        except Exception as dir_error:
-            print(f"Error creating exports directory: {dir_error}")
-            raise
+            vehicle_data = json.loads(vehicle_details)
+            logger.info(f"Parsed vehicle details: {vehicle_data}")
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid vehicle_details JSON: {str(e)}")
 
-        # Export comprehensive data as CSV only
-        filename = f"simulation_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        csv_path = os.path.join("exports", f"{filename}.csv")
+        # Validate file types
+        if not parts_data_file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Parts data file must be a CSV file")
 
+        if not articles_data_file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Articles data file must be a CSV file")
+
+        # Read and parse CSV files
         try:
-            # Use the enhanced export function
-            export_simulation_data(model, csv_path)
+            # Read parts data CSV
+            parts_content = await parts_data_file.read()
+            parts_df = pd.read_csv(StringIO(parts_content.decode('utf-8')))
+            logger.info(f"Parts data shape: {parts_df.shape}")
+            logger.info(f"Parts data columns: {list(parts_df.columns)}")
 
-            # Verify CSV file was created
-            if not os.path.exists(csv_path):
-                raise FileNotFoundError(f"CSV file was not created at {csv_path}")
+            # Read articles data CSV
+            articles_content = await articles_data_file.read()
+            articles_df = pd.read_csv(StringIO(articles_content.decode('utf-8')))
+            logger.info(f"Articles data shape: {articles_df.shape}")
+            logger.info(f"Articles data columns: {list(articles_df.columns)}")
 
-            print(f"Successfully created simulation file: {filename}.csv")
-        except Exception as export_error:
-            print(f"Error creating CSV file: {export_error}")
-            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error reading CSV files: {str(e)}")
 
-        return {
-            "status": "success",
-            "export_filename": filename,
-            "timestamp": datetime.datetime.now().isoformat()
+        # Log all received form data
+        form_data_summary = {
+            "vehicle_details": {
+                "manufacturer": vehicle_data.get("manufacturerName"),
+                "model": vehicle_data.get("modelName"),
+                "engine_type": vehicle_data.get("typeEngineName"),
+                "power_ps": vehicle_data.get("powerPs"),
+                "fuel_type": vehicle_data.get("fuelType"),
+                "body_type": vehicle_data.get("bodyType"),
+                "vehicle_id": vehicle_data.get("vehicleId")
+            },
+            "simulation_parameters": {
+                "category_filter": category_filter,
+                "manufacturing_location": manufacturing_location,
+                "tariff_shock_country": tariff_shock_country
+            },
+            "uploaded_files": {
+                "parts_data": {
+                    "filename": parts_data_file.filename,
+                    "size_kb": len(parts_content) / 1024,
+                    "rows": len(parts_df),
+                    "columns": len(parts_df.columns)
+                },
+                "articles_data": {
+                    "filename": articles_data_file.filename,
+                    "size_kb": len(articles_content) / 1024,
+                    "rows": len(articles_df),
+                    "columns": len(articles_df.columns)
+                }
+            }
         }
+
+        logger.info(f"Form data summary: {json.dumps(form_data_summary, indent=2)}")
+
+        prompt = auto_supplychain_prompt_template(vehicle_data.get("manufacturerName"), vehicle_data.get("modelName"), "Brake System", "Japan", [10, 30, 60])
+
+        start_main_span(prompt)
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        error_msg = f"Simulation failed: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        print(f"Error type: {type(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error(f"Unexpected error in run_simulation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.post("/upload_powerbi")
