@@ -1,19 +1,21 @@
 COT_EXAMPLES = """
-Q: What is the supply chain structure for the braking system of the Toyota RAV4?
-A: The braking system consists of key components: brake pads, rotors, calipers, and control units.
-Each component has suppliers: Germany supplies pads and discs, Denmark supplies calipers, Belgium supplies accessories.
-Toyota uses a Just-In-Time model, so suppliers deliver parts directly to the assembly line with minimal inventory.
-The answer is: multi-tiered supply chain with key suppliers in Germany, Denmark, and Belgium, supporting Toyota’s JIT manufacturing.
+Q: What is the supply chain structure for the powertrain system of the Honda CR-V?
+A: The powertrain includes the engine block, transmission, control units, and exhaust system.
+Key suppliers: Japan is the leading supplier of engine block, South Korea supplies transmission components, and the 
+United States supplies control modules. Honda follows a Just-In-Time (JIT) approach, meaning suppliers deliver 
+components directly to assembly plants with minimal warehousing. 
+The answer is: a multi-tiered supply chain with critical suppliers in Japan, South Korea, and the United States, all 
+integrated within Honda’s JIT production model.
 
-Q: Which component makes up the largest share by value of the braking system? 
-A: The total cost of the braking system is £614.38, with the most expensive part being the brake calliper, which costs 
-£72.64 and requires a quantity of 4. Proportion of total cost = part cost / total component cost. For the brake 
-calliper, this equates to (£72.64 x 4) / £614.38 = 51.2%. The answer is: Brake callipers make up 51.2% of the total 
-cost of the component, with an average cost of £72.64 per unit.
+Q: Which component represents the highest value share in the powertrain system? 
+A: The total cost of the powertrain system is £1,245.60, and the transmission assembly is the most expensive part, 
+costing £310.50 each, with two units required per vehicle. Proportion of total cost = (part cost × quantity) / total 
+cost = (£310.50 × 2) / £1,245.60 = 49.8%. 
+The answer is: Transmission assemblies account for 49.8% of the total system cost, at £310.50 per unit.
 
-Q: What risks does Toyota face in its braking system supply chain, and how can it mitigate them?
-A: Car supply chains face risks from single-source suppliers, critical material shortages (e.g., rare earths, 
-semiconductors), and tariff or geopolitical disruptions that can halt production. The answer is: diversifying 
-suppliers, building strategic inventories, and utilising real-time risk monitoring and scenario planning to enhance 
-resilience.
+Q: What risks does Honda face in its powertrain supply chain, and how can these risks be mitigated?
+A: Automotive supply chains are exposed to risks such as dependency on single suppliers, fluctuating raw material 
+prices (e.g., steel, rare earths), and geopolitical or tariff disruptions affecting cross-border shipping. 
+The answer is: mitigating these risks by diversifying supplier networks, securing backup logistics routes, maintaining 
+strategic inventory reserves, and utilising digital supply chain monitoring to enhance resilience.
 """
