@@ -147,8 +147,14 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 async def run_simulation(
         vehicle_details: str = Form(..., description="JSON string containing vehicle details"),
         category_filter: str = Form(..., description="Parts category filter"),
-        manufacturing_location: str = Form(..., description="Manufacturing location country"),
-        tariff_shock_country: str = Form(..., description="Country for tariff shock simulation"),
+        category_name: str = Form(..., description="Parts category name"),
+        manufacturing_location: str = Form(..., description="Manufacturing location country code"),
+        manufacturing_location_name: str = Form(..., description="Manufacturing location country name"),
+        tariff_shock_country: str = Form(..., description="Country code for tariff shock simulation"),
+        tariff_shock_country_name: str = Form(..., description="Country name for tariff shock simulation"),
+        tariff_rate_1: str = Form(..., description="First tariff rate percentage"),
+        tariff_rate_2: str = Form(..., description="Second tariff rate percentage"),
+        tariff_rate_3: str = Form(..., description="Third tariff rate percentage"),
         parts_data_file: UploadFile = File(..., description="CSV file with parts data"),
         articles_data_file: UploadFile = File(..., description="CSV file with articles data")
 ):
@@ -160,6 +166,7 @@ async def run_simulation(
     - Category filter for parts
     - Manufacturing location
     - Tariff shock simulation country
+    - Three tariff rate percentages for simulation scenarios
     - Parts data CSV file
     - Articles data CSV file
     """
@@ -171,6 +178,31 @@ async def run_simulation(
             logger.info(f"Parsed vehicle details: {vehicle_data}")
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid vehicle_details JSON: {str(e)}")
+
+        # Parse and validate tariff rates
+        try:
+            tariff_rates = []
+            for rate_str, rate_name in [(tariff_rate_1, "tariff_rate_1"),
+                                        (tariff_rate_2, "tariff_rate_2"),
+                                        (tariff_rate_3, "tariff_rate_3")]:
+                if not rate_str or rate_str.strip() == "":
+                    raise HTTPException(status_code=400, detail=f"{rate_name} cannot be empty")
+
+                try:
+                    rate_float = float(rate_str)
+                    if rate_float < 0:
+                        raise HTTPException(status_code=400, detail=f"{rate_name} cannot be negative")
+                    if rate_float > 1000:  # Reasonable upper limit
+                        raise HTTPException(status_code=400, detail=f"{rate_name} cannot exceed 1000%")
+                    tariff_rates.append(rate_float)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid {rate_name}: must be a valid number")
+
+            logger.info(f"Parsed tariff rates: {tariff_rates}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error parsing tariff rates: {str(e)}")
 
         # Validate file types
         if not parts_data_file.filename.endswith('.csv'):
@@ -196,6 +228,12 @@ async def run_simulation(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error reading CSV files: {str(e)}")
 
+        # Determine the category to use based on category_filter
+        # We now receive the category_name directly from frontend
+        logger.info(f"Using category: {category_name} (ID: {category_filter})")
+        logger.info(f"Manufacturing location: {manufacturing_location_name} ({manufacturing_location})")
+        logger.info(f"Tariff shock country: {tariff_shock_country_name} ({tariff_shock_country})")
+
         # Log all received form data
         form_data_summary = {
             "vehicle_details": {
@@ -209,8 +247,16 @@ async def run_simulation(
             },
             "simulation_parameters": {
                 "category_filter": category_filter,
-                "manufacturing_location": manufacturing_location,
-                "tariff_shock_country": tariff_shock_country
+                "category_name": category_name,
+                "manufacturing_location": {
+                    "code": manufacturing_location,
+                    "name": manufacturing_location_name
+                },
+                "tariff_shock_country": {
+                    "code": tariff_shock_country,
+                    "name": tariff_shock_country_name
+                },
+                "tariff_rates": tariff_rates
             },
             "uploaded_files": {
                 "parts_data": {
@@ -230,9 +276,25 @@ async def run_simulation(
 
         logger.info(f"Form data summary: {json.dumps(form_data_summary, indent=2)}")
 
-        prompt = auto_supplychain_prompt_template(vehicle_data.get("manufacturerName"), vehicle_data.get("modelName"), "Brake System", "Japan", [10, 30, 60])
+        # Generate prompt with actual received data
+        prompt = auto_supplychain_prompt_template(
+            manufacturer=vehicle_data.get("manufacturerName"),
+            model=vehicle_data.get("modelName"),
+            component=category_name,  # Now using the actual category name from frontend
+            country=tariff_shock_country_name,  # Using country name instead of code
+            rates=tariff_rates
+        )
 
-        start_main_span(prompt)
+        # Start the main processing with the generated prompt
+        result = start_main_span(prompt)
+
+        # Return successful response with summary
+        return {
+            "status": "success",
+            "message": "Simulation completed successfully",
+            "simulation_summary": form_data_summary,
+            "result": result
+        }
 
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -240,7 +302,6 @@ async def run_simulation(
     except Exception as e:
         logger.error(f"Unexpected error in run_simulation: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
 
 @router.post("/upload_powerbi")
 async def upload_simulation_to_powerbi(csv_filename: Optional[str] = None):

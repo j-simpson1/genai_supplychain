@@ -13,7 +13,11 @@ import {
   Autocomplete,
   TextField,
   CircularProgress,
-  Chip
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { getCodes, getNames } from 'country-list';
@@ -32,6 +36,9 @@ interface FormData {
   categoryFilter: string;
   manufacturingLocation: string;
   tariffShockCountry: string;
+  tariffRate1: string;
+  tariffRate2: string;
+  tariffRate3: string;
 }
 
 interface EngineOption {
@@ -163,6 +170,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     categoryFilter: 'all',
     manufacturingLocation: '',
     tariffShockCountry: '',
+    tariffRate1: '',
+    tariffRate2: '',
+    tariffRate3: '',
   });
 
   // Data state
@@ -172,6 +182,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [manufacturingLocations, setManufacturingLocations] = useState<{ id: string, name: string }[]>([]);
   const [partsDataFile, setPartsDataFile] = useState<File | null>(null);
   const [articlesDataFile, setArticlesDataFile] = useState<File | null>(null);
+  const [showProcessingDialog, setShowProcessingDialog] = useState(false);
 
   // Loading state
   const [loading, setLoading] = useState({
@@ -179,6 +190,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     engines: false,
     categories: false,
     countries: false,
+    simulation: false, // Add simulation loading state
   });
 
   // Error state
@@ -314,15 +326,44 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       return;
     }
 
+    // Show immediate popup when user clicks Run Simulation
+    setShowProcessingDialog(true);
+
     try {
+      // Set simulation loading state
+      setLoading(prev => ({ ...prev, simulation: true }));
+
       // Create FormData for file upload
       const formDataToSend = new FormData();
 
       // Add vehicle details
       formDataToSend.append('vehicle_details', JSON.stringify(selectedEngine));
       formDataToSend.append('category_filter', formData.categoryFilter);
+
+      // Get category name
+      const categoryName = formData.categoryFilter === 'all'
+        ? 'Complete Vehicle'
+        : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Unknown Category';
+      formDataToSend.append('category_name', categoryName);
+
       formDataToSend.append('manufacturing_location', formData.manufacturingLocation);
+
+      // Get manufacturing location name
+      const manufacturingLocationName = manufacturingLocations.find(
+        location => location.id === formData.manufacturingLocation
+      )?.name || 'Unknown Location';
+      formDataToSend.append('manufacturing_location_name', manufacturingLocationName);
+
       formDataToSend.append('tariff_shock_country', formData.tariffShockCountry);
+
+      // Get tariff shock country name
+      const tariffShockCountryName = manufacturingLocations.find(
+        location => location.id === formData.tariffShockCountry
+      )?.name || 'Unknown Country';
+      formDataToSend.append('tariff_shock_country_name', tariffShockCountryName);
+      formDataToSend.append('tariff_rate_1', formData.tariffRate1);
+      formDataToSend.append('tariff_rate_2', formData.tariffRate2);
+      formDataToSend.append('tariff_rate_3', formData.tariffRate3);
 
       // Add files
       formDataToSend.append('parts_data_file', partsDataFile);
@@ -334,7 +375,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         body: formDataToSend,
       });
 
+      // Process the response
       if (response.ok) {
+        // Continue processing the response
         const result = await response.json();
         console.log('Simulation completed:', result);
         console.log('Form data submitted:', {
@@ -342,15 +385,15 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           categoryFilter: formData.categoryFilter,
           manufacturingLocation: formData.manufacturingLocation,
           tariffShockCountry: formData.tariffShockCountry,
+          tariffRate1: formData.tariffRate1,
+          tariffRate2: formData.tariffRate2,
+          tariffRate3: formData.tariffRate3,
           partsDataFile: partsDataFile?.name,
           articlesDataFile: articlesDataFile?.name
         });
 
         // You can navigate to results page or handle the response as needed
         // navigate('/simulation_results', { state: { results: result } });
-
-        // Or handle the response data directly here
-        alert(`Simulation completed successfully!\n\nSubmitted data:\nVehicle: ${selectedEngine.manufacturerName} ${selectedEngine.modelName}\nEngine: ${selectedEngine.typeEngineName}\nCategory: ${formData.categoryFilter}\nManufacturing Location: ${formData.manufacturingLocation}\nTariff Shock Country: ${formData.tariffShockCountry}\nParts File: ${partsDataFile?.name}\nArticles File: ${articlesDataFile?.name}`);
       } else {
         const errorData = await response.json();
         console.error('Simulation failed:', errorData);
@@ -359,6 +402,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     } catch (error) {
       console.error('Error running simulation:', error);
       alert('Failed to run simulation. Please try again.');
+    } finally {
+      // Re-enable the button once the process is complete (success or failure)
+      setLoading(prev => ({ ...prev, simulation: false }));
     }
   }, [engineOptions, formData, partsDataFile, articlesDataFile]);
 
@@ -371,7 +417,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       type: '',
       categoryFilter: 'all',
       manufacturingLocation: '',
-      tariffShockCountry: ''
+      tariffShockCountry: '',
+      tariffRate1: '',
+      tariffRate2: '',
+      tariffRate3: '',
     });
     setModels([]);
     setEngineOptions([]);
@@ -397,6 +446,19 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     if (items.length === 0) return <MenuItem value="" disabled>{emptyMessage}</MenuItem>;
     return items.map(renderItem);
   }, []);
+
+  const handleTariffRateChange = (field: 'tariffRate1' | 'tariffRate2' | 'tariffRate3') => (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = event.target.value;
+    // Allow empty string or valid numbers (including decimals)
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  };
 
   return (
     <Container maxWidth="lg">
@@ -635,6 +697,51 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           </StyledFormControl>
 
           <StyledFormControl fullWidth required>
+            <TextField
+              label="Tariff Shock Simulation: Rate 1 (%)"
+              value={formData.tariffRate1}
+              onChange={handleTariffRateChange('tariffRate1')}
+              required
+              placeholder="e.g. 25"
+              type="text"
+              inputProps={{
+                pattern: '^\\d*\\.?\\d*$',
+                inputMode: 'decimal'
+              }}
+            />
+          </StyledFormControl>
+
+          <StyledFormControl fullWidth required>
+            <TextField
+              label="Tariff Shock Simulation: Rate 2 (%)"
+              value={formData.tariffRate2}
+              onChange={handleTariffRateChange('tariffRate2')}
+              required
+              placeholder="e.g. 50"
+              type="text"
+              inputProps={{
+                pattern: '^\\d*\\.?\\d*$',
+                inputMode: 'decimal'
+              }}
+            />
+          </StyledFormControl>
+
+          <StyledFormControl fullWidth required>
+            <TextField
+              label="Tariff Shock Simulation: Rate 3 (%)"
+              value={formData.tariffRate3}
+              onChange={handleTariffRateChange('tariffRate3')}
+              required
+              placeholder="e.g. 75"
+              type="text"
+              inputProps={{
+                pattern: '^\\d*\\.?\\d*$',
+                inputMode: 'decimal'
+              }}
+            />
+          </StyledFormControl>
+
+          <StyledFormControl fullWidth required>
             <Box sx={{
               border: '2px dashed #e5e7eb',
               borderRadius: 2,
@@ -754,12 +861,111 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               type="submit"
               variant="contained"
               size="medium"
-              disabled={!formData.type || !formData.manufacturingLocation || !formData.tariffShockCountry || !formData.categoryFilter || !partsDataFile || !articlesDataFile}
+              disabled={!formData.type || !formData.manufacturingLocation || !formData.tariffShockCountry || !formData.categoryFilter || !formData.tariffRate1 || !formData.tariffRate2 || !formData.tariffRate3 || !partsDataFile || !articlesDataFile || loading.simulation}
             >
-              Run Simulation
+              {loading.simulation ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={20} color="inherit" />
+                  Processing...
+                </Box>
+              ) : (
+                'Generate Report'
+              )}
             </StyledButton>
           </Box>
         </Box>
+
+        {/* Processing Dialog */}
+        <Dialog
+          open={showProcessingDialog}
+          onClose={() => setShowProcessingDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              p: 1
+            }
+          }}
+        >
+          <DialogTitle sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            pb: 2,
+            fontSize: '1.5rem',
+            fontWeight: 600
+          }}>
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              color: '#1976d2'
+            }}>
+              <CircularProgress size={28} thickness={4} />
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#1976d2' }}>
+                Report Being Generated
+              </Typography>
+            </Box>
+          </DialogTitle>
+
+          <DialogContent sx={{ pb: 3 }}>
+            <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem', lineHeight: 1.6 }}>
+              Your simulation has been initiated and is now processing in the background.
+            </Typography>
+
+            <Box sx={{
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e9ecef',
+              borderRadius: 2,
+              p: 2.5,
+              mb: 2
+            }}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+                color: '#495057',
+                mb: 1,
+                fontSize: '0.95rem'
+              }}>
+                Next Steps:
+              </Typography>
+              <Typography variant="body2" sx={{
+                color: '#6c757d',
+                lineHeight: 1.5,
+                fontSize: '0.9rem'
+              }}>
+                • Please return to your <strong>terminal/console</strong> to monitor progress<br/>
+                • The process will take approximately <strong>5 minutes</strong> to complete<br/>
+                • You can close this dialog and the processing will continue
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" sx={{
+              color: '#6c757d',
+              fontStyle: 'italic',
+              textAlign: 'center'
+            }}>
+              The "Generate Report" button will be re-enabled once processing is finished.
+            </Typography>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button
+              onClick={() => setShowProcessingDialog(false)}
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem'
+              }}
+            >
+              Got it
+            </Button>
+          </DialogActions>
+        </Dialog>
       </StyledPaper>
     </Container>
   );
