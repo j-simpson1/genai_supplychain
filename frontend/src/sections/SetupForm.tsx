@@ -464,7 +464,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     <Container maxWidth="lg">
       <StyledPaper elevation={3}>
         <Typography variant="h5" component="h3" gutterBottom sx={{ fontWeight: 700, color: '#1f2937', textAlign: 'center', mb: 4, fontSize: '1.75rem' }}>
-          Select Vehicle & Manufacturing Location
+          Select Vehicle & Configure Report
         </Typography>
 
         <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 400, mx: 'auto' }}>
