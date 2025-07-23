@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Toolbar, Box } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
-import VehicleForm from '../sections/VehicleForm';
+import VehicleForm from '../sections/SetupForm';
 import Header from "../components/Header";
 import { MainLayout } from "../layouts/MainLayout"
 
@@ -78,7 +78,7 @@ function GetManufacturers() {
 }
 
 
-function BillOfMaterials() {
+function ReportSetup() {
   const [brands, setBrands] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,4 +117,4 @@ function BillOfMaterials() {
   );
 }
 
-export default BillOfMaterials;
+export default ReportSetup;

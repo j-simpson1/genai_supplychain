@@ -3,15 +3,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
-import BillOfMaterials from './pages/bill_of_materials.tsx';
+import ReportSetup from './pages/report_setup.tsx';
 import ChatSystem from './pages/chat.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ChatSystem />} />
-        <Route path="/bill_of_materials" element={<BillOfMaterials />} />
+        <Route path="/" element={<ReportSetup />} />
+        <Route path="/chat" element={<ChatSystem />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>
