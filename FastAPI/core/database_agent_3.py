@@ -14,11 +14,14 @@ quantities_df = pd.read_csv(quantities_path)
 
 @tool
 def parts_summary() -> list:
-    """Summarizes product groups by price, count, country of origin, and quantity."""
+    """Summarizes product groups by price, count, country of origin, quantity, and % of total cost."""
     try:
         # Group article data
         grouped = articles_df.groupby('productGroupId')
         results = []
+
+        # Temporary list to calculate total cost later
+        temp_costs = []
 
         for productGroupId, group in grouped:
             partDescription = group['articleProductName'].mode()[0]
@@ -28,14 +31,25 @@ def parts_summary() -> list:
             quantity_row = quantities_df[quantities_df['productGroupId'] == productGroupId]
             quantity = int(quantity_row['quantity'].values[0]) if not quantity_row.empty else 0
 
+            cost = averagePrice * quantity
+            temp_costs.append((productGroupId, partDescription, averagePrice, numArticles, mostCommonCountry, quantity, cost))
+
+        # Calculate total cost
+        total_cost = sum(item[6] for item in temp_costs) or 1  # Avoid division by zero
+
+        # Final results with percentage
+        for item in temp_costs:
+            percentage = round((item[6] / total_cost) * 100, 2)
             results.append({
-                "productGroupId": productGroupId,
-                "partDescription": partDescription,
-                "averagePrice": averagePrice,
-                "numArticles": numArticles,
-                "mostCommonCountryOfOrigin": mostCommonCountry,
-                "quantity": quantity
+                "productGroupId": item[0],
+                "partDescription": item[1],
+                "averagePrice": item[2],
+                "numArticles": item[3],
+                "mostCommonCountryOfOrigin": item[4],
+                "quantity": item[5],
+                "percentageOfTotalCost": percentage
             })
+
         return results
     except Exception as e:
         print(e)
@@ -107,4 +121,4 @@ def total_component_price() -> float:
         return 0.0
 
 if __name__ == "__main__":
-    print(top_5_parts_by_price.invoke({}))
+    print(parts_summary.invoke({}))

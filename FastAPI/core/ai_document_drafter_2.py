@@ -64,6 +64,8 @@ class AgentState(TypedDict):
     revision_number: int
     max_revisions: int
     # chart generation
+    chart_plan: List[Dict[str, str]]
+    current_chart_index: int
     chart_code: str
     chart_generation_success: bool
     chart_generation_error: str
@@ -128,7 +130,8 @@ revised version of your previous attempts. Provide the output in a JSON format u
     }}
     
 The charts should be included using placeholders like [[FIGURE:<chart_id>]] in part of the report where the chart \
-should appear. These placeholders will be replaced with the actual figures in the final report. \
+should appear. These placeholders will be replaced with the actual figures in the final report. On revision don't \
+remove any graphs.
 
 Please can you reference all external sources using Harvard referencing style. 
 
@@ -305,20 +308,71 @@ def research_plan_node(state: AgentState):
 model_with_tools = model.bind_tools([automotive_tariff_simulation])
 
 @tracer.chain
+def chart_planning_node(state: AgentState):
+    """
+    Decides what charts to generate based on DB summary & content.
+    Returns `chart_plan` for the next node to consume.
+    """
+    db_summary = state.get("db_summary", "")
+    db_content = "\n\n".join(state.get("db_content", []))
+
+    prompt = f"""
+You are a supply chain data visualization expert. 
+Based on the following database summary and raw data, propose 1 (maybe 2) meaningful charts 
+for an automotive braking system supply chain report.
+
+Database summary:
+{db_summary}
+
+Structured data:
+{db_content}
+
+Return JSON list like:
+[
+  {{ "chart_id": "chart1", "chart_description": "Top 5 parts by price" }},
+  {{ "chart_id": "chart2", "chart_description": "Country of origin distribution" }}
+]
+"""
+
+    response = model.invoke([SystemMessage(content=prompt)])
+    try:
+        chart_plan = json.loads(response.content)
+        if not isinstance(chart_plan, list):
+            chart_plan = [chart_plan]
+    except json.JSONDecodeError:
+        chart_plan = [{"chart_id": "chart1", "chart_description": response.content.strip()}]
+
+    return {"chart_plan": chart_plan}
+
+@tracer.chain
 def generate_chart_code_node(state: AgentState):
-    prompt = f"""You are a data visualization expert. Based on the data below, generate a Python script using matplotlib
-that creates a useful chart for our supply chain report. Save the chart using `plt.savefig(chart_path)` — assume 
-`chart_path` is a variable passed into the environment. Do not use `plt.show()`.
+
+    # Determine which chart we are working on
+    chart_index = state.get("current_chart_index", 0)
+    chart_plan = state.get("chart_plan", [])
+
+    if chart_index >= len(chart_plan):
+        # No charts left to process
+        return {"chart_code": "", "chart_generation_success": True}
+
+    chart = chart_plan[chart_index]
+    chart_description = chart.get("chart_description", "No description")
+
+    prompt = f"""You are a data visualization expert. 
+Generate a Python script using matplotlib to produce the chart described. 
+Always save with: `plt.savefig(chart_path)` and never assign `chart_path` inside the script.
+Assume it is already defined.
+
+When designing the chart use professional styling ideally using blue.
 
 Data:
 {state['db_content']}
 
-Requirements:
-- Chart should be informative and visually clear
+Chart requirement:
+{chart_description}
 """
 
     response = model.invoke([SystemMessage(content=prompt)])
-
     match = re.search(r"```(?:python)?\n(.*?)```", response.content, re.DOTALL)
     chart_code = match.group(1).strip() if match else response.content.strip()
 
@@ -328,23 +382,26 @@ Requirements:
 def execute_chart_code_node(state: AgentState):
     try:
         os.makedirs("./charts", exist_ok=True)
-
         code = state["chart_code"]
-        chart_path = f"./charts/chart_{uuid.uuid4().hex}.png"
 
-        exec_globals = {
-            "__file__": chart_path,
-            "chart_path": chart_path
-        }
+        # Get chart info
+        chart_index = state.get("current_chart_index", 0)
+        chart_plan = state.get("chart_plan", [])
+        chart_id = chart_plan[chart_index]["chart_id"] if chart_index < len(chart_plan) else f"chart_{chart_index}"
 
+        chart_path = f"./charts/{chart_id}_{uuid.uuid4().hex}.png"
+        exec_globals = {"__file__": chart_path, "chart_path": chart_path}
         exec(code, exec_globals)
 
+        # Append to chart_metadata
+        chart_metadata = state.get("chart_metadata", [])
+        chart_metadata.append({"id": chart_id, "path": chart_path})
+
         return {
-            "chart_metadata": [{
-                "id": os.path.splitext(os.path.basename(chart_path))[0],
-                "path": chart_path
-            }],
-            "chart_generation_success": True
+            "chart_metadata": chart_metadata,
+            "chart_generation_success": True,
+            "current_chart_index": chart_index + 1,
+            "chart_retry_count": 0
         }
     except Exception as e:
         return {
@@ -522,9 +579,15 @@ def code_should_continue(state: AgentState) -> str:
         if state["chart_retry_count"] < state["max_chart_retries"]:
             return "reflect_chart"
         else:
-            print("Max chart retries reached — skipping chart generation retry.")
+            print("Max chart retries reached — skipping this chart.")
+            # Move to next chart
+            return "generate_chart_code"
+    else:
+        # Are there more charts?
+        if state.get("current_chart_index", 0) < len(state.get("chart_plan", [])):
+            return "generate_chart_code"
+        else:
             return "research_plan"
-    return "research_plan"
 
 # initialise the graph with the agent state
 builder = StateGraph(AgentState)
@@ -536,6 +599,7 @@ builder.add_node("reflect", reflection_node)
 builder.add_node("research_plan", research_plan_node)
 builder.add_node("db_plan", database_plan_node)
 builder.add_node("summarize_db", summarize_db_node)
+builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_chart_code", generate_chart_code_node)
 builder.add_node("execute_chart_code", execute_chart_code_node)
 builder.add_node("reflect_chart", reflect_chart_node)
@@ -554,13 +618,15 @@ builder.add_conditional_edges(
 # add in basic edges
 builder.add_edge("planner", "db_plan")
 builder.add_edge("db_plan", "summarize_db")
-builder.add_edge("summarize_db", "generate_chart_code")
+builder.add_edge("summarize_db", "chart_planning_node")
+builder.add_edge("chart_planning_node", "generate_chart_code")
 builder.add_edge("generate_chart_code", "execute_chart_code")
 builder.add_conditional_edges(
     "execute_chart_code",
     code_should_continue,
     {
         "reflect_chart": "reflect_chart",
+        "generate_chart_code": "generate_chart_code",
         "research_plan": "research_plan"
     }
 )
@@ -608,7 +674,9 @@ def run_agent(messages):
             'chart_generation_success': False,
             'chart_generation_error': '',
             'chart_retry_count': 0,
-            'max_chart_retries': 2
+            'max_chart_retries': 2,
+            'chart_plan': [],
+            'current_chart_index': 0
         }, thread):
             print(s)
         span.set_status(StatusCode.OK)
