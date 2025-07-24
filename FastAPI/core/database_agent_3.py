@@ -58,20 +58,33 @@ def parts_summary() -> list:
 
 @tool
 def top_5_parts_by_price() -> list:
-    """Returns the top 5 parts by average price including quantity."""
+    """Returns the top 5 parts by average price including quantity, using total group counts."""
     try:
-        # Group articles by product group and part name
-        grouped = articles_df.groupby(['productGroupId', 'articleProductName'])
-        summary_df = grouped['price'].agg(['mean', 'count']).reset_index()
-        summary_df.columns = ['productGroupId', 'partDescription', 'avg_price', 'num_articles']
+        # Group by productGroupId only, like parts_summary
+        grouped = articles_df.groupby('productGroupId')
+        summary_list = []
 
-        # Merge with quantities_df to include quantity
-        summary_df = summary_df.merge(quantities_df[['productGroupId', 'quantity']], on='productGroupId', how='left')
-        summary_df['quantity'] = summary_df['quantity'].fillna(0).astype(int)
+        for productGroupId, group in grouped:
+            # Most common part name for description
+            partDescription = group['articleProductName'].mode()[0]
+            avg_price = round(group['price'].mean(), 3)
+            num_articles = group.shape[0]
+
+            # Merge quantity
+            quantity_row = quantities_df[quantities_df['productGroupId'] == productGroupId]
+            quantity = int(quantity_row['quantity'].values[0]) if not quantity_row.empty else 0
+
+            summary_list.append({
+                "productGroupId": productGroupId,
+                "partDescription": partDescription,
+                "avg_price": avg_price,
+                "num_articles": num_articles,
+                "quantity": quantity
+            })
 
         # Take top 5 by average price
-        top5 = summary_df.sort_values(by='avg_price', ascending=False).head(5)
-        return top5.to_dict(orient='records')
+        top5 = sorted(summary_list, key=lambda x: x['avg_price'], reverse=True)[:5]
+        return top5
     except Exception as e:
         print(e)
         return []
@@ -121,4 +134,4 @@ def total_component_price() -> float:
         return 0.0
 
 if __name__ == "__main__":
-    print(parts_summary.invoke({}))
+    print(top_5_parts_by_price.invoke({}))
