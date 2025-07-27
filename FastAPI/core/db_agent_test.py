@@ -1,15 +1,21 @@
 from dotenv import load_dotenv
 _ = load_dotenv()
 
-from pydantic import BaseModel
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from typing import Annotated, List
-from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 import os
+import json
+from pydantic import BaseModel
+from typing import Annotated, List
+from langchain_core.messages import (
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage
+)
+from langgraph.graph.message import add_messages
+from langgraph.graph import StateGraph, END
+from langchain_openai import ChatOpenAI
 
-# Import your custom tools (already refactored to use file paths)
+# --- Import custom tools ---
 from FastAPI.core.database_agent_3 import (
     parts_summary,
     top_5_parts_by_price,
@@ -18,74 +24,13 @@ from FastAPI.core.database_agent_3 import (
     total_component_price
 )
 
-# --- UPDATED STATE ---
+# --- Pydantic State ---
 class AgentState(BaseModel):
     db_content: Annotated[List[AnyMessage], add_messages]
     articles_path: str
     parts_path: str
 
-class Agent:
-    def __init__(self, model, tools, system=""):
-        self.system = system
-
-        graph_builder = StateGraph(AgentState)
-
-        # --- build graph using new builder API ---
-        graph_builder.add_node("llm", self.call_openai)
-        graph_builder.add_node("action", self.take_action)
-        graph_builder.add_edge(START, "llm")
-        graph_builder.add_conditional_edges("llm", self.exists_action, {True: "action", False: END})
-        graph_builder.add_edge("action", "llm")
-
-        # compile graph
-        self.graph = graph_builder.compile()
-
-        output_graph_path = "db_langgraph.png"
-        with open(output_graph_path, "wb") as f:
-            f.write(self.graph.get_graph().draw_mermaid_png())
-
-        # tools and model
-        self.tools = {t.name: t for t in tools}
-        self.model = model.bind_tools(tools)
-
-    def exists_action(self, state: AgentState):
-        result = state.db_content[-1]
-        return len(result.tool_calls) > 0
-
-    def call_openai(self, state: AgentState):
-        messages = state.db_content
-        if self.system:
-            messages = [SystemMessage(content=self.system)] + messages
-        message = self.model.invoke(messages)
-        return {'db_content': [message]}
-
-    def take_action(self, state: AgentState):
-        tool_calls = state.db_content[-1].tool_calls
-        results = []
-        for t in tool_calls:
-            print(f"Calling: {t}")
-            if t['name'] not in self.tools:
-                print("\n ....bad tool name....")
-                result = "bad tool name, retry"
-            else:
-                # Inject file paths from state into tool call
-                args = dict(t['args'])
-                args["articles_path"] = state.articles_path
-                args["parts_path"] = state.parts_path
-                result = self.tools[t['name']].invoke(args)
-            results.append(ToolMessage(tool_call_id=t['id'], name=t['name'], content=str(result)))
-        print("Back to the model!")
-        return {'db_content': results}
-
-# --- Prompt ---
-prompt = """You are a parts database assistant. Use the available tools to summarize parts, 
-analyze prices, and retrieve distribution information. Always return clear, structured data when possible.
-The file paths required by the tools are available from AgentState:
-- articles_path - path to the articles CSV file
-- parts_path - path to the parts CSV file
-"""
-
-model = ChatOpenAI(model="gpt-4o")
+# --- Tools & Model ---
 tools = [
     parts_summary,
     top_5_parts_by_price,
@@ -94,21 +39,74 @@ tools = [
     total_component_price
 ]
 
-abot = Agent(model, tools, system=prompt)
+model = ChatOpenAI(model="gpt-4o").bind_tools(tools)
+tools_by_name = {tool.name: tool for tool in tools}
 
+# --- Tool Node ---
+def tool_node(state: AgentState):
+    outputs = []
+    last_message = state.db_content[-1]
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call["name"]
+        args = dict(tool_call["args"])
+        # Inject paths
+        args["articles_path"] = state.articles_path
+        args["parts_path"] = state.parts_path
+
+        if tool_name not in tools_by_name:
+            result = "Unknown tool, please retry."
+        else:
+            result = tools_by_name[tool_name].invoke(args)
+
+        outputs.append(ToolMessage(
+            content=json.dumps(result),
+            name=tool_name,
+            tool_call_id=tool_call["id"]
+        ))
+    return {"db_content": outputs}
+
+# --- Model Node ---
+def call_model(state: AgentState, config=None):
+    system_prompt = SystemMessage(content="""
+You are a parts database assistant. Use the available tools to summarize parts,
+analyze prices, and retrieve distribution information.
+The file paths required by the tools are available from state:
+- articles_path - path to the articles CSV file
+- parts_path - path to the parts CSV file
+""")
+    response = model.invoke([system_prompt] + state.db_content, config)
+    return {"db_content": [response]}
+
+# --- Branching ---
+def should_continue(state: AgentState):
+    last_message = state.db_content[-1]
+    return "continue" if last_message.tool_calls else "end"
+
+# --- Graph Build ---
+workflow = StateGraph(AgentState)
+workflow.add_node("agent", call_model)
+workflow.add_node("tools", tool_node)
+workflow.set_entry_point("agent")
+workflow.add_conditional_edges("agent", should_continue, {"continue": "tools", "end": END})
+workflow.add_edge("tools", "agent")
+graph = workflow.compile()
+
+# --- Visualization (optional) ---
+output_graph_path = "db_langgraph.png"
+with open(output_graph_path, "wb") as f:
+    f.write(graph.get_graph().draw_mermaid_png())
+
+# --- Example Run ---
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    # Build full paths
     articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
     parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
-    # Pass file paths into state
     state = AgentState(
         db_content=[HumanMessage(content="Give me the parts summary as well as the total price of the component.")],
         articles_path=articles_path,
         parts_path=parts_path
     )
-    result = abot.graph.invoke(state)
 
+    result = graph.invoke(state)
     print(result["db_content"][-1].content)
