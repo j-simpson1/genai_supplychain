@@ -20,7 +20,7 @@ from FastAPI.core.database_agent_3 import (
 
 # --- UPDATED STATE ---
 class AgentState(BaseModel):
-    messages: Annotated[List[AnyMessage], add_messages]
+    db_content: Annotated[List[AnyMessage], add_messages]
     articles_path: str
     parts_path: str
 
@@ -49,18 +49,18 @@ class Agent:
         self.model = model.bind_tools(tools)
 
     def exists_action(self, state: AgentState):
-        result = state.messages[-1]
+        result = state.db_content[-1]
         return len(result.tool_calls) > 0
 
     def call_openai(self, state: AgentState):
-        messages = state.messages
+        messages = state.db_content
         if self.system:
             messages = [SystemMessage(content=self.system)] + messages
         message = self.model.invoke(messages)
-        return {'messages': [message]}
+        return {'db_content': [message]}
 
     def take_action(self, state: AgentState):
-        tool_calls = state.messages[-1].tool_calls
+        tool_calls = state.db_content[-1].tool_calls
         results = []
         for t in tool_calls:
             print(f"Calling: {t}")
@@ -75,7 +75,7 @@ class Agent:
                 result = self.tools[t['name']].invoke(args)
             results.append(ToolMessage(tool_call_id=t['id'], name=t['name'], content=str(result)))
         print("Back to the model!")
-        return {'messages': results}
+        return {'db_content': results}
 
 # --- Prompt ---
 prompt = """You are a parts database assistant. Use the available tools to summarize parts, 
@@ -105,10 +105,10 @@ if __name__ == "__main__":
 
     # Pass file paths into state
     state = AgentState(
-        messages=[HumanMessage(content="Give me the parts summary as well as the total price of the component.")],
+        db_content=[HumanMessage(content="Give me the parts summary as well as the total price of the component.")],
         articles_path=articles_path,
         parts_path=parts_path
     )
     result = abot.graph.invoke(state)
 
-    print(result["messages"][-1].content)
+    print(result["db_content"][-1].content)
