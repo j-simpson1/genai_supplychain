@@ -84,11 +84,11 @@ def should_continue(state: AgentState):
 
 # --- Graph Build ---
 workflow = StateGraph(AgentState)
-workflow.add_node("agent", call_model)
-workflow.add_node("tools", tool_node)
-workflow.set_entry_point("agent")
-workflow.add_conditional_edges("agent", should_continue, {"continue": "tools", "end": END})
-workflow.add_edge("tools", "agent")
+workflow.add_node("db_agent", call_model)
+workflow.add_node("db_tools", tool_node)
+workflow.set_entry_point("db_agent")
+workflow.add_conditional_edges("db_agent", should_continue, {"continue": "db_tools", "end": END})
+workflow.add_edge("db_tools", "db_agent")
 graph = workflow.compile()
 
 # --- Visualization (optional) ---
