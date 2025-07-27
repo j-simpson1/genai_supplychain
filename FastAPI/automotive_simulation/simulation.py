@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 class TariffSimulation:
-    """Enhanced tariff simulation with current tariff rates"""
+    """Enhanced tariff simulation with bottom quartile supplier selection"""
 
     def __init__(self, suppliers_data, part_requirements):
         self.suppliers_data = suppliers_data
@@ -35,7 +35,10 @@ class TariffSimulation:
 
         # Now initialize suppliers after tariff rates are set
         self.suppliers_by_product = self._group_suppliers()
-        self.current_suppliers = self._get_cheapest_suppliers()
+        # Get bottom quartile suppliers for baseline scenario
+        self.bottom_quartile_suppliers = self._get_bottom_quartile_suppliers()
+        # Set current suppliers to bottom quartile average
+        self.current_suppliers = self._calculate_quartile_average_suppliers()
 
     def _group_suppliers(self):
         """Group suppliers by product ID"""
@@ -44,20 +47,84 @@ class TariffSimulation:
             groups[supplier['productId']].append(supplier)
         return groups
 
-    def _get_cheapest_suppliers(self, tariffs=None):
-        """Find cheapest supplier for each required product"""
+    def _get_bottom_quartile_suppliers(self, tariffs=None):
+        """Get bottom quartile suppliers for each product based on article number and tariff-adjusted prices"""
         if tariffs is None:
             tariffs = self.current_tariff_rates
 
-        suppliers = {}
+        quartile_suppliers = {}
+
         for product_id in self.part_requirements:
             if product_id in self.suppliers_by_product:
-                best_supplier = min(
-                    self.suppliers_by_product[product_id],
-                    key=lambda s: s['price'] * (1 + tariffs.get(s['countryOfOrigin'], 0))
-                )
-                suppliers[product_id] = best_supplier
-        return suppliers
+                # Calculate tariff-adjusted prices for all suppliers of this product
+                suppliers_with_data = []
+                for supplier in self.suppliers_by_product[product_id]:
+                    tariff_rate = tariffs.get(supplier['countryOfOrigin'], 0)
+                    adjusted_price = supplier['price'] * (1 + tariff_rate)
+                    suppliers_with_data.append({
+                        'supplier': supplier,
+                        'adjusted_price': adjusted_price,
+                        'article_no': supplier.get('articleNo', ''),
+                    })
+
+                # Sort by article number first, then by adjusted price
+                # This ensures consistent ordering when article numbers are the same
+                suppliers_with_data.sort(key=lambda x: (x['article_no'], x['adjusted_price']))
+
+                # Get bottom quartile (25% of suppliers)
+                quartile_size = max(1, len(suppliers_with_data) // 4)
+                bottom_quartile = suppliers_with_data[:quartile_size]
+
+                quartile_suppliers[product_id] = [item['supplier'] for item in bottom_quartile]
+
+        return quartile_suppliers
+
+    def _calculate_quartile_average_suppliers(self, tariffs=None):
+        """Calculate average price from bottom quartile suppliers for each product"""
+        if tariffs is None:
+            tariffs = self.current_tariff_rates
+
+        average_suppliers = {}
+
+        for product_id in self.part_requirements:
+            if product_id in self.bottom_quartile_suppliers:
+                quartile_suppliers = self.bottom_quartile_suppliers[product_id]
+
+                # Calculate average price and select representative supplier
+                total_adjusted_price = 0
+                supplier_count = len(quartile_suppliers)
+
+                for supplier in quartile_suppliers:
+                    tariff_rate = tariffs.get(supplier['countryOfOrigin'], 0)
+                    adjusted_price = supplier['price'] * (1 + tariff_rate)
+                    total_adjusted_price += adjusted_price
+
+                average_price = total_adjusted_price / supplier_count
+
+                # Create a virtual supplier representing the quartile average
+                # Use the first supplier as template but with average price
+                template_supplier = quartile_suppliers[0].copy()
+
+                # Calculate what the base price should be to achieve the average adjusted price
+                # We'll use the most common country or the template's country for tariff calculation
+                countries = [s['countryOfOrigin'] for s in quartile_suppliers]
+                most_common_country = max(set(countries), key=countries.count)
+                tariff_rate = tariffs.get(most_common_country, 0)
+
+                # Back-calculate base price: average_price = base_price * (1 + tariff_rate)
+                base_price = average_price / (1 + tariff_rate)
+
+                template_supplier.update({
+                    'price': base_price,
+                    'countryOfOrigin': most_common_country,
+                    'supplierName': f"Bottom Quartile Average ({supplier_count} suppliers)",
+                    'articleProductName': template_supplier.get('articleProductName', 'Unknown'),
+                    'articleNo': f"AVG-{product_id}"
+                })
+
+                average_suppliers[product_id] = template_supplier
+
+        return average_suppliers
 
     def get_total_cost(self, tariffs=None):
         """Calculate total cost with current suppliers"""
@@ -74,7 +141,7 @@ class TariffSimulation:
         return total
 
     def run_simulation(self, steps=25, shock_step=10, target_country='Germany', tariff_rate=0.30):
-        """Run tariff shock simulation"""
+        """Run tariff shock simulation with consistent bottom quartile suppliers"""
         self.cost_history = []
         # Start with current tariff rates
         current_tariffs = self.current_tariff_rates.copy()
@@ -83,7 +150,8 @@ class TariffSimulation:
             if step == shock_step:
                 # Apply tariff shock to target country
                 current_tariffs[target_country] = tariff_rate
-                self.current_suppliers = self._get_cheapest_suppliers(current_tariffs)
+                # Recalculate costs with new tariffs but keep same supplier selection
+                # (bottom quartile was determined at initialization)
 
             cost = self.get_total_cost(current_tariffs)
             self.cost_history.append(cost)
@@ -122,15 +190,69 @@ class TariffSimulation:
                     'tariff_rate': tariff_rate,
                     'base_cost': base_cost,
                     'tariff_cost': tariff_cost,
-                    'total_cost': total_product_cost
+                    'total_cost': total_product_cost,
+                    'quartile_suppliers_count': len(self.bottom_quartile_suppliers.get(product_id, []))
                 }
 
                 total_cost += total_product_cost
 
         return cost_breakdown, total_cost
 
+    def get_quartile_analysis(self):
+        """Get detailed analysis of bottom quartile selection"""
+        analysis = {}
+
+        for product_id in self.part_requirements:
+            if product_id in self.bottom_quartile_suppliers:
+                quartile_suppliers = self.bottom_quartile_suppliers[product_id]
+                all_suppliers = self.suppliers_by_product[product_id]
+
+                # Calculate statistics
+                quartile_prices = []
+                all_prices = []
+
+                for supplier in quartile_suppliers:
+                    tariff_rate = self.current_tariff_rates.get(supplier['countryOfOrigin'], 0)
+                    adjusted_price = supplier['price'] * (1 + tariff_rate)
+                    quartile_prices.append(adjusted_price)
+
+                for supplier in all_suppliers:
+                    tariff_rate = self.current_tariff_rates.get(supplier['countryOfOrigin'], 0)
+                    adjusted_price = supplier['price'] * (1 + tariff_rate)
+                    all_prices.append(adjusted_price)
+
+                analysis[product_id] = {
+                    'total_suppliers': len(all_suppliers),
+                    'quartile_suppliers': len(quartile_suppliers),
+                    'quartile_percentage': (len(quartile_suppliers) / len(all_suppliers)) * 100,
+                    'quartile_price_range': {
+                        'min': min(quartile_prices),
+                        'max': max(quartile_prices),
+                        'average': np.mean(quartile_prices)
+                    },
+                    'all_suppliers_price_range': {
+                        'min': min(all_prices),
+                        'max': max(all_prices),
+                        'average': np.mean(all_prices)
+                    },
+                    'savings_vs_average': np.mean(all_prices) - np.mean(quartile_prices),
+                    'quartile_suppliers_details': [
+                        {
+                            'supplier_name': s['supplierName'],
+                            'article_no': s.get('articleNo', ''),
+                            'country': s['countryOfOrigin'],
+                            'base_price': s['price'],
+                            'adjusted_price': s['price'] * (1 + self.current_tariff_rates.get(s['countryOfOrigin'], 0))
+                        }
+                        for s in sorted(quartile_suppliers, key=lambda x: (x.get('articleNo', ''), x['price']))
+                    ]
+                }
+
+        return analysis
+
 
 import pandas as pd
+
 
 def load_data_from_csv(articles_csv_path, parts_csv_path):
     """
@@ -163,7 +285,8 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
                 color=colors[i], linewidth=3, marker='o', markersize=6)
 
     ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock', linewidth=2)
-    ax.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Starting from current rates)', fontweight='bold',
+    ax.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Bottom Quartile by Article No. + Price)',
+                 fontweight='bold',
                  fontsize=18)
     ax.set_xlabel('Time Step', fontsize=16)
     ax.set_ylabel('Total Cost (USD)', fontsize=16)
@@ -179,7 +302,7 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"cost_progression_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"cost_progression_quartile_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
@@ -193,13 +316,90 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     return saved_path
 
 
-def create_price_distribution_chart(price_distributions, tariff_rates, target_country, show_plot=False, save_plot=True,
-                                    output_dir='./charts'):
-    """Create the price distribution boxplot chart separately"""
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_country, show_plot=False, save_plot=True,
+                                            output_dir='./charts'):
+    """Create the quartile cost distribution boxplot chart showing total system costs after tariff shocks"""
+
+    # Calculate cost distributions for each tariff scenario
+    cost_distributions = []
+
+    for tariff_rate in tariff_rates:
+        # Create temporary tariff rates with the shock applied
+        temp_tariffs = simulation.current_tariff_rates.copy()
+        temp_tariffs[target_country] = tariff_rate
+
+        # Calculate total system costs for all possible combinations
+        system_costs = []
+
+        # Get all possible supplier combinations for the complete system
+        # We'll generate multiple system cost scenarios based on different supplier selections
+        # from the bottom quartile of each component
+
+        # First, collect all quartile suppliers for each product
+        product_suppliers = {}
+        for product_id in simulation.part_requirements:
+            if product_id in simulation.bottom_quartile_suppliers:
+                quartile_suppliers = simulation.bottom_quartile_suppliers[product_id]
+                quantity = simulation.part_requirements[product_id]
+
+                product_suppliers[product_id] = []
+                for supplier in quartile_suppliers:
+                    country = supplier['countryOfOrigin']
+                    # Use the shock tariff if it's the target country, otherwise use current tariff
+                    if country == target_country:
+                        tariff_rate_to_use = tariff_rate
+                    else:
+                        tariff_rate_to_use = simulation.current_tariff_rates.get(country, 0)
+
+                    # Calculate total cost for this component (all units)
+                    unit_price = supplier['price']
+                    adjusted_unit_price = unit_price * (1 + tariff_rate_to_use)
+                    total_component_cost = adjusted_unit_price * quantity
+
+                    product_suppliers[product_id].append({
+                        'supplier': supplier,
+                        'component_cost': total_component_cost,
+                        'product_id': product_id
+                    })
+
+        # Generate system cost scenarios
+        # For computational efficiency, we'll sample combinations rather than generate all permutations
+        import itertools
+        import random
+
+        # Get supplier options for each product
+        supplier_options = []
+        for product_id in sorted(product_suppliers.keys()):
+            supplier_options.append(product_suppliers[product_id])
+
+        # Generate sample combinations (limit to reasonable number for performance)
+        max_combinations = 1000
+        if supplier_options:
+            # Calculate total possible combinations
+            total_combinations = 1
+            for options in supplier_options:
+                total_combinations *= len(options)
+
+            if total_combinations <= max_combinations:
+                # Generate all combinations if small enough
+                for combination in itertools.product(*supplier_options):
+                    total_system_cost = sum(item['component_cost'] for item in combination)
+                    system_costs.append(total_system_cost)
+            else:
+                # Sample random combinations if too many
+                random.seed(42)  # For reproducibility
+                for _ in range(max_combinations):
+                    combination = [random.choice(options) for options in supplier_options]
+                    total_system_cost = sum(item['component_cost'] for item in combination)
+                    system_costs.append(total_system_cost)
+
+        cost_distributions.append(system_costs)
+
+    # Create the chart
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 
     box_colors = ['lightblue', 'lightgreen', 'lightcoral']
-    box_plot = ax.boxplot(price_distributions, tick_labels=[f'{r:.0%}' for r in tariff_rates],
+    box_plot = ax.boxplot(cost_distributions, tick_labels=[f'{r:.0%}' for r in tariff_rates],
                           patch_artist=True)
 
     for patch, color in zip(box_plot['boxes'], box_colors):
@@ -207,11 +407,23 @@ def create_price_distribution_chart(price_distributions, tariff_rates, target_co
         patch.set_alpha(0.7)
 
     ax.set_title(
-        f'Price Distribution - {target_country} Tariff Shock\n(Including current rates for other countries)',
+        f'Complete System Cost Distribution - {target_country} Tariff Shock\n(Total Cost for Entire Brake System from Bottom Quartile Suppliers)',
         fontweight='bold', fontsize=18)
     ax.set_xlabel('Tariff Rate', fontsize=16)
-    ax.set_ylabel('Article Price (USD)', fontsize=16)
+    ax.set_ylabel('Total System Cost (USD)', fontsize=16)
     ax.grid(True, alpha=0.3)
+
+    # Add summary statistics as text
+    for i, (costs, rate) in enumerate(zip(cost_distributions, tariff_rates)):
+        if costs:  # Check if costs list is not empty
+            median_cost = np.median(costs)
+            mean_cost = np.mean(costs)
+            max_cost = max(costs)
+            min_cost = min(costs)
+            ax.text(i + 1, max_cost * 1.02,
+                    f'Median: ${median_cost:.2f}\nMean: ${mean_cost:.2f}\nRange: ${min_cost:.2f}-${max_cost:.2f}',
+                    ha='center', va='bottom', fontsize=9,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
     # Increase tick label sizes
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -222,11 +434,11 @@ def create_price_distribution_chart(price_distributions, tariff_rates, target_co
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"price_distribution_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"complete_system_cost_distribution_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
-        print(f"Price distribution chart saved as: {saved_path}")
+        print(f"Complete system cost distribution chart saved as: {saved_path}")
 
     if show_plot:
         plt.show()
@@ -243,7 +455,7 @@ def analyze_tariff_impact(
         save_plots=True,
         output_dir='./charts'
 ):
-    """Analyze tariff impact and create charts separately"""
+    """Analyze tariff impact using bottom quartile average pricing with updated cost distribution chart"""
 
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
@@ -259,21 +471,31 @@ def analyze_tariff_impact(
     # Get current tariff information
     current_tariffs = sim.get_current_tariff_info()
     current_cost_breakdown, current_total_cost = sim.analyze_current_costs()
+    quartile_analysis = sim.get_quartile_analysis()
 
     # Test different shock scenarios
     results = []
-    price_distributions = []
 
     for rate in tariff_rates:
         result = sim.run_simulation(target_country=target_country, tariff_rate=rate)
 
-        # Calculate affected suppliers and prices
+        # Calculate affected suppliers for this scenario
         affected_suppliers = []
-        all_prices = []
+
+        # Use the same approach but with the specific tariff rate for the target country
+        temp_tariffs = current_tariffs.copy()
+        temp_tariffs[target_country] = rate
 
         for supplier in suppliers_data:
-            if supplier['countryOfOrigin'] == target_country:
-                adjusted_price = supplier['price'] * (1 + rate)
+            country = supplier['countryOfOrigin']
+            if country == target_country:
+                tariff_rate_to_use = rate
+            else:
+                tariff_rate_to_use = current_tariffs.get(country, 0)
+
+            adjusted_price = supplier['price'] * (1 + tariff_rate_to_use)
+
+            if country == target_country:
                 affected_suppliers.append({
                     'supplier_name': supplier['supplierName'],
                     'article_no': supplier['articleNo'],
@@ -281,16 +503,8 @@ def analyze_tariff_impact(
                     'shock_tariff': rate,
                     'original_price': supplier['price'],
                     'adjusted_price': adjusted_price,
-                    'price_increase': adjusted_price - supplier['price']
+                    'price_increase': adjusted_price - supplier['price'] * (1 + current_tariffs.get(target_country, 0))
                 })
-                all_prices.append(adjusted_price)
-            else:
-                # Use current tariff rates for other countries
-                current_rate = current_tariffs.get(supplier['countryOfOrigin'], 0)
-                adjusted_price = supplier['price'] * (1 + current_rate)
-                all_prices.append(adjusted_price)
-
-        price_distributions.append(all_prices)
 
         # Build result
         scenario = {
@@ -299,13 +513,8 @@ def analyze_tariff_impact(
                 'initial_cost': result['initial_cost'],
                 'final_cost': result['final_cost'],
                 'cost_increase': result['cost_increase'],
-                'percentage_increase': (result['cost_increase'] / result['initial_cost']) * 100
-            },
-            'price_statistics': {
-                'min_price': min(all_prices),
-                'max_price': max(all_prices),
-                'mean_price': np.mean(all_prices),
-                'median_price': np.median(all_prices)
+                'percentage_increase': (result['cost_increase'] / result['initial_cost']) * 100 if result[
+                                                                                                       'initial_cost'] > 0 else 0
             },
             'affected_suppliers': affected_suppliers,
             'cost_progression': sim.cost_history
@@ -340,6 +549,15 @@ def analyze_tariff_impact(
             'severity': 'medium'
         })
 
+    # Add quartile-specific recommendations
+    avg_quartile_size = np.mean([q['quartile_suppliers'] for q in quartile_analysis.values()])
+    if avg_quartile_size < 2:
+        recommendations.append({
+            'type': 'limited_supplier_base',
+            'message': f"Limited supplier diversity - average {avg_quartile_size:.1f} suppliers in bottom quartile",
+            'severity': 'high'
+        })
+
     # Create charts separately
     chart_paths = {}
 
@@ -351,16 +569,17 @@ def analyze_tariff_impact(
         if cost_chart_path:
             chart_paths['cost_progression'] = cost_chart_path
 
-        # Create price distribution chart
-        price_chart_path = create_price_distribution_chart(
-            price_distributions, tariff_rates, target_country, show_plots, save_plots, output_dir
+        # Create NEW complete system cost distribution chart
+        system_cost_chart_path = create_quartile_cost_distribution_chart(
+            sim, tariff_rates, target_country, show_plots, save_plots, output_dir
         )
-        if price_chart_path:
-            chart_paths['price_distribution'] = price_chart_path
+        if system_cost_chart_path:
+            chart_paths['complete_system_cost_distribution'] = system_cost_chart_path
 
     # Return JSON response
     response = {
-        'analysis_type': 'tariff_impact_analysis',
+        'analysis_type': 'tariff_impact_analysis_quartile',
+        'methodology': 'bottom_quartile_selection_by_article_and_price',
         'target_country': target_country,
         'timestamp': datetime.now().isoformat(),
         'current_tariff_rates': current_tariffs,
@@ -368,6 +587,7 @@ def analyze_tariff_impact(
             'total_cost': current_total_cost,
             'cost_breakdown': current_cost_breakdown
         },
+        'quartile_analysis': quartile_analysis,
         'summary': {
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
@@ -375,6 +595,11 @@ def analyze_tariff_impact(
             'cost_range': {
                 'min_increase': min(r['cost_analysis']['percentage_increase'] for r in results),
                 'max_increase': max(r['cost_analysis']['percentage_increase'] for r in results)
+            },
+            'quartile_summary': {
+                'avg_quartile_size': avg_quartile_size,
+                'total_products': len(quartile_analysis),
+                'avg_savings_vs_market': np.mean([q['savings_vs_average'] for q in quartile_analysis.values()])
             }
         },
         'scenarios': results,
@@ -390,29 +615,7 @@ def analyze_tariff_impact(
 
 
 if __name__ == "__main__":
-    print("Running tariff impact analysis with CSV input...")
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    articles_csv_path = os.path.join(BASE_DIR, "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-    parts_csv_path = os.path.join(BASE_DIR, "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
-
-    suppliers_data, part_requirements, taxable_info = load_data_from_csv(
-        articles_csv_path, parts_csv_path
-    )
-    print("Supplier Data: ", suppliers_data)
-    print("Part Requirements", part_requirements)
-    print("Taxable Info: ", taxable_info)
-    sim = TariffSimulation(suppliers_data, part_requirements)
-
-    # Print current tariff rates
-    print("\nCurrent Tariff Rates:")
-    current_rates = sim.get_current_tariff_info()
-    for country, rate in sorted(current_rates.items()):
-        print(f"{country}: {rate:.1%}")
-
-    # JSON output
-    print("\n" + "=" * 50)
-    print("JSON OUTPUT:")
-    print("=" * 50)
+    print("Running tariff impact analysis with updated quartile cost distribution chart...")
     result = analyze_tariff_impact(
         target_country='Germany',
         tariff_rates=[0.10, 0.30, 0.60],
