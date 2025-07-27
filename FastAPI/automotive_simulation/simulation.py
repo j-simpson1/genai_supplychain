@@ -130,47 +130,27 @@ class TariffSimulation:
         return cost_breakdown, total_cost
 
 
-def load_sample_data():
-    """Load sample brake parts data"""
-    suppliers_data = [
-        {'articleNo': '0088', 'articleProductName': 'Bleeder Screw/Valve', 'productId': 5213, 'price': 0.96,
-         'countryOfOrigin': 'Denmark', 'supplierName': 'QUICK BRAKE'},
-        {'articleNo': '0101-GSV70F', 'articleProductName': 'Brake Pad Set', 'productId': 402, 'price': 4.08,
-         'countryOfOrigin': 'Japan', 'supplierName': 'FEBEST'},
-        {'articleNo': '0101-GYL25R', 'articleProductName': 'Brake Pad Set', 'productId': 402, 'price': 18.52,
-         'countryOfOrigin': 'Japan', 'supplierName': 'FEBEST'},
-        {'articleNo': '08.D418.11', 'articleProductName': 'Brake Disc', 'productId': 82, 'price': 34.66,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'A.B.S.'},
-        {'articleNo': '0 986 424 899', 'articleProductName': 'Brake Pad Set', 'productId': 402, 'price': 48.51,
-         'countryOfOrigin': 'Germany', 'supplierName': 'BOSCH'},
-        {'articleNo': '0 986 424 912', 'articleProductName': 'Brake Pad Set', 'productId': 402, 'price': 24.64,
-         'countryOfOrigin': 'Germany', 'supplierName': 'BOSCH'},
-        {'articleNo': '0 986 479 E91', 'articleProductName': 'Brake Disc', 'productId': 82, 'price': 10.46,
-         'countryOfOrigin': 'Germany', 'supplierName': 'BOSCH'},
-        {'articleNo': '0 986 479 H04', 'articleProductName': 'Brake Disc', 'productId': 82, 'price': 10.46,
-         'countryOfOrigin': 'Germany', 'supplierName': 'BOSCH'},
-        {'articleNo': '09.D979.11', 'articleProductName': 'Brake Disc', 'productId': 82, 'price': 54.47,
-         'countryOfOrigin': 'Italy', 'supplierName': 'BREMBO'},
-        {'articleNo': '13012145281', 'articleProductName': 'Brake Caliper', 'productId': 78, 'price': 102.57,
-         'countryOfOrigin': 'Denmark', 'supplierName': 'sbs'},
-        {'articleNo': '13012145282', 'articleProductName': 'Brake Caliper', 'productId': 78, 'price': 102.57,
-         'countryOfOrigin': 'Denmark', 'supplierName': 'sbs'},
-        {'articleNo': '2145281', 'articleProductName': 'Brake Caliper', 'productId': 78, 'price': 49.36,
-         'countryOfOrigin': 'Denmark', 'supplierName': 'NK'},
-        {'articleNo': '740581', 'articleProductName': 'Brake Caliper', 'productId': 78, 'price': 61.63,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'A.B.S.'},
-        {'articleNo': '19000', 'articleProductName': 'Brake Fluid', 'productId': 3357, 'price': 65.59,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'MPM'},
-        {'articleNo': '20000_', 'articleProductName': 'Brake Fluid', 'productId': 3357, 'price': 4.04,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'MPM'},
-        {'articleNo': 'DOT3', 'articleProductName': 'Brake Fluid', 'productId': 3357, 'price': 8.26,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'KROON OIL'},
-        {'articleNo': 'DOT4', 'articleProductName': 'Brake Fluid', 'productId': 3357, 'price': 3.48,
-         'countryOfOrigin': 'Netherlands', 'supplierName': 'KROON OIL'},
-    ]
+import pandas as pd
 
-    part_requirements = {402: 1, 82: 2, 78: 2, 3357: 1, 5213: 4}
-    return suppliers_data, part_requirements
+def load_data_from_csv(articles_csv_path, parts_csv_path):
+    """
+    Load supplier articles and part requirements from CSV.
+    """
+    # Articles (suppliers)
+    articles_df = pd.read_csv(articles_csv_path)
+
+    suppliers_data = articles_df.rename(columns={
+        "productGroupId": "productId"
+    }).to_dict(orient="records")
+
+    # Parts requirements
+    parts_df = pd.read_csv(parts_csv_path)
+    part_requirements = dict(zip(parts_df["productGroupId"], parts_df["quantity"]))
+
+    # Also capture taxable flag if needed
+    taxable_info = dict(zip(parts_df["productGroupId"], parts_df["taxable"]))
+
+    return suppliers_data, part_requirements, taxable_info
 
 
 def create_cost_progression_chart(results, target_country, show_plot=False, save_plot=True, output_dir='./charts'):
@@ -268,7 +248,12 @@ def analyze_tariff_impact(
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
 
-    suppliers_data, part_requirements = load_sample_data()
+    articles_csv_path = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
+    parts_csv_path = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
+
+    suppliers_data, part_requirements, taxable_info = load_data_from_csv(
+        articles_csv_path, parts_csv_path
+    )
     sim = TariffSimulation(suppliers_data, part_requirements)
 
     # Get current tariff information
@@ -405,20 +390,21 @@ def analyze_tariff_impact(
 
 
 if __name__ == "__main__":
-    # Analysis with separated charts
-    print("Running tariff impact analysis with separated charts...")
-    result = analyze_tariff_impact(
-        'Germany',
-        [0.10, 0.30, 0.60],
-        show_plots=True,
-        save_plots=True,
-        output_dir='./output_charts'
+    print("Running tariff impact analysis with CSV input...")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    articles_csv_path = os.path.join(BASE_DIR, "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_csv_path = os.path.join(BASE_DIR, "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+
+    suppliers_data, part_requirements, taxable_info = load_data_from_csv(
+        articles_csv_path, parts_csv_path
     )
+    print("Supplier Data: ", suppliers_data)
+    print("Part Requirements", part_requirements)
+    print("Taxable Info: ", taxable_info)
+    sim = TariffSimulation(suppliers_data, part_requirements)
 
     # Print current tariff rates
     print("\nCurrent Tariff Rates:")
-    suppliers_data, part_requirements = load_sample_data()
-    sim = TariffSimulation(suppliers_data, part_requirements)
     current_rates = sim.get_current_tariff_info()
     for country, rate in sorted(current_rates.items()):
         print(f"{country}: {rate:.1%}")
@@ -427,5 +413,11 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("JSON OUTPUT:")
     print("=" * 50)
-    json_output = analyze_tariff_impact('Germany', show_plots=False, save_plots=False)
-    print(json.dumps(json_output, indent=2, default=str))
+    result = analyze_tariff_impact(
+        target_country='Germany',
+        tariff_rates=[0.10, 0.30, 0.60],
+        show_plots=True,
+        save_plots=True
+    )
+
+    print(json.dumps(result, indent=2, default=str))
