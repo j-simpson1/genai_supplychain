@@ -38,3 +38,20 @@ MSc Computer Science Project, James Simpson
 
   pgAdmin http://localhost:5050
   Login: admin@example.com / adminpass
+
+
+4) Launch Streamlit Dashboard
+-----------------------------
+
+- Install Streamlit (if not already installed):
+    pip install streamlit pandas
+
+- Run the Streamlit app:
+    streamlit run FastAPI/core/dashboard.py
+
+- View in Browser:  
+   After launching, Streamlit will print a local URL in the terminal.  
+   Open it in your browser to interact with the dashboard.
+
+Note: Streamlit must be run using `streamlit run ...` instead of `python dashboard.py` to enable full interactive 
+functionality.
