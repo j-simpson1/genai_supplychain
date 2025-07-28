@@ -237,51 +237,53 @@ tools_sql = [
     }
 ]
 
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=messages,
-    tools=tools_sql,
-    tool_choice="auto",
-)
+if __name__ == "__main__":
 
-response_message = response.choices[0].message
-tool_calls = response_message.tool_calls
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        tools=tools_sql,
+        tool_choice="auto",
+    )
+
+    response_message = response.choices[0].message
+    tool_calls = response_message.tool_calls
 
 
-if tool_calls:
-    print(tool_calls)
+    if tool_calls:
+        print(tool_calls)
 
-    # Map available function names to actual functions
-    available_functions = {
-        "parts_summary": parts_summary,
-        "top_5_parts_by_price": top_5_parts_by_price,
-        "top_5_part_distrubution_by_country": top_5_part_distrubution_by_country
-    }
+        # Map available function names to actual functions
+        available_functions = {
+            "parts_summary": parts_summary,
+            "top_5_parts_by_price": top_5_parts_by_price,
+            "top_5_part_distrubution_by_country": top_5_part_distrubution_by_country
+        }
 
-    messages.append(response_message)
+        messages.append(response_message)
 
-    for tool_call in tool_calls:
-        function_name = tool_call.function.name
-        function_to_call = available_functions.get(function_name)
+        for tool_call in tool_calls:
+            function_name = tool_call.function.name
+            function_to_call = available_functions.get(function_name)
 
-        # These functions don't take any arguments
-        function_response = function_to_call()
+            # These functions don't take any arguments
+            function_response = function_to_call()
 
-        messages.append(
-            {
-                "tool_call_id": tool_call.id,
-                "role": "tool",
-                "name": function_name,
-                "content": json.dumps(function_response, indent=2),
-            }
-        )
+            messages.append(
+                {
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": json.dumps(function_response, indent=2),
+                }
+            )
 
-    print(messages)
+        print(messages)
 
-second_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-        )
-print (second_response)
+    second_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+            )
+    print (second_response)
 
 

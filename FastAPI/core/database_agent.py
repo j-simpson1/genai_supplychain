@@ -123,8 +123,9 @@ agent_executor = create_sql_agent(
     verbose=True
 )
 
-# Use `.invoke()` instead of `.run()`
-query = "Can you retrieve me the average price by productGroupId?"
+if __name__ == "__main__":
 
-response = agent_executor.invoke({"input": query})
-print(response["output"])
+    # Use `.invoke()` instead of `.run()`
+    query = "Can you retrieve me the average price by productGroupId?"
+    response = agent_executor.invoke({"input": query})
+    print(response["output"])
