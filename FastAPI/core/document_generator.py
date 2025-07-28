@@ -675,16 +675,12 @@ with open(output_graph_path, "wb") as f:
     f.write(graph.get_graph().draw_mermaid_png())
 
 
-def run_agent(messages):
+def run_agent(messages, parts_path, articles_path):
     with (tracer.start_as_current_span(
             "LangGraphExecution",
             openinference_span_kind="chain")
     as span):
         span.set_input(value=messages)
-
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-        parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
         # adding in graph.stream so can see all the steps
         thread = {"configurable": {"thread_id": "1"}}
@@ -715,7 +711,7 @@ def run_agent(messages):
 
 # start from the outermost layer and work your way down so you capture the right info
 # only just calling this run_agent span and calls to add tracing
-def start_main_span(messages):
+def start_main_span(messages, parts_path, articles_path):
     print("Starting main span with messages:", messages)
 
     # span_kind maps to colors etc...
@@ -725,7 +721,7 @@ def start_main_span(messages):
     ) as span:
         # setting the input
         span.set_input(value=messages)
-        ret = run_agent(messages)
+        ret = run_agent(messages, parts_path, articles_path)
         print("Main span completed with return value:", ret)
         # setting the output
         span.set_output(value=ret)
@@ -749,5 +745,9 @@ prompt = auto_supplychain_prompt_template(
 )
 
 if __name__ == "__main__":
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+
     print(prompt)
-    start_main_span(prompt)
+    start_main_span(prompt, parts_path, articles_path)

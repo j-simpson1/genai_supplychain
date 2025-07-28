@@ -302,7 +302,7 @@ async def run_simulation(
         articles_df.to_csv(articles_path, index=False)
 
         # Call agent using file paths
-        result = start_main_span(prompt)
+        result = start_main_span(prompt, parts_path, articles_path)
 
         # Return successful response with summary
         return {
