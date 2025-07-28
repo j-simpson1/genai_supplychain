@@ -729,7 +729,7 @@ def analyze_tariff_impact(
 
 if __name__ == "__main__":
     print("Running tariff impact analysis with VAT inclusion...")
-    result = analyze_tariff_impact_with_vat(
+    result = analyze_tariff_impact(
         target_country='Germany',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
