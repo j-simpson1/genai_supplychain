@@ -27,12 +27,12 @@ class TariffSimulation:
             'Finland': 0.03824,
             'France': 0.03824,
             'Germany': 0.03824,
-            'Hong Kong SAR, China': 0.0,
+            'Hong Kong': 0.0,
             'Hungary': 0.03824,
             'Iceland': 0.0,
             'Italy': 0.03824,
             'Japan': 0.0,
-            'Korea, Rep.': 0.08,
+            'Korea': 0.08,
             'Malta': 0.03824,
             'Netherlands': 0.03824,
             'New Zealand': 0.03545,
@@ -45,7 +45,7 @@ class TariffSimulation:
             'Switzerland': 0.0,
             'Turkey': 0.05925,
             'United Kingdom': 0.02208,
-            'United States': 0.01307
+            'United States of America': 0.01307
         }
 
         # Now initialize suppliers after tariff rates are set
