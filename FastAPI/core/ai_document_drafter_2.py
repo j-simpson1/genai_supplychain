@@ -17,6 +17,7 @@ from phoenix.otel import register
 from opentelemetry.trace import StatusCode
 
 from FastAPI.core.pdf_creator import save_to_pdf
+from FastAPI.core.word_creator import save_to_word
 from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price, total_component_price
 from FastAPI.core.CoT_prompting import COT_EXAMPLES
 
@@ -589,6 +590,7 @@ def should_continue(state):
         span.set_input(value=state)
         if state["revision_number"] > state["max_revisions"]:
             print(save_to_pdf(content=state["draft"], filename="report.pdf", chart_metadata=state.get("chart_metadata", [])))
+            print(save_to_word(content=state["draft"], filename="report.docx", chart_metadata=state.get("chart_metadata", [])))
             result = END
         else:
             result = "reflect"
