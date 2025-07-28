@@ -1,3 +1,4 @@
+import pandas as pd
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy import text
 from FastAPI.database.database import engine
@@ -236,5 +237,5 @@ def categories_modelled(engine, query_text=None):
 
     return data
 
-
-print(parts_summary(engine))
+if __name__ == "__main__":
+    print(parts_summary(engine))
