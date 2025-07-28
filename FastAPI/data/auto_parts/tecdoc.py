@@ -147,6 +147,10 @@ def fetch_countries():
 
 	return response.json()
 
+if __name__ == "__main__":
+
+	print(fetch_manufacturers())
+
 # '100006': {
 # 	'text': 'Braking System',
 # 	'children': {
