@@ -575,8 +575,9 @@ def analyze_tariff_impact(
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
 
-    articles_csv_path = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
-    parts_csv_path = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    articles_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data", "RAV4_brake_articles_data.csv")
+    parts_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data", "RAV4_brake_parts_data.csv")
 
     suppliers_data, part_requirements, taxable_info = load_data_from_csv(
         articles_csv_path, parts_csv_path

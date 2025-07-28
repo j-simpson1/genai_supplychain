@@ -25,10 +25,10 @@ def summarize_simulation_content(sim: dict) -> dict:
                     {
                         "supplier_name": s["supplier_name"],
                         "original_price": round(s["original_price"], 2),
-                        "adjusted_price": round(s["adjusted_price"], 2),
+                        "final_price": round(s["shock_final_price"], 2),
                         "price_increase": round(s["price_increase"], 2)
                     }
-                    for s in scenario.get("affected_suppliers", [])[:2]  # Limit to top 2 per scenario
+                    for s in scenario.get("affected_suppliers", [])[:2]
                 ]
             }
             for scenario in scenarios
