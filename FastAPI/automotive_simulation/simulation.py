@@ -562,7 +562,7 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
     return saved_path
 
 
-def analyze_tariff_impact_with_vat(
+def analyze_tariff_impact(
         target_country='Germany',
         tariff_rates=None,
         vat_rate=0.20,  # UK VAT rate
