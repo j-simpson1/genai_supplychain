@@ -2,8 +2,7 @@ import json
 import re
 import os
 from typing import List, Dict
-
-from langchain.tools import tool
+from pathlib import Path
 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.colors import Color
@@ -14,7 +13,7 @@ from reportlab.platypus.doctemplate import PageTemplate
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 
-def save_to_pdf(content: str, filename: str = "14_07_25_v6_report.pdf", chart_metadata: List[Dict[str, str]] = []) -> str:
+def save_to_pdf(content: str, filename: str = "report.pdf", chart_metadata: List[Dict[str, str]] = []) -> str:
     """Save the current document as a PDF file."""
 
     if not filename.endswith(".pdf"):
@@ -50,8 +49,11 @@ def save_to_pdf(content: str, filename: str = "14_07_25_v6_report.pdf", chart_me
 
         # Create a function to add the logo to each page
         def add_logo(canvas, doc):
-            import os
-            logo_path = os.path.abspath("Alvarez_and_Marsal.png")
+
+            BASE_DIR = Path(__file__).resolve().parent.parent
+            LOGO_PATH = BASE_DIR / "static" / "Alvarez_and_Marsal.png"
+
+            logo_path = str(LOGO_PATH)
             try:
                 width = 1.5 * inch
                 height = 0.75 * inch

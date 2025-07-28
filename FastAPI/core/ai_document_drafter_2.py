@@ -7,9 +7,10 @@ import traceback
 import re
 
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, List, Dict
+from typing import TypedDict, List, Dict, Annotated
 from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AnyMessage
+from langgraph.graph.message import add_messages
 
 from tavily import TavilyClient
 from phoenix.otel import register
@@ -54,7 +55,7 @@ class AgentState(TypedDict):
     # documents tavily has come back with
     web_content: List[str]
     # information from the database
-    db_content: List[str]
+    db_content: Annotated[List[AnyMessage], add_messages]
     db_summary: str
     trajectory: List[str]
     # information from running the simulation
@@ -72,6 +73,8 @@ class AgentState(TypedDict):
     chart_generation_error: str
     chart_retry_count: int
     max_chart_retries: int
+    articles_path: str
+    parts_path: str
 
 from langchain_openai import ChatOpenAI
 # creating model
@@ -218,112 +221,72 @@ def plan_node(state: AgentState):
     # get the content of the messages and pass to the plan key
     return {"plan": response.content}
 
-db_model = ChatOpenAI(
-    model="gpt-4o",
-    api_key=os.getenv("OPENAI_API_KEY"),
-    temperature=0
-)
 
-db_model_with_tools = db_model.bind_tools([
+tools = [
     parts_summary,
     top_5_parts_by_price,
     top_5_part_distribution_by_country,
-    parts_average_price
-])
+    parts_average_price,
+    total_component_price
+]
 
+db_model = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0
+).bind_tools(tools)
+
+tools_by_name = {tool.name: tool for tool in tools}
+
+# --- Tool Node ---
 @tracer.chain
-def database_plan_node(state: AgentState):
-    """
-    ReAct-style database reasoning:
-    - Calls one database tool at a time.
-    - After each observation, re-prompts the model.
-    - Stops when model outputs 'Finish'.
-    """
+def tool_node(state: AgentState):
+    outputs = []
+    last_message = state["db_content"][-1]
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call["name"]
+        args = dict(tool_call["args"])
+        # Inject paths
+        args["articles_path"] = state["articles_path"]
+        args["parts_path"] = state["parts_path"]
 
-    trajectory = state.get("trajectory", [])
-    results = []
-    stop = False
-
-    available_tools = {
-        "parts_summary": parts_summary,
-        "top_5_parts_by_price": top_5_parts_by_price,
-        "top_5_part_distribution_by_country": top_5_part_distribution_by_country,
-        "parts_average_price": parts_average_price,
-        "total_component_price": total_component_price,
-    }
-
-    REACT_PROMPT = f"""
-You are a supply chain data analyst.
-
-Your goal is to gather relevant data for this task:
-{state['task']}
-
-You have these tools:
-- parts_summary()
-- top_5_parts_by_price()
-- top_5_part_distribution_by_country()
-- parts_average_price()
-- total_component_price()
-
-Follow this format:
-Thought: reasoning about what to do next
-Action: tool_name(args)
-Observation: tool output
-...
-Finish: concise summary of findings
-"""
-
-    while not stop:
-        # Prepare conversation
-        conversation = [
-            SystemMessage(content=REACT_PROMPT),
-            HumanMessage(content="\n".join(trajectory))
-        ]
-
-        # Get model response
-        response = db_model_with_tools.invoke(conversation)
-        text = response.content.strip()
-
-        if text.startswith("Finish"):
-            summary = text[len("Finish:"):].strip()
-            stop = True
-            trajectory.append(f"Finish: {summary}")
-        elif hasattr(response, "tool_calls") and response.tool_calls:
-            # Only take the first tool call (enforce one step at a time)
-            tool_call = response.tool_calls[0]
-            tool_name = tool_call["name"]
-            args = tool_call.get("args", {}) or {}
-
-            trajectory.append(f"Action: {tool_name}({args})")
-
-            tool_fn = available_tools.get(tool_name)
-            if not tool_fn:
-                trajectory.append(f"Observation: Unknown tool {tool_name}")
-                continue
-
-            # Execute tool and record result
-            tool_output = tool_fn.invoke(args)
-            results.append(tool_output)
-            trajectory.append(f"Observation: {json.dumps(tool_output)}")
+        if tool_name not in tools_by_name:
+            result = "Unknown tool, please retry."
         else:
-            # No action or finish → stop
-            stop = True
-            summary = "(No explicit Finish statement)"
-            trajectory.append("Finish: (No explicit Finish statement)")
+            result = tools_by_name[tool_name].invoke(args)
 
-    return {
-        "db_content": [json.dumps(r) for r in results] if results else ["(No database tool call made)"],
-        "trajectory": trajectory
-    }
+        outputs.append(ToolMessage(
+            content=json.dumps(result),
+            name=tool_name,
+            tool_call_id=tool_call["id"]
+        ))
+    return {"db_content": state["db_content"] + outputs}
+
+# --- Model Node ---
+@tracer.chain
+def call_model(state: AgentState, config=None):
+    system_prompt = SystemMessage(content=f"""
+You are a database assistant helping with the drafting of an automotive supply chain report. Use the available tools 
+to retrieve the relevant data for the report.
+The file paths required by the tools are available from state:
+- articles_path - path to the articles CSV file
+- parts_path - path to the parts CSV file
+
+Just return a summary of the raw data from the tools.
+
+See the following report plan to guide you what data to extract:
+{state.get('plan', 'No plan provided')}
+""")
+    response = db_model.invoke([system_prompt] + state["db_content"], config)
+    return {"db_content": state["db_content"] + [response]}
 
 @tracer.chain
 def summarize_db_node(state: AgentState):
-    db_content = "\n\n".join(state.get("db_content", []))
-    prompt = "Summarize the key takeaways from this structured database output for a supply chain report:"
-
+    db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     response = model.invoke([
-        SystemMessage(content=prompt),
-        HumanMessage(content=db_content)
+        SystemMessage(content="Analyse the data from the database agent and provide additional insight. "
+                              "Be succinct, don't speculate, only use the information provided and make the "
+                              "analysis quantative:"),
+        HumanMessage(content=db_content_text)
     ])
 
     return {
@@ -367,7 +330,7 @@ def chart_planning_node(state: AgentState):
     Returns `chart_plan` for the next node to consume.
     """
     db_summary = state.get("db_summary", "")
-    db_content = "\n\n".join(state.get("db_content", []))
+    db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
     prompt = f"""
 You are a supply chain data visualization expert. 
@@ -643,6 +606,9 @@ def execute_chart_next_node(state: AgentState) -> str:
         # Failed, need to reflect
         return "reflect_chart"
 
+def db_should_continue(state: AgentState):
+    last_message = state["db_content"][-1]
+    return "continue" if last_message.tool_calls else "end"
 
 # initialise the graph with the agent state
 builder = StateGraph(AgentState)
@@ -652,7 +618,8 @@ builder.add_node("planner", plan_node)
 builder.add_node("generate", generation_node)
 builder.add_node("reflect", reflection_node)
 builder.add_node("research_plan", research_plan_node)
-builder.add_node("db_plan", database_plan_node)
+builder.add_node("db_agent", call_model)
+builder.add_node("db_tools", tool_node)
 builder.add_node("summarize_db", summarize_db_node)
 builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_chart_code", generate_chart_code_node)
@@ -671,8 +638,7 @@ builder.add_conditional_edges(
 )
 
 # add in basic edges
-builder.add_edge("planner", "db_plan")
-builder.add_edge("db_plan", "summarize_db")
+builder.add_edge("planner", "db_agent")
 builder.add_edge("summarize_db", "chart_planning_node")
 builder.add_edge("chart_planning_node", "generate_chart_code")
 builder.add_edge("generate_chart_code", "execute_chart_code")
@@ -684,6 +650,9 @@ builder.add_conditional_edges(
         "research_plan": "research_plan"
     }
 )
+
+builder.add_conditional_edges("db_agent", db_should_continue, {"continue": "db_tools", "end": "summarize_db"})
+builder.add_edge("db_tools", "db_agent")
 
 builder.add_edge("reflect_chart", "generate_chart_code")
 builder.add_edge("research_plan", "generate")
@@ -711,6 +680,10 @@ def run_agent(messages):
     as span):
         span.set_input(value=messages)
 
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+        parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+
         # adding in graph.stream so can see all the steps
         thread = {"configurable": {"thread_id": "1"}}
         for s in graph.stream({
@@ -730,7 +703,9 @@ def run_agent(messages):
             'chart_retry_count': 0,
             'max_chart_retries': 2,
             'chart_plan': [],
-            'current_chart_index': 0
+            'current_chart_index': 0,
+            'articles_path': articles_path,
+            'parts_path': parts_path
         }, thread):
             print(s)
         span.set_status(StatusCode.OK)
