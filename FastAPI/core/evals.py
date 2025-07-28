@@ -27,26 +27,10 @@ tracer = tracer_provider.get_tracer(__name__)
 px.launch_app()
 
 
-import ast
+import phoenix as px
 
 
-import pandas as pd
+# Download all spans from a specific project
+df = px.Client().get_spans_dataframe(project_name='my-llm-app')
+print(df)
 
-
-def extract_message_content(row):
-  if isinstance(row, list) and row and isinstance(row[0], dict):
-    return row[0].get('message.content')
-  return None
-
-# Load all spans
-df = px.Client().query_spans(project_name="my-llm-app")
-
-output = df['attributes.llm.output_messages'].iloc[0][0]['message.content']
-print("OUTPUT!!!", output)
-
-# Remove rows where 'attributes.llm.output_messages' is NaN or empty/whitespace
-df = df[df['attributes.llm.output_messages'].notna()]
-df = df[df['attributes.llm.output_messages'].astype(str).str.strip().ne('')]
-
-df['message_content'] = df['attributes.llm.output_messages'].apply(extract_message_content)
-print(df['message_content'].head())
