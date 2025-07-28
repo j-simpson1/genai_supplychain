@@ -285,11 +285,11 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
                 color=colors[i], linewidth=3, marker='o', markersize=6)
 
     ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock', linewidth=2)
-    ax.set_title(f'Cost Impact - {target_country} Tariff Shock\n(Bottom Quartile by Article No. + Price)',
+    ax.set_title(f'Total Cost Impact - {target_country} Tariff Shock\n(Average price of Bottom Quartile)',
                  fontweight='bold',
                  fontsize=18)
     ax.set_xlabel('Time Step', fontsize=16)
-    ax.set_ylabel('Total Cost (USD)', fontsize=16)
+    ax.set_ylabel('Total Cost (GBP)', fontsize=16)
     ax.legend(fontsize=14)
     ax.grid(True, alpha=0.3)
 
@@ -407,10 +407,10 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
         patch.set_alpha(0.7)
 
     ax.set_title(
-        f'Complete System Cost Distribution - {target_country} Tariff Shock\n(Total Cost for Entire Brake System from Bottom Quartile Suppliers)',
+        f'Complete System Cost Distribution - {target_country} Tariff Shock\n(Bottom Quartile of Suppliers)',
         fontweight='bold', fontsize=18)
     ax.set_xlabel('Tariff Rate', fontsize=16)
-    ax.set_ylabel('Total System Cost (USD)', fontsize=16)
+    ax.set_ylabel('Total Cost (GBP)', fontsize=16)
     ax.grid(True, alpha=0.3)
 
     # Add summary statistics as text
