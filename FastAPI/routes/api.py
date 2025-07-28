@@ -29,6 +29,7 @@ import openai
 from dotenv import load_dotenv
 import json
 import traceback
+import re
 
 router = APIRouter()
 
@@ -276,16 +277,31 @@ async def run_simulation(
 
         logger.info(f"Form data summary: {json.dumps(form_data_summary, indent=2)}")
 
+        manufacturer = vehicle_data.get("manufacturerName")
+        normalized_manufacturer = manufacturer.title()
+
+        model_name = vehicle_data.get("modelName")
+        clean_model_name = re.sub(r"\s*\([^)]*\)", "", model_name)
+
         # Generate prompt with actual received data
         prompt = auto_supplychain_prompt_template(
-            manufacturer=vehicle_data.get("manufacturerName"),
-            model=vehicle_data.get("modelName"),
+            manufacturer=normalized_manufacturer,
+            model=clean_model_name,
             component=category_name,  # Now using the actual category name from frontend
             country=tariff_shock_country_name,  # Using country name instead of code
             rates=tariff_rates
         )
 
-        # Start the main processing with the generated prompt
+        import tempfile
+
+        # Save uploaded CSVs temporarily
+        parts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
+        articles_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
+
+        parts_df.to_csv(parts_path, index=False)
+        articles_df.to_csv(articles_path, index=False)
+
+        # Call agent using file paths
         result = start_main_span(prompt)
 
         # Return successful response with summary
