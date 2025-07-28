@@ -128,7 +128,7 @@ print(f"Pivot CSV saved to {pivot_filename}")
 avg_tariffs = pivot_df.drop(columns=["HS Code", "Product Description"]).mean(numeric_only=True).round(3)
 avg_tariff_dict = avg_tariffs.to_dict()
 
-avg_filename = os.path.join(output_dir, "avg_tariff_dict.json")
+avg_filename = os.path.join(output_dir, "wb_avg_tariff_dict.json")
 with open(avg_filename, "w") as f:
     json.dump(avg_tariff_dict, f, indent=2)
 
