@@ -3,16 +3,15 @@ import base64
 import os
 from dotenv import load_dotenv
 
-# --------------------
-load_dotenv()
-CLIENT_ID = os.getenv("EBAY_APP_ID")
-CLIENT_SECRET = os.getenv("EBAY_CERT_ID")
-# --------------------
-
-def get_access_token(client_id, client_secret):
+def get_ebay_access_token():
     """
     Get OAuth access token from eBay
     """
+
+    load_dotenv()
+    client_id = os.getenv("EBAY_APP_ID")
+    client_secret = os.getenv("EBAY_CERT_ID")
+
     TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 
     credentials = f"{client_id}:{client_secret}"
@@ -74,7 +73,7 @@ def ebay_search_car_parts(access_token, query, limit=5):
 def main():
     print("Getting OAuth token...")
     try:
-        token = get_access_token(CLIENT_ID, CLIENT_SECRET)
+        token = get_ebay_access_token()
     except requests.HTTPError as e:
         print("Failed to get token:", e.response.text)
         raise
