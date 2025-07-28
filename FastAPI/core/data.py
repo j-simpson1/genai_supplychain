@@ -2,6 +2,8 @@ import pandas as pd
 from FastAPI.data.auto_parts.tecdoc import fetch_categories_data, get_article_list
 from sqlmodel import Session, select
 from sqlalchemy import text
+import time
+import random
 
 from FastAPI.database.database import engine
 from FastAPI.database.models import Manufacturers, Models, Vehicle, Parts, Articles, Suppliers, Category, ArticleVehicleLink
@@ -203,20 +205,28 @@ def automotive_parts():
 
     print("All articles: ",all_articles)
 
+    # ebay_access_token = get_ebay_access_token()
+    #
+    # for article in all_articles[:1]:
+    #     articleNo = article['articleNo']
+    #     ebay_price_search = ebay_search_car_parts(ebay_access_token, articleNo, 3)
+    #     print(ebay_price_search)
+
+
     # search for pricing information
-    for article in all_articles[:1]:
-        articleNo = article['articleNo']
-        # price_search = search_autodoc(articleNo)
-        price_search = None
-        gbp_eur_fx_rate = 1.17
-        if price_search and price_search['results']:
-            first_price = round(price_search['results'][0]['price'] / gbp_eur_fx_rate, 2)
-            article['priceGBP'] = first_price
-            article['priceSource'] = 1
-            print(first_price)
-        else:
-            article['priceGBP'] = None
-        print(article)
+    # for article in all_articles[:1]:
+    #     articleNo = article['articleNo']
+    #     price_search = search_autodoc(articleNo)
+    #     gbp_eur_fx_rate = 1.17
+    #     if price_search and price_search['results']:
+    #         first_price = round(price_search['results'][0]['price'] / gbp_eur_fx_rate, 2)
+    #         article['priceGBP'] = first_price
+    #         article['priceSource'] = 1
+    #         print(first_price)
+    #     else:
+    #         article['priceGBP'] = None
+    #     print(article)
+    #     time.sleep(random.uniform(1, 2))
 
     print(all_articles)
 
