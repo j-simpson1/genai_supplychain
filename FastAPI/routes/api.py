@@ -5,7 +5,7 @@ from FastAPI.automotive_simulation.powerBi_upload import upload_to_powerbi
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 from FastAPI.actions.handle_action import handle_actions
 
-from FastAPI.core.ai_document_drafter_2 import start_main_span, auto_supplychain_prompt_template
+from FastAPI.core.document_generator import start_main_span, auto_supplychain_prompt_template
 
 from fastapi import UploadFile, File, Form
 from io import StringIO
