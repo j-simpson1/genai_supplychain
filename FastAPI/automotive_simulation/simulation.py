@@ -16,23 +16,36 @@ class TariffSimulation:
         self.vat_rate = vat_rate  # Default UK VAT rate of 20%
         self.cost_history = []
 
-        # Current tariff rates by country (as of 2025) - initialize first
+        # Current tariff rates by country (updated with provided rates)
         self.current_tariff_rates = {
-            'Germany': 0.025,  # EU standard automotive tariffs
-            'Netherlands': 0.025,  # EU standard automotive tariffs
-            'Denmark': 0.025,  # EU standard automotive tariffs
-            'Italy': 0.025,  # EU standard automotive tariffs
-            'Japan': 0.12,  # US-Japan trade agreement rates
-            'China': 0.27,  # Current US-China trade tensions
-            'South Korea': 0.08,  # KORUS agreement
-            'Mexico': 0.0,  # USMCA agreement
-            'Canada': 0.0,  # USMCA agreement
-            'India': 0.15,  # Recent trade negotiations
-            'Brazil': 0.18,  # Mercosur rates
-            'United Kingdom': 0.035,  # Post-Brexit rates
-            'Taiwan': 0.095,  # Recent semiconductor-related adjustments
-            'Thailand': 0.065,  # ASEAN trade rates
-            'Turkey': 0.055,  # EU customs union adjustments
+            'Canada': 0.03394,
+            'China': 0.06,
+            'Croatia': 0.03824,
+            'Cyprus': 0.03824,
+            'Czech Republic': 0.03824,
+            'Denmark': 0.03824,
+            'Finland': 0.03824,
+            'France': 0.03824,
+            'Germany': 0.03824,
+            'Hong Kong SAR, China': 0.0,
+            'Hungary': 0.03824,
+            'Iceland': 0.0,
+            'Italy': 0.03824,
+            'Japan': 0.0,
+            'Korea, Rep.': 0.08,
+            'Malta': 0.03824,
+            'Netherlands': 0.03824,
+            'New Zealand': 0.03545,
+            'Poland': 0.03824,
+            'Portugal': 0.03824,
+            'Romania': 0.03824,
+            'Singapore': 0.0,
+            'Spain': 0.03824,
+            'Sweden': 0.03824,
+            'Switzerland': 0.0,
+            'Turkey': 0.05925,
+            'United Kingdom': 0.02208,
+            'United States': 0.01307
         }
 
         # Now initialize suppliers after tariff rates are set
@@ -522,7 +535,7 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
             max_cost = max(costs)
             min_cost = min(costs)
             ax.text(i + 1, max_cost * 1.02,
-                    f'Median: £{median_cost:.2f}\nMean: £{mean_cost:.2f}\nRange: £{min_cost:.2f}-£{max_cost:.2f}',
+                    f'Median: ${median_cost:.2f}\nMean: ${mean_cost:.2f}\nRange: ${min_cost:.2f}-${max_cost:.2f}',
                     ha='center', va='bottom', fontsize=9,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
