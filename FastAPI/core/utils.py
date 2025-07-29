@@ -50,3 +50,17 @@ def convert_numpy(obj):
         return obj.tolist()
     else:
         return obj
+
+def serialize_state(state):
+    def serialize(obj):
+        # Convert message objects to dict
+        from langchain_core.messages import BaseMessage
+        if isinstance(obj, BaseMessage):
+            return {"type": obj.type, "content": obj.content}
+        elif isinstance(obj, list):
+            return [serialize(x) for x in obj]
+        elif isinstance(obj, dict):
+            return {k: serialize(v) for k, v in obj.items()}
+        else:
+            return obj
+    return serialize(state)

@@ -22,8 +22,14 @@ from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, t
 from FastAPI.core.CoT_prompting import COT_EXAMPLES
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
-from FastAPI.core.utils import summarize_simulation_content, convert_numpy
+from FastAPI.core.utils import summarize_simulation_content, convert_numpy, serialize_state
 from langchain.agents import tool
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
+os.makedirs(CHARTS_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
 
 load_dotenv()
 pheonix_key = os.getenv("PHOENIX_API_KEY")
@@ -398,7 +404,6 @@ Chart requirement:
 @tracer.chain
 def execute_chart_code_node(state: AgentState):
     try:
-        os.makedirs("./charts", exist_ok=True)
         code = state["chart_code"]
 
         # Get chart info
@@ -406,7 +411,7 @@ def execute_chart_code_node(state: AgentState):
         chart_plan = state.get("chart_plan", [])
         chart_id = chart_plan[chart_index]["chart_id"] if chart_index < len(chart_plan) else f"chart_{chart_index}"
 
-        chart_path = f"./charts/{chart_id}_{uuid.uuid4().hex}.png"
+        chart_path = os.path.join(CHARTS_DIR, f"{chart_id}_{uuid.uuid4().hex}.png")
         exec_globals = {"__file__": chart_path, "chart_path": chart_path}
         exec(code, exec_globals)
 
@@ -682,6 +687,8 @@ def run_agent(messages, parts_path, articles_path):
     as span):
         span.set_input(value=messages)
 
+        final_state = {}
+
         # adding in graph.stream so can see all the steps
         thread = {"configurable": {"thread_id": "1"}}
         for s in graph.stream({
@@ -706,6 +713,15 @@ def run_agent(messages, parts_path, articles_path):
             'parts_path': parts_path
         }, thread):
             print(s)
+
+            final_state = s
+
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
+
+        with open(SAVE_PATH, "w") as f:
+            json.dump(serialize_state(final_state), f, indent=2)
+
         span.set_status(StatusCode.OK)
 
 
