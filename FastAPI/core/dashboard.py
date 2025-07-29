@@ -14,12 +14,12 @@ def load_csv(file_path):
 
 st.title("Toyota RAV4 Brake System Data")
 
-# --- Articles Data ---
-st.header("Brake Articles Data")
-articles_df = load_csv(articles_path)
-st.dataframe(articles_df, use_container_width=True)
-
 # --- Parts Data ---
 st.header("Brake Parts Data")
 parts_df = load_csv(parts_path)
 st.dataframe(parts_df, use_container_width=True)
+
+# --- Articles Data ---
+st.header("Brake Articles Data")
+articles_df = load_csv(articles_path)
+st.dataframe(articles_df, use_container_width=True)
