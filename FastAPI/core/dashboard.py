@@ -32,8 +32,9 @@ def load_csv(file_path):
 
 st.title("Toyota RAV4 Brake System Data")
 
+st.header("Chart from the report")
+
 # --- Charts Section ---
-st.header("Tariff Impact Charts")
 for chart_path in chart_paths:
     if os.path.exists(chart_path):
         st.image(chart_path, caption=os.path.basename(chart_path))
@@ -44,8 +45,10 @@ parts_df = load_csv(parts_path)
 articles_df = load_csv(articles_path)
 
 
+st.header("Streamlit Generated Charts")
+
 # --- 1. BOM Cost Breakdown ---
-st.header("BOM Cost Contribution")
+st.subheader("BOM Cost Contribution")
 merged = pd.merge(articles_df, parts_df, on="productGroupId")
 merged["total_cost"] = merged["price"] * merged["quantity"]
 cost_breakdown = merged.groupby("partDescription")["total_cost"].sum()
@@ -57,7 +60,7 @@ st.pyplot(fig)
 
 
 # --- 2. Average Cost × Quantity per Part ---
-st.header("Average Cost per Part (excl VAT)")
+st.subheader("Average Cost per Part (excl VAT)")
 
 # Merge price and quantity information
 merged = pd.merge(articles_df, parts_df, on="productGroupId", how="left")
@@ -90,7 +93,7 @@ st.pyplot(fig)
 
 
 # --- 3. Count of Articles by Country of Origin ---
-st.header("Number of Articles by Country of Origin")
+st.subheader("Number of Articles by Country of Origin")
 articles_by_country = articles_df["countryOfOrigin"].value_counts().sort_index()
 
 fig, ax = plt.subplots()
@@ -103,7 +106,7 @@ st.pyplot(fig)
 
 
 # --- 4. Number of Articles per Part ---
-st.header("Number of Articles per Part Description")
+st.subheader("Number of Articles per Part Description")
 
 # Merge to get part descriptions for each article
 merged = pd.merge(articles_df, parts_df, on="productGroupId", how="left")
@@ -120,10 +123,14 @@ ax.set_title("Articles per Part")
 plt.xticks(rotation=45, ha='right')
 st.pyplot(fig)
 
+
+
+st.header("Data")
+
 # --- Parts Data ---
-st.header("Brake Parts Data")
+st.subheader("Parts Data")
 st.dataframe(parts_df, use_container_width=True)
 
 # --- Articles Data ---
-st.header("Brake Articles Data")
+st.subheader("Articles Data")
 st.dataframe(articles_df, use_container_width=True)
