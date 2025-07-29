@@ -30,7 +30,9 @@ chart_paths = list(set(chart_metadata_paths + chart_output_paths))
 def load_csv(file_path):
     return pd.read_csv(file_path)
 
-st.title("Toyota RAV4 Brake System Data")
+st.title("Toyota RAV4 Braking System")
+
+st.markdown("---")
 
 st.header("Chart from the report")
 
@@ -44,6 +46,7 @@ for chart_path in chart_paths:
 parts_df = load_csv(parts_path)
 articles_df = load_csv(articles_path)
 
+st.markdown("---")
 
 st.header("Streamlit Generated Charts")
 
@@ -124,6 +127,7 @@ plt.xticks(rotation=45, ha='right')
 st.pyplot(fig)
 
 
+st.markdown("---")
 
 st.header("Data")
 
