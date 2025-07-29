@@ -4,6 +4,7 @@ from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_simulation.powerBi_upload import upload_to_powerbi
 from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 from FastAPI.actions.handle_action import handle_actions
+from FastAPI.utils.data_validation import validate_uploaded_csvs
 
 from FastAPI.core.document_generator import start_main_span, auto_supplychain_prompt_template
 
@@ -212,22 +213,41 @@ async def run_simulation(
         if not articles_data_file.filename.endswith('.csv'):
             raise HTTPException(status_code=400, detail="Articles data file must be a CSV file")
 
-        # Read and parse CSV files
+        # Read CSV files
         try:
-            # Read parts data CSV
             parts_content = await parts_data_file.read()
-            parts_df = pd.read_csv(StringIO(parts_content.decode('utf-8')))
-            logger.info(f"Parts data shape: {parts_df.shape}")
-            logger.info(f"Parts data columns: {list(parts_df.columns)}")
-
-            # Read articles data CSV
             articles_content = await articles_data_file.read()
-            articles_df = pd.read_csv(StringIO(articles_content.decode('utf-8')))
-            logger.info(f"Articles data shape: {articles_df.shape}")
-            logger.info(f"Articles data columns: {list(articles_df.columns)}")
+
+            parts_content_str = parts_content.decode('utf-8')
+            articles_content_str = articles_content.decode('utf-8')
 
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error reading CSV files: {str(e)}")
+
+        # Validate CSV structure and required columns
+        csvs_valid, csv_errors = validate_uploaded_csvs(parts_content_str, articles_content_str)
+
+        if not csvs_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV validation failed: {'; '.join(csv_errors)}"
+            )
+
+        # Parse validated CSV files
+        try:
+            parts_df = pd.read_csv(StringIO(parts_content_str))
+            articles_df = pd.read_csv(StringIO(articles_content_str))
+
+            # Strip whitespace from column names
+            parts_df.columns = parts_df.columns.str.strip()
+            articles_df.columns = articles_df.columns.str.strip()
+
+            logger.info(f"CSV validation passed - Parts: {len(parts_df)} rows, Articles: {len(articles_df)} rows")
+            logger.info(f"Parts data columns: {list(parts_df.columns)}")
+            logger.info(f"Articles data columns: {list(articles_df.columns)}")
+
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error parsing validated CSV files: {str(e)}")
 
         # Determine the category to use based on category_filter
         # We now receive the category_name directly from frontend
@@ -304,11 +324,24 @@ async def run_simulation(
         # Call agent using file paths
         result = start_main_span(prompt, parts_path, articles_path)
 
+        # Clean up temporary files
+        try:
+            import os
+            os.unlink(parts_path)
+            os.unlink(articles_path)
+        except Exception as cleanup_error:
+            logger.warning(f"Could not clean up temporary files: {cleanup_error}")
+
         # Return successful response with summary
         return {
             "status": "success",
             "message": "Simulation completed successfully",
             "simulation_summary": form_data_summary,
+            "validation_info": {
+                "parts_rows_processed": len(parts_df),
+                "articles_rows_processed": len(articles_df),
+                "validation_passed": True
+            },
             "result": result
         }
 
@@ -317,6 +350,7 @@ async def run_simulation(
         raise
     except Exception as e:
         logger.error(f"Unexpected error in run_simulation: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/upload_powerbi")
