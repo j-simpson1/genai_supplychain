@@ -8,6 +8,7 @@ import traceback
 import re
 import tempfile
 import pandas as pd
+import re
 
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict, Annotated
@@ -307,31 +308,28 @@ def chart_planning_node(state: AgentState):
     db_summary = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
-    prompt = f"""
-You are a supply chain data visualization expert. 
-Based on the following database summary and raw data, propose 1 (maybe 2) meaningful charts 
-for an automotive braking system supply chain report.
+    chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_model=False)
 
-Database summary:
-{db_summary}
+    formatted_chart_planning_prompt = chart_planning_prompt.format(
+        db_summary=db_summary,
+        db_content=db_content
+    )
 
-Structured data:
-{db_content}
+    response = model.invoke([SystemMessage(content=formatted_chart_planning_prompt)])
 
-Return JSON list like:
-[
-  {{ "chart_id": "chart1", "chart_description": "Top 5 parts by price" }},
-  {{ "chart_id": "chart2", "chart_description": "Country of origin distribution" }}
-]
-"""
+    raw = response.content.strip()
 
-    response = model.invoke([SystemMessage(content=prompt)])
+    # Remove ```json or ``` from start/end if present
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+        raw = re.sub(r"```$", "", raw).strip()
+
     try:
-        chart_plan = json.loads(response.content)
-        if not isinstance(chart_plan, list):
-            chart_plan = [chart_plan]
+        chart_plan = json.loads(raw)
+        if isinstance(chart_plan, dict):
+            chart_plan = [chart_plan]  # wrap single dict as list
     except json.JSONDecodeError:
-        chart_plan = [{"chart_id": "chart1", "chart_description": response.content.strip()}]
+        chart_plan = [{"chart_id": "chart1", "chart_description": raw}]
 
     return {"chart_plan": chart_plan}
 
