@@ -12,6 +12,7 @@ from typing import TypedDict, List, Dict, Annotated
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AnyMessage
 from langgraph.graph.message import add_messages
+from langsmith import evaluate, Client
 
 from tavily import TavilyClient
 
@@ -19,6 +20,7 @@ from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.word_creator import save_to_word
 from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price, total_component_price
 from FastAPI.core.CoT_prompting import COT_EXAMPLES
+from FastAPI.core.evals import report_quality_evaluator
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import summarize_simulation_content, convert_numpy, serialize_state
@@ -578,9 +580,6 @@ builder = StateGraph(AgentState)
 
 # add all nodes
 builder.add_node("planner", plan_node)
-builder.add_node("generate", generation_node)
-builder.add_node("reflect", reflection_node)
-builder.add_node("research_plan", research_plan_node)
 builder.add_node("db_agent", call_model)
 builder.add_node("db_tools", tool_node)
 builder.add_node("summarize_db", summarize_db_node)
@@ -588,23 +587,35 @@ builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_chart_code", generate_chart_code_node)
 builder.add_node("execute_chart_code", execute_chart_code_node)
 builder.add_node("reflect_chart", reflect_chart_node)
+builder.add_node("generate", generation_node)
+builder.add_node("reflect", reflection_node)
+builder.add_node("research_plan", research_plan_node)
 builder.add_node("research_critique", research_critique_node)
 
 # set entry point
 builder.set_entry_point("planner")
 
-# add conditional edge
-builder.add_conditional_edges(
-    "generate",
-    should_continue,
-    {END: END, "reflect": "reflect"}
-)
 
 # add in basic edges
 builder.add_edge("planner", "db_agent")
+builder.add_edge("db_tools", "db_agent")
 builder.add_edge("summarize_db", "chart_planning_node")
 builder.add_edge("chart_planning_node", "generate_chart_code")
 builder.add_edge("generate_chart_code", "execute_chart_code")
+builder.add_edge("reflect_chart", "generate_chart_code")
+builder.add_edge("research_plan", "generate")
+builder.add_edge("reflect", "research_critique")
+builder.add_edge("research_critique", "generate")
+
+builder.add_conditional_edges(
+    "db_agent",
+    db_should_continue,
+    {
+        "continue": "db_tools",
+        "end": "summarize_db"
+    }
+)
+
 builder.add_conditional_edges(
     "execute_chart_code",
     execute_chart_next_node,
@@ -614,21 +625,15 @@ builder.add_conditional_edges(
     }
 )
 
-builder.add_conditional_edges("db_agent", db_should_continue, {"continue": "db_tools", "end": "summarize_db"})
-builder.add_edge("db_tools", "db_agent")
-
-builder.add_edge("reflect_chart", "generate_chart_code")
-builder.add_edge("research_plan", "generate")
-
-builder.add_edge("reflect", "research_critique")
-builder.add_edge("research_critique", "generate")
+# add conditional edge
+builder.add_conditional_edges(
+    "generate",
+    should_continue,
+    {END: END, "reflect": "reflect"}
+)
 
 # compile graph and add in checkpointer
 graph = builder.compile(checkpointer=memory)
-
-# from IPython.display import Image
-#
-# Image(graph.get_graph().draw_png())
 
 # save the graph
 output_graph_path = "langgraph.png"
@@ -673,6 +678,8 @@ def run_agent(messages, parts_path, articles_path):
     with open(SAVE_PATH, "w") as f:
         json.dump(serialize_state(final_state), f, indent=2)
 
+    return serialize_state(final_state)
+
 
 def auto_supplychain_prompt_template(manufacturer, model, component, country, rates):
     rates_str = ", ".join(f"{r}%" for r in rates)
@@ -689,10 +696,56 @@ prompt = auto_supplychain_prompt_template(
     rates=[20, 50, 80]
 )
 
-if __name__ == "__main__":
+def target(inputs: dict) -> dict:
+    prompt = auto_supplychain_prompt_template(
+        manufacturer=inputs["manufacturer"],
+        model=inputs["model"],
+        component=inputs["component"],
+        country=inputs["country"],
+        rates=inputs["rates"]
+    )
+
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
     articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
-    print(prompt)
-    run_agent(prompt, parts_path, articles_path)
+    final_state = run_agent(prompt, parts_path, articles_path)
+    draft = final_state.get("generate", {}).get("draft", "")
+
+    return {"draft": draft}
+
+
+if __name__ == "__main__":
+
+    client = Client()
+
+    try:
+        dataset = client.read_dataset(dataset_name="Supply Chain Dataset")
+    except:
+        dataset = client.create_dataset(
+            dataset_name="Supply Chain Dataset",
+            description="Evaluation dataset for supply chain report generator"
+        )
+
+    # Add examples
+    examples = [
+        {
+            "inputs": {
+                "manufacturer": "Toyota",
+                "model": "RAV4",
+                "component": "braking system",
+                "country": "Japan",
+                "rates": [20, 50, 80]
+            }
+        }
+    ]
+    client.create_examples(dataset_id=dataset.id, examples=examples)
+
+    # Assuming you already have a dataset created (inputs only)
+    results = evaluate(
+        target,
+        data="Supply Chain Dataset",  # dataset name or id
+        evaluators=[report_quality_evaluator]
+    )
+
+    print("Done! Check results in LangSmith dashboard.")
