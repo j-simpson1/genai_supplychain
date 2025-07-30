@@ -6,6 +6,8 @@ import json
 import uuid
 import traceback
 import re
+import tempfile
+import pandas as pd
 
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict, Annotated
@@ -31,6 +33,8 @@ CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
 os.makedirs(CHARTS_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
+
+client = Client()
 
 # setup inmemory sqlite checkpointers
 import sqlite3
@@ -79,24 +83,11 @@ from langchain_openai import ChatOpenAI
 model = ChatOpenAI(model="gpt-4o", temperature=0)
 
 # prompt for llm that is going to write out the plan for the essay
-PLAN_PROMPT = f"""You are an expert research analyst tasked with writing a high level outline of an automotive supply \
-chain report. Write such an outline for the user provided topic using the sections below. Give an \
-outline of the essay along with any relevant notes or instructions for the sections. 
+PLAN_PROMPT = client.pull_prompt("plan_prompt")
 
-    1. Executive Summary
-    2. Introduction
-    3. Overview of the braking system component
-    4. Supply chain structure
-    5. Tariff simulation scenarios
-    6. Risk Assessment
-    7. Conclusion and Recommendations
-    8. References
-    9. Appendices
-
-Here are reasoning examples to guide your thought process:
-{COT_EXAMPLES}
-
-"""
+FORMATTED_PLAN_PROMPT = PLAN_PROMPT.format(
+    COT_EXAMPLES=COT_EXAMPLES
+)
 
 # writing the essay given the information that was researched
 WRITER_PROMPT = f"""You are a research analyst tasked with writing a report of at least 800 words with a maximum of \
@@ -209,7 +200,7 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
 # then create a human message which is what we want system to do
 def plan_node(state: AgentState):
     messages = [
-        SystemMessage(content=PLAN_PROMPT),
+        SystemMessage(content=FORMATTED_PLAN_PROMPT),
         HumanMessage(content=state['task'])
     ]
     # pass these messages to the model
@@ -698,18 +689,49 @@ prompt = auto_supplychain_prompt_template(
 
 def target(inputs: dict) -> dict:
     prompt = auto_supplychain_prompt_template(
-        manufacturer=inputs["manufacturer"],
-        model=inputs["model"],
-        component=inputs["component"],
-        country=inputs["country"],
-        rates=inputs["rates"]
+        manufacturer=inputs["setup"]["manufacturer"],
+        model=inputs["setup"]["model"],
+        component=inputs["setup"]["component"],
+        country=inputs["setup"]["country"],
+        rates=inputs["setup"]["rates"]
     )
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
-    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_order = [
+        "productGroupId",
+        "partDescription",
+        "quantity",
+        "taxable"
+    ]
 
-    final_state = run_agent(prompt, parts_path, articles_path)
+    parts = inputs["parts"]
+    parts_df = pd.DataFrame(parts)
+    parts_df = parts_df[parts_order]
+
+    # Create a temporary CSV file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as parts_tmp_file:
+        parts_df.to_csv(parts_tmp_file.name, index=False)
+        print(f"Temporary CSV file created: {parts_tmp_file.name}")
+
+    articles_order = [
+        "productGroupId",
+        "articleNo",
+        "articleProductName",
+        "price",
+        "countryOfOrigin",
+        "supplierId",
+        "supplierName"
+    ]
+
+    articles = inputs["articles"]
+    articles_df = pd.DataFrame(articles)
+    articles_df = articles_df[articles_order]
+
+    # Create a temporary CSV file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as articles_tmp_file:
+        articles_df.to_csv(articles_tmp_file.name, index=False)
+        print(f"Temporary CSV file created: {articles_tmp_file.name}")
+
+    final_state = run_agent(prompt, parts_tmp_file.name, articles_tmp_file.name)
     draft = final_state.get("generate", {}).get("draft", "")
 
     return {"draft": draft}
@@ -717,35 +739,13 @@ def target(inputs: dict) -> dict:
 
 if __name__ == "__main__":
 
-    client = Client()
+    dataset_name = "Toyota RAV4 Brake System"
 
-    try:
-        dataset = client.read_dataset(dataset_name="Supply Chain Dataset")
-    except:
-        dataset = client.create_dataset(
-            dataset_name="Supply Chain Dataset",
-            description="Evaluation dataset for supply chain report generator"
-        )
-
-    # Add examples
-    examples = [
-        {
-            "inputs": {
-                "manufacturer": "Toyota",
-                "model": "RAV4",
-                "component": "braking system",
-                "country": "Japan",
-                "rates": [20, 50, 80]
-            }
-        }
-    ]
-    client.create_examples(dataset_id=dataset.id, examples=examples)
-
-    # Assuming you already have a dataset created (inputs only)
     results = evaluate(
         target,
-        data="Supply Chain Dataset",  # dataset name or id
-        evaluators=[report_quality_evaluator]
+        data=dataset_name,
+        evaluators=[report_quality_evaluator],
+        experiment_prefix = "Toyota RAV4 Brake System experiment"
     )
 
     print("Done! Check results in LangSmith dashboard.")
