@@ -78,13 +78,13 @@ class AgentState(TypedDict):
     parts_path: str
 
 from langchain_openai import ChatOpenAI
+
 # creating model
-# temperature of 0 will make it very deterministic
+# temperature not supported by o4-mini
 model = ChatOpenAI(model="gpt-4o", temperature=0)
 
-# prompt for llm that is going to write out the plan for the essay
+# prompt for the planning node
 PLAN_PROMPT = client.pull_prompt("plan_prompt")
-
 FORMATTED_PLAN_PROMPT = PLAN_PROMPT.format(
     COT_EXAMPLES=COT_EXAMPLES
 )
@@ -348,21 +348,17 @@ def generate_chart_code_node(state: AgentState):
     chart = chart_plan[chart_index]
     chart_description = chart.get("chart_description", "No description")
 
-    prompt = f"""You are a data visualization expert. 
-Generate a Python script using matplotlib to produce the chart described. 
-Always save with: `plt.savefig(chart_path)` and never assign `chart_path` inside the script.
-Assume it is already defined.
+    tool_data = "\n\n".join(
+        msg.content for msg in state['db_content'] if isinstance(msg, ToolMessage)
+    )
 
-When designing the chart use professional styling ideally using blue.
+    GENERATE_CHART_PROMPT = client.pull_prompt("generate_chart_prompt", include_model=False)
+    FORMATTED_GENERATE_CHART_PROMPT = GENERATE_CHART_PROMPT.format(
+        chart_description=chart_description,
+        tool_data=tool_data
+    )
 
-Data:
-{state['db_content']}
-
-Chart requirement:
-{chart_description}
-"""
-
-    response = model.invoke([SystemMessage(content=prompt)])
+    response = model.invoke([SystemMessage(content=FORMATTED_GENERATE_CHART_PROMPT)])
     match = re.search(r"```(?:python)?\n(.*?)```", response.content, re.DOTALL)
     chart_code = match.group(1).strip() if match else response.content.strip()
 
@@ -739,13 +735,20 @@ def target(inputs: dict) -> dict:
 
 if __name__ == "__main__":
 
-    dataset_name = "Toyota RAV4 Brake System"
+    # dataset_name = "Toyota RAV4 Brake System"
+    #
+    # results = evaluate(
+    #     target,
+    #     data=dataset_name,
+    #     evaluators=[report_quality_evaluator],
+    #     experiment_prefix = "Toyota RAV4 Brake System experiment"
+    # )
 
-    results = evaluate(
-        target,
-        data=dataset_name,
-        evaluators=[report_quality_evaluator],
-        experiment_prefix = "Toyota RAV4 Brake System experiment"
-    )
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+
+    print(prompt)
+    run_agent(prompt, parts_path, articles_path)
 
     print("Done! Check results in LangSmith dashboard.")
