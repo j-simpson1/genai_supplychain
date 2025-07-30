@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
-_ = load_dotenv()
+load_dotenv()
+
 import os
 import json
 import uuid
@@ -13,8 +14,6 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, An
 from langgraph.graph.message import add_messages
 
 from tavily import TavilyClient
-from phoenix.otel import register
-from opentelemetry.trace import StatusCode
 
 from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.word_creator import save_to_word
@@ -30,17 +29,6 @@ CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
 os.makedirs(CHARTS_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
-
-load_dotenv()
-pheonix_key = os.getenv("PHOENIX_API_KEY")
-pheonix_collector_endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")
-
-# configure the Phoenix tracer
-tracer_provider = register(
-  project_name="my-llm-app", # Default is 'default'
-  auto_instrument=True, # See 'Trace all calls made to a library' below
-)
-tracer = tracer_provider.get_tracer(__name__)
 
 # setup inmemory sqlite checkpointers
 import sqlite3
@@ -217,7 +205,6 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
-@tracer.chain
 def plan_node(state: AgentState):
     messages = [
         SystemMessage(content=PLAN_PROMPT),
@@ -245,7 +232,6 @@ db_model = ChatOpenAI(
 tools_by_name = {tool.name: tool for tool in tools}
 
 # --- Tool Node ---
-@tracer.chain
 def tool_node(state: AgentState):
     outputs = []
     last_message = state["db_content"][-1]
@@ -269,7 +255,6 @@ def tool_node(state: AgentState):
     return {"db_content": state["db_content"] + outputs}
 
 # --- Model Node ---
-@tracer.chain
 def call_model(state: AgentState, config=None):
     system_prompt = SystemMessage(content=f"""
 You are a database assistant helping with the drafting of an automotive supply chain report. Use the available tools 
@@ -286,7 +271,6 @@ See the following report plan to guide you what data to extract:
     response = db_model.invoke([system_prompt] + state["db_content"], config)
     return {"db_content": state["db_content"] + [response]}
 
-@tracer.chain
 def summarize_db_node(state: AgentState):
     db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     response = model.invoke([
@@ -301,7 +285,6 @@ def summarize_db_node(state: AgentState):
     }
 
 # takes in the plan and does some research
-@tracer.chain
 def research_plan_node(state: AgentState):
     # response with what we will invoke this with is the
     # response will be pydantic model which has the list of queries
@@ -314,23 +297,15 @@ def research_plan_node(state: AgentState):
     content = state['web_content'] or []
     # loop over the queries and search for them in Tavily
     for q in queries.queries:
-        with tracer.start_as_current_span(
-                "TavilySearch",
-                openinference_span_kind="tool",
-                attributes={"query": q}
-        ) as span:
-            span.set_input(value=q)
-            response = tavily.search(query=q, max_results=2)
-            span.set_output(value=response)
-            for r in response['results']:
-                # get the list of results and append them to the content
-                content.append(f"Source: {r['url']}\n{r['content']}")
+        response = tavily.search(query=q, max_results=2)
+        for r in response['results']:
+            # get the list of results and append them to the content
+            content.append(f"Source: {r['url']}\n{r['content']}")
     # return the content key which is equal to the original content plus the accumulated content
     return {"web_content": content}
 
 model_with_tools = model.bind_tools([automotive_tariff_simulation])
 
-@tracer.chain
 def chart_planning_node(state: AgentState):
     """
     Decides what charts to generate based on DB summary & content.
@@ -367,7 +342,6 @@ Return JSON list like:
 
     return {"chart_plan": chart_plan}
 
-@tracer.chain
 def generate_chart_code_node(state: AgentState):
 
     # Determine which chart we are working on
@@ -401,7 +375,6 @@ Chart requirement:
 
     return {"chart_code": chart_code}
 
-@tracer.chain
 def execute_chart_code_node(state: AgentState):
     try:
         code = state["chart_code"]
@@ -433,7 +406,6 @@ def execute_chart_code_node(state: AgentState):
         }
 
 
-@tracer.chain
 def reflect_chart_node(state: AgentState):
     # If previous execution failed → fix code
     if not state.get("chart_generation_success", False):
@@ -459,7 +431,6 @@ Please revise the code so it avoids the error and still meets the requirements.
     # If successful (but still more charts), just continue
     return {}
 
-@tracer.chain
 def generation_node(state: AgentState):
     db = state.get("db_summary", "")
     web = "\n\n".join(state.get("web_content", []))
@@ -554,7 +525,6 @@ def generation_node(state: AgentState):
         "revision_number": state.get("revision_number", 1) + 1
     }
 
-@tracer.chain
 def reflection_node(state: AgentState):
     messages = [
         # take the reflection node and the draft
@@ -565,7 +535,6 @@ def reflection_node(state: AgentState):
     # going to generate the critique
     return {"critique": response.content}
 
-@tracer.chain
 def research_critique_node(state: AgentState):
     queries = model.with_structured_output(ResearchQueries).invoke([
         SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
@@ -574,33 +543,20 @@ def research_critique_node(state: AgentState):
     # get the original content and append with new queries
     content = state['web_content'] or []
     for q in queries.queries:
-        with tracer.start_as_current_span(
-                "TavilySearch",
-                openinference_span_kind="tool",
-                attributes={"query": q}
-        ) as span:
-            span.set_input(value=q)
-            response = tavily.search(query=q, max_results=2)
-            span.set_output(value=response)
-            for r in response['results']:
-                content.append(r['content'])
+        response = tavily.search(query=q, max_results=2)
+        for r in response['results']:
+            content.append(r['content'])
     return {"web_content": content}
 
 # look at the revision number - if greater than the max revisions will then end.
 def should_continue(state):
-    with tracer.start_as_current_span(
-            "ShouldContinueCheck",
-            openinference_span_kind="chain"
-    ) as span:
-        span.set_input(value=state)
-        if state["revision_number"] > state["max_revisions"]:
-            print(save_to_pdf(content=state["draft"], filename="report.pdf", chart_metadata=state.get("chart_metadata", [])))
-            print(save_to_word(content=state["draft"], filename="report.docx", chart_metadata=state.get("chart_metadata", [])))
-            result = END
-        else:
-            result = "reflect"
-        span.set_output(value=result)
-        return result
+    if state["revision_number"] > state["max_revisions"]:
+        print(save_to_pdf(content=state["draft"], filename="report.pdf", chart_metadata=state.get("chart_metadata", [])))
+        print(save_to_word(content=state["draft"], filename="report.docx", chart_metadata=state.get("chart_metadata", [])))
+        result = END
+    else:
+        result = "reflect"
+    return result
 
 def execute_chart_next_node(state: AgentState) -> str:
     if state.get("chart_generation_success", False):
@@ -681,69 +637,42 @@ with open(output_graph_path, "wb") as f:
 
 
 def run_agent(messages, parts_path, articles_path):
-    with (tracer.start_as_current_span(
-            "LangGraphExecution",
-            openinference_span_kind="chain")
-    as span):
-        span.set_input(value=messages)
 
-        final_state = {}
+    final_state = {}
 
-        # adding in graph.stream so can see all the steps
-        thread = {"configurable": {"thread_id": "1"}}
-        for s in graph.stream({
-            'task': messages,
-            'max_revisions': 2,
-            'revision_number': 1,
-            'db_content': [],
-            'web_content': [],
-            'simulation_content': {},
-            'chart_metadata': [],
-            'plan': '',
-            'draft': '',
-            'critique': '',
-            'chart_code': '',
-            'chart_generation_success': False,
-            'chart_generation_error': '',
-            'chart_retry_count': 0,
-            'max_chart_retries': 2,
-            'chart_plan': [],
-            'current_chart_index': 0,
-            'articles_path': articles_path,
-            'parts_path': parts_path
-        }, thread):
-            print(s)
+    # adding in graph.stream so can see all the steps
+    thread = {"configurable": {"thread_id": "1"}}
+    for s in graph.stream({
+        'task': messages,
+        'max_revisions': 2,
+        'revision_number': 1,
+        'db_content': [],
+        'web_content': [],
+        'simulation_content': {},
+        'chart_metadata': [],
+        'plan': '',
+        'draft': '',
+        'critique': '',
+        'chart_code': '',
+        'chart_generation_success': False,
+        'chart_generation_error': '',
+        'chart_retry_count': 0,
+        'max_chart_retries': 2,
+        'chart_plan': [],
+        'current_chart_index': 0,
+        'articles_path': articles_path,
+        'parts_path': parts_path
+    }, thread):
+        print(s)
 
-            final_state = s
+        final_state = s
 
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
 
-        with open(SAVE_PATH, "w") as f:
-            json.dump(serialize_state(final_state), f, indent=2)
+    with open(SAVE_PATH, "w") as f:
+        json.dump(serialize_state(final_state), f, indent=2)
 
-        span.set_status(StatusCode.OK)
-
-
-# start from the outermost layer and work your way down so you capture the right info
-# only just calling this run_agent span and calls to add tracing
-def start_main_span(messages, parts_path, articles_path):
-    print("Starting main span with messages:", messages)
-
-    # span_kind maps to colors etc...
-    # anything in the with cause block will be treated as part of that span
-    with tracer.start_as_current_span(
-            "AgentRun", openinference_span_kind="agent"
-    ) as span:
-        # setting the input
-        span.set_input(value=messages)
-        ret = run_agent(messages, parts_path, articles_path)
-        print("Main span completed with return value:", ret)
-        # setting the output
-        span.set_output(value=ret)
-        # set status call - called correctly
-        span.set_status(StatusCode.OK)
-        return ret
 
 def auto_supplychain_prompt_template(manufacturer, model, component, country, rates):
     rates_str = ", ".join(f"{r}%" for r in rates)
@@ -766,4 +695,4 @@ if __name__ == "__main__":
     articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
     print(prompt)
-    start_main_span(prompt, parts_path, articles_path)
+    run_agent(prompt, parts_path, articles_path)
