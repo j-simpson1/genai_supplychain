@@ -27,6 +27,7 @@ from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.word_creator import save_to_word
 from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price, total_component_price
 from FastAPI.core.evals import report_quality_evaluator
+from FastAPI.core.utils import get_last_tool_result
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import summarize_simulation_content, convert_numpy, serialize_state
@@ -214,6 +215,24 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
 
     response = analyze_tariff_impact(target_country, normalized_rates)
     return convert_numpy(response)
+
+simulation_analysis_model = ChatOpenAI(model="gpt-4o")
+
+class SimulationResultsInput(BaseModel):
+    simulation_result: dict
+
+@tool(args_schema=SimulationResultsInput)
+def simulation_results_analyst(simulation_result: dict):
+    """
+    Perform analysis on the results from the simulation (e.g. assessing the impact on the component and picking out
+    key details.
+    """
+    analysis_response = simulation_analysis_model.invoke([
+        SystemMessage(content="Summarize the following simulation results for a supply chain manager."),
+        HumanMessage(content=json.dumps(simulation_result))
+    ])
+
+    return {"simulation": analysis_response}
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
@@ -436,11 +455,12 @@ Please revise the code so it avoids the error and still meets the requirements.
     # If successful (but still more charts), just continue
     return {}
 
-simulation_tools = [automotive_tariff_simulation]
+simulation_tools = [automotive_tariff_simulation, simulation_results_analyst]
+
 
 def simulation_tool_node(state: AgentState):
     """
-    Enhanced tool node that creates both full simulation data and summary
+    Enhanced tool node that handles both automotive_tariff_simulation and simulation_results_analyst
     """
     outputs = []
     messages = state.get("simulation", [])
@@ -457,10 +477,10 @@ def simulation_tool_node(state: AgentState):
             tool_call_id = tool_call["id"]
 
             if tool_name == "automotive_tariff_simulation":
-                # Execute the tool
+                # Execute the tariff simulation tool
                 result = automotive_tariff_simulation.invoke(args)
 
-                # Extract chart metadata
+                # Extract chart metadata from simulation results
                 if "output_files" in result and result["output_files"].get("charts_saved"):
                     chart_paths = result["output_files"].get("chart_paths", {})
                     for chart_id, chart_path in chart_paths.items():
@@ -478,7 +498,34 @@ def simulation_tool_node(state: AgentState):
                     name=tool_name,
                     tool_call_id=tool_call_id
                 ))
+
+            elif tool_name == "simulation_results_analyst":
+                # Execute the simulation results analyst tool
+                try:
+
+                    simulation_data = get_last_tool_result(state["simulation"], "automotive_tariff_simulation")
+                    if simulation_data is None:
+                        raise ValueError("No previous automotive_tariff_simulation ToolMessage found")
+
+                    result = simulation_results_analyst.invoke({"simulation_result": simulation_data})
+                    outputs.append(ToolMessage(
+                        content=json.dumps(result) if isinstance(result, dict) else str(result),
+                        name=tool_name,
+                        tool_call_id=tool_call_id
+                    ))
+                except Exception as e:
+                    # Handle any errors in the analyst tool
+                    error_result = {
+                        "error": str(e),
+                        "message": "Failed to analyze simulation results"
+                    }
+                    outputs.append(ToolMessage(
+                        content=json.dumps(error_result),
+                        name=tool_name,
+                        tool_call_id=tool_call_id
+                    ))
             else:
+                # Handle unknown tools
                 outputs.append(ToolMessage(
                     content="Unknown tool",
                     name=tool_name,
@@ -497,7 +544,8 @@ def simulation_model_call(state: AgentState):
     system_prompt = SystemMessage(content=(
         "You are a professional supply chain analyst. "
         "When asked for a tariff shock simulation, you must call the automotive_tariff_simulation tool "
-        "with the appropriate parameters before answering."
+        "with the appropriate parameters before answering. Make sure to call automotive_tariff_simulation before the "
+        "simulation_results_analyst tool."
     ))
     task_message = HumanMessage(content=state['task'])
 

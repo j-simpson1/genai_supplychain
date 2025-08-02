@@ -1,4 +1,6 @@
 import numpy as np
+import json
+from langchain_core.messages import ToolMessage
 
 def summarize_simulation_content(sim: dict) -> dict:
     summary = sim.get("summary", {})
@@ -64,3 +66,18 @@ def serialize_state(state):
         else:
             return obj
     return serialize(state)
+
+
+def get_last_tool_result(messages, tool_name: str) -> dict | None:
+    """
+    Find the last ToolMessage for the given tool_name in a list of messages.
+    Returns the parsed dict content if JSON, or raw string if not JSON.
+    """
+    for msg in reversed(messages):
+        # Only check ToolMessages
+        if isinstance(msg, ToolMessage) and msg.name == tool_name:
+            try:
+                return json.loads(msg.content)
+            except json.JSONDecodeError:
+                return {"raw_content": msg.content}
+    return None
