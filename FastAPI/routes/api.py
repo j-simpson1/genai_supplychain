@@ -6,7 +6,7 @@ from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
 from FastAPI.actions.handle_action import handle_actions
 from FastAPI.utils.data_validation import validate_uploaded_csvs
 
-from FastAPI.core.document_generator import start_main_span, auto_supplychain_prompt_template
+from FastAPI.core.document_generator import auto_supplychain_prompt_template, run_agent
 
 from fastapi import UploadFile, File, Form
 from io import StringIO
@@ -334,7 +334,7 @@ async def run_simulation(
         articles_df.to_csv(articles_path, index=False)
 
         # Call agent using file paths
-        result = start_main_span(prompt, parts_path, articles_path)
+        result = run_agent(prompt, parts_path, articles_path)
 
         # Clean up temporary files
         try:

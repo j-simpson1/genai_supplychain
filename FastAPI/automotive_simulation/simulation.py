@@ -693,14 +693,14 @@ def analyze_tariff_impact(
         'methodology': 'bottom_quartile_selection_with_vat_calculation',
         'target_country': target_country,
         'vat_rate': vat_rate,
-        'timestamp': datetime.now().isoformat(),
-        'current_tariff_rates': current_tariffs,
+        # 'timestamp': datetime.now().isoformat(),
+        # 'current_tariff_rates': current_tariffs,
         'vat_summary': vat_summary,
         'current_cost_analysis': {
             'total_cost': current_total_cost,
             'cost_breakdown': current_cost_breakdown
         },
-        'quartile_analysis': quartile_analysis,
+        # 'quartile_analysis': quartile_analysis,
         'summary': {
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
@@ -716,7 +716,7 @@ def analyze_tariff_impact(
                 'avg_savings_vs_market': np.mean([q['savings_vs_average'] for q in quartile_analysis.values()])
             }
         },
-        'scenarios': results,
+        # 'scenarios': results,
         'recommendations': recommendations,
         'output_files': {
             'charts_saved': bool(chart_paths),
