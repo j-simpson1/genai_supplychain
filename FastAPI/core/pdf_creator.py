@@ -10,7 +10,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import LETTER
 from reportlab.platypus.frames import Frame
 from reportlab.platypus.doctemplate import PageTemplate
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, ListFlowable, ListItem
 
 
 def save_to_pdf(content: str, filename: str = "report.pdf", chart_metadata: List[Dict[str, str]] = []) -> str:
@@ -41,6 +41,9 @@ def save_to_pdf(content: str, filename: str = "report.pdf", chart_metadata: List
         styles["Heading1"].fontSize = 16
         styles["Heading2"].fontSize = 14
         styles["Heading3"].fontSize = 12
+        styles["Heading1"].spaceBefore = 9
+        styles["Heading2"].spaceBefore = 7
+        styles["Heading3"].spaceBefore = 5
         navy_blue = Color(19 / 255, 52 / 255, 92 / 255)  # Convert RGB to 0-1 scale
         styles["Title"].textColor = navy_blue
         styles["Heading1"].textColor = navy_blue
@@ -145,12 +148,28 @@ def save_to_pdf(content: str, filename: str = "report.pdf", chart_metadata: List
 
                 # Heading
                 story.append(Paragraph(section["heading"], heading_style))
-                story.append(Spacer(1, 6))
 
                 # Process content with image handling
                 content_text = section.get("content", "")
                 content_elements = process_content(content_text, chart_metadata)
                 story.extend(content_elements)
+
+                # Handle bullet points
+                bullets = section.get("bullet_points", [])
+                if bullets:
+                    bullet_items = [
+                        ListItem(Paragraph(b, styles["BodyText"]), leftIndent=20)
+                        for b in bullets
+                    ]
+                    story.append(
+                        ListFlowable(
+                            bullet_items,
+                            bulletType='bullet',
+                            leftIndent=10,
+                            bulletIndent=5
+                        )
+                    )
+                    story.append(Spacer(1, 6))
 
                 # Subsections
                 for sub in section.get("subsections", []):

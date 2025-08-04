@@ -95,19 +95,27 @@ def parts_average_price(articles_path: str) -> list:
 
 
 @tool
-def total_component_price(articles_path: str, parts_path: str) -> float:
-    """Calculates the total price of the component using average price * quantity for each part."""
+def total_component_price(articles_path: str, parts_path: str) -> dict:
+    """Calculates and returns only the total component cost (Excluding VAT) as a dictionary."""
     try:
         articles_df = pd.read_csv(articles_path)
         parts_df = pd.read_csv(parts_path)
+
+        # Calculate average price per product group
         avg_prices = articles_df.groupby('productGroupId')['price'].mean().reset_index()
         avg_prices.columns = ['productGroupId', 'avg_price']
+
+        # Merge with quantity
         merged = avg_prices.merge(parts_df, on='productGroupId', how='left')
         merged['quantity'] = merged['quantity'].fillna(0).astype(int)
-        return round((merged['avg_price'] * merged['quantity']).sum(), 2)
+
+        # Compute total cost excl. VAT
+        total_cost = round((merged['avg_price'] * merged['quantity']).sum(), 2)
+
+        return {"totalComponentCostExclVAT": total_cost}
     except Exception as e:
         print(e)
-        return 0.0
+        return {"totalComponentCostExclVAT": 0.0}
 
 
 if __name__ == "__main__":

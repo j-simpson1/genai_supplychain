@@ -41,9 +41,15 @@ def save_to_word(content, filename, chart_metadata=None):
             elif part.strip():
                 doc.add_paragraph(part)
 
+    def insert_bullets(doc, bullets):
+        for b in bullets:
+            para = doc.add_paragraph(b)
+            para.style = 'ListBullet'
+
     for section in content.get("sections", []):
         doc.add_heading(section.get("heading", "No Heading"), level=1)
         insert_text_with_figures(section.get("content", ""))
+        insert_bullets(doc, section.get("bullet_points", []))
         for subsection in section.get("subsections", []):
             doc.add_heading(subsection.get("heading", "No Subheading"), level=2)
             insert_text_with_figures(subsection.get("content", ""))

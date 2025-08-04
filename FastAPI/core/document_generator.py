@@ -11,6 +11,7 @@ import traceback
 import tempfile
 import pandas as pd
 import re
+import asyncio
 
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Dict, Annotated, Sequence, Optional
@@ -28,6 +29,9 @@ from FastAPI.core.word_creator import save_to_word
 from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price, total_component_price
 from FastAPI.core.evals import report_quality_evaluator
 from FastAPI.core.utils import get_last_tool_result
+from FastAPI.open_deep_research.deep_researcher import deep_researcher
+from FastAPI.core.CoT_prompting import chain_of_thought_examples
+from FastAPI.core.prompts import PLAN_PROMPT
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import summarize_simulation_content, convert_numpy, serialize_state
@@ -42,11 +46,13 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 client = Client()
 
 # setup inmemory sqlite checkpointers
-import sqlite3
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-conn = sqlite3.connect(":memory:", check_same_thread=False)
-memory = SqliteSaver(conn)
+async def get_checkpointer():
+    return AsyncSqliteSaver.from_conn_string(":memory:")
+
+# We'll initialize this in the run_agent function
+memory = None
 
 # keeping
 class AgentState(TypedDict):
@@ -86,81 +92,7 @@ from langchain_openai import ChatOpenAI
 
 # creating model
 # temperature not supported by o4-mini
-model = ChatOpenAI(model="gpt-4o", temperature=0)
-
-chain_of_thought_examples = """
-Q: What is the supply chain structure for the powertrain system of the Honda CR-V?
-A: The powertrain includes the engine block, transmission, control units, and exhaust system.
-Key suppliers: Japan is the leading supplier of engine block, South Korea supplies transmission components, and the 
-United States supplies control modules. Honda follows a Just-In-Time (JIT) approach, meaning suppliers deliver 
-components directly to assembly plants with minimal warehousing. 
-The answer is: a multi-tiered supply chain with critical suppliers in Japan, South Korea, and the United States, all 
-integrated within Honda’s JIT production model.
-
-Q: Which component represents the highest value share in the powertrain system? 
-A: The total cost of the powertrain system is £1,245.60, and the transmission assembly is the most expensive part, 
-costing £310.50 each, with two units required per vehicle. Proportion of total cost = (part cost × quantity) / total 
-cost = (£310.50 × 2) / £1,245.60 = 49.8%. 
-The answer is: Transmission assemblies account for 49.8% of the total system cost, at £310.50 per unit.
-
-Q: What risks does Honda face in its powertrain supply chain, and how can these risks be mitigated?
-A: Automotive supply chains are exposed to risks such as dependency on single suppliers, fluctuating raw material 
-prices (e.g., steel, rare earths), and geopolitical or tariff disruptions affecting cross-border shipping. 
-The answer is: mitigating these risks by diversifying supplier networks, securing backup logistics routes, maintaining 
-strategic inventory reserves, and utilising digital supply chain monitoring to enhance resilience.
-"""
-
-# prompt for the planning node
-PLAN_PROMPT = client.pull_prompt("plan_prompt")
-FORMATTED_PLAN_PROMPT = PLAN_PROMPT.format(
-    COT_EXAMPLES=chain_of_thought_examples
-)
-
-# writing the essay given the information that was researched
-WRITER_PROMPT = f"""You are a research analyst working in the automotive supply chain sector tasked with writing a professional-level report of at least 800 words (maximum of 1000 words). Generate the best report possible for the user's request and the initial plan. Make sure to include any charts that are available in the body of the report in their relevant sections and not in the appendix. 
-
-Here are reasoning examples you should follow:
-{chain_of_thought_examples}
-
-Before writing, think step-by-step:
-1. Summarise insights from each source (database, web, simulation).
-2. Plan the structure and flow of arguments.
-3. Write the full report based on your reasoning.
-
-Provide the output in a JSON format using the structure below.
-
-{{
-      "title": "<Report Title>",
-      "sections": [
-        {{
-          "heading": "<Section Heading>",
-          "content": "<Plain text or markdown content>",
-          "subsections": [
-            {{
-              "heading": "<Subsection Heading>",
-              "content": "<Plain text or markdown content>"
-            }}
-          ]
-        }}
-      ]
-    }}
-    
-The charts should be included using placeholders like [[FIGURE:<chart_id>]] in part of the report where the chart should appear. These placeholders will be replaced with the actual figures in the final report. On revision, don't remove any graphs.
-
-Only include sections and subsections in the report. Do not include any subsubsections or any headings nested deeper than two levels.
-
-Reference all external sources. 
-
-If the task requires information on tariff impacts, ensure you call the automotive_tariff_simulation tool. Please include all charts generated from the tool call in the report in the tariff simulation section, without splitting them into sub-sections. Mention the tariff simulation is based on the average price of the lowest-priced quartile of products.
-
-Include quantitative analysis where possible. 
-
-Utilise all the information below as needed: 
-
-
-------
-
-"""
+model = ChatOpenAI(model="gpt-4o", temperature=0.3)
 
 # control how we are critiqing the draft of the essay
 REFLECTION_PROMPT = """You are a manager reviewing the analysts report. \
@@ -177,11 +109,21 @@ picking the most appropriate tool.
 RESEARCH_PLAN_PROMPT = """You are a researcher charged with providing information that can \
 be used when writing the following essay. Generate a list of search queries that will gather \
 any relevant information. Only generate 4 queries max."""
+# RESEARCH_PLAN_PROMPT = """You are a research analyst charged with providing information that can \
+# be used when writing the following supply chain report. Generate a detailed deep search query (50 words max) which \
+# can be used as input into a deep search agent. Your query can contain multiple areas of research and the deep search \
+# agent will be able to break these areas down and handle them individually. Can your ask for the response to be a \
+# maximum of 800 words."""
 
 # after we've made the critique will pass the list of queries to pass to tavily
 RESEARCH_CRITIQUE_PROMPT = """You are a researcher charged with providing information that can \
 be used when making any requested revisions (as outlined below). \
 Generate a list of search queries that will gather any relevant information. Only generate 4 queries max."""
+# RESEARCH_CRITIQUE_PROMPT = """You are a research analyst charged with providing information that can \
+# be used when making any requested revisions (as outlined below). Generate a detailed deep search query \
+# (50 words max) which can be used as input into a deep search agent. Your query can contain multiple areas of \
+# research and the deep search agent will be able to break these areas down and handle them individually. Can your ask \
+# for the response to be a maximum of 800 words."""
 
 # for generating a list of queries to pass to tavily will use function calling so we get a list of strings
 # from tavily
@@ -192,12 +134,15 @@ class ResearchQueries(BaseModel):
 class DBQueries(BaseModel):
     queries: List[str]
 
-# importing taviliy as using it in a slightly unconventional way
-tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
+class SimulationResultsInput(BaseModel):
+    simulation_result: dict
 
 class simulation_inputs(BaseModel):
     target_country: str = Field(..., description="Country to simulate tariff shock for")
     tariff_rates: List[int] = Field(description="tariff rates to use in the tariff shock simulation.")
+
+# importing taviliy as using it in a slightly unconventional way
+tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
 @tool(args_schema=simulation_inputs)
 def automotive_tariff_simulation(target_country: str, tariff_rates: List[float]) -> dict:
@@ -218,9 +163,6 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
 
 simulation_analysis_model = ChatOpenAI(model="gpt-4o")
 
-class SimulationResultsInput(BaseModel):
-    simulation_result: dict
-
 @tool(args_schema=SimulationResultsInput)
 def simulation_results_analyst(simulation_result: dict):
     """
@@ -238,7 +180,7 @@ def simulation_results_analyst(simulation_result: dict):
 # then create a human message which is what we want system to do
 def plan_node(state: AgentState):
     messages = [
-        SystemMessage(content=FORMATTED_PLAN_PROMPT),
+        SystemMessage(content=PLAN_PROMPT),
         HumanMessage(content=state['task'])
     ]
     # pass these messages to the model
@@ -288,17 +230,17 @@ def tool_node(state: AgentState):
 # --- Model Node ---
 def call_model(state: AgentState, config=None):
     system_prompt = SystemMessage(content=f"""
-You are a database assistant helping with the drafting of an automotive supply chain report. Use the available tools 
-to retrieve the relevant data for the report.
-The file paths required by the tools are available from state:
-- articles_path - path to the articles CSV file
-- parts_path - path to the parts CSV file
-
-Just return a summary of the raw data from the tools.
-
-See the following report plan to guide you what data to extract:
-{state.get('plan', 'No plan provided')}
-""")
+    You are a database assistant helping with the drafting of an automotive supply chain report. Use the available tools 
+    to retrieve the relevant data for the report.
+    The file paths required by the tools are available from state:
+    - articles_path - path to the articles CSV file
+    - parts_path - path to the parts CSV file
+    
+    Just return a summary of the raw data from the tools.
+    
+    See the following report plan to guide you what data to extract:
+    {state.get('plan', 'No plan provided')}
+    """)
     response = db_model.invoke([system_prompt] + state["db_content"], config)
     return {"db_content": state["db_content"] + [response]}
 
@@ -316,7 +258,9 @@ def summarize_db_node(state: AgentState):
     }
 
 # takes in the plan and does some research
-def research_plan_node(state: AgentState):
+async def research_plan_node(state: AgentState):
+
+    # using Tavily by creating a finite list of queries
     # response with what we will invoke this with is the
     # response will be pydantic model which has the list of queries
     queries = model.with_structured_output(ResearchQueries).invoke([
@@ -333,6 +277,25 @@ def research_plan_node(state: AgentState):
             # get the list of results and append them to the content
             content.append(f"Source: {r['url']}\n{r['content']}")
     # return the content key which is equal to the original content plus the accumulated content
+
+
+    # # using open-deep-research
+    # query = await model.ainvoke([
+    #     SystemMessage(content=RESEARCH_PLAN_PROMPT),
+    #     HumanMessage(content=state['task'])
+    # ])
+    # # original content
+    # content = state['web_content'] or []
+    #
+    # response = await deep_researcher.ainvoke({
+    #     "messages": [HumanMessage(content=query.content)],
+    # })
+    #
+    # output = response['messages'][-1].content
+    # print(output)
+    #
+    # content.append(output)
+
     return {"web_content": content}
 
 model_with_tools = model.bind_tools([automotive_tariff_simulation])
@@ -590,7 +553,9 @@ def reflection_node(state: AgentState):
     # going to generate the critique
     return {"critique": response.content}
 
-def research_critique_node(state: AgentState):
+async def research_critique_node(state: AgentState):
+
+    # creating a list of tavily queries
     queries = model.with_structured_output(ResearchQueries).invoke([
         SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
         HumanMessage(content=state['critique'])
@@ -601,6 +566,22 @@ def research_critique_node(state: AgentState):
         response = tavily.search(query=q, max_results=2)
         for r in response['results']:
             content.append(r['content'])
+
+    # # using open-deep-research
+    # query = await model.ainvoke([
+    #     SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
+    #     HumanMessage(content=state['critique'])
+    # ])
+    # # get the original content and append with new queries
+    # content = state['web_content'] or []
+    #
+    # response = await deep_researcher.ainvoke({
+    #     "messages": [HumanMessage(content=query.content)],
+    # })
+    #
+    # output = response['messages'][-1].content
+    # content.append(output)
+
     return {"web_content": content}
 
 # look at the revision number - if greater than the max revisions will then end.
@@ -705,53 +686,53 @@ builder.add_conditional_edges(
     },
 )
 
-# compile graph and add in checkpointer
-graph = builder.compile(checkpointer=memory)
+async def run_agent(messages, parts_path, articles_path):
+    # Initialize the async checkpointer
+    async with AsyncSqliteSaver.from_conn_string(":memory:") as checkpointer:
+        # compile graph and add in checkpointer
+        graph = builder.compile(checkpointer=checkpointer)
 
-# save the graph
-output_graph_path = "langgraph.png"
-with open(output_graph_path, "wb") as f:
-    f.write(graph.get_graph().draw_mermaid_png())
+        # save the graph
+        output_graph_path = "langgraph.png"
+        with open(output_graph_path, "wb") as f:
+            f.write(graph.get_graph().draw_mermaid_png())
 
+        final_state = {}
 
-def run_agent(messages, parts_path, articles_path):
+        # adding in graph.astream so can see all the steps
+        thread = {"configurable": {"thread_id": "1"}}
+        async for s in graph.astream({
+            'task': messages,
+            'max_revisions': 2,
+            'revision_number': 1,
+            'db_content': [],
+            'web_content': [],
+            'simulation': [],
+            'chart_metadata': [],
+            'plan': '',
+            'draft': '',
+            'critique': '',
+            'chart_code': '',
+            'chart_generation_success': False,
+            'chart_generation_error': '',
+            'chart_retry_count': 0,
+            'max_chart_retries': 2,
+            'chart_plan': [],
+            'current_chart_index': 0,
+            'articles_path': articles_path,
+            'parts_path': parts_path
+        }, thread):
+            print(s)
 
-    final_state = {}
+            final_state = s
 
-    # adding in graph.stream so can see all the steps
-    thread = {"configurable": {"thread_id": "1"}}
-    for s in graph.stream({
-        'task': messages,
-        'max_revisions': 2,
-        'revision_number': 1,
-        'db_content': [],
-        'web_content': [],
-        'simulation': [],
-        'chart_metadata': [],
-        'plan': '',
-        'draft': '',
-        'critique': '',
-        'chart_code': '',
-        'chart_generation_success': False,
-        'chart_generation_error': '',
-        'chart_retry_count': 0,
-        'max_chart_retries': 2,
-        'chart_plan': [],
-        'current_chart_index': 0,
-        'articles_path': articles_path,
-        'parts_path': parts_path
-    }, thread):
-        print(s)
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
 
-        final_state = s
+        with open(SAVE_PATH, "w") as f:
+            json.dump(serialize_state(final_state), f, indent=2)
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
-
-    with open(SAVE_PATH, "w") as f:
-        json.dump(serialize_state(final_state), f, indent=2)
-
-    return serialize_state(final_state)
+        return serialize_state(final_state)
 
 
 def auto_supplychain_prompt_template(manufacturer, model, component, country, rates):
@@ -769,7 +750,7 @@ prompt = auto_supplychain_prompt_template(
     rates=[20, 50, 80]
 )
 
-def target(inputs: dict) -> dict:
+async def target(inputs: dict) -> dict:
     prompt = auto_supplychain_prompt_template(
         manufacturer=inputs["setup"]["manufacturer"],
         model=inputs["setup"]["model"],
@@ -813,7 +794,7 @@ def target(inputs: dict) -> dict:
         articles_df.to_csv(articles_tmp_file.name, index=False)
         print(f"Temporary CSV file created: {articles_tmp_file.name}")
 
-    final_state = run_agent(prompt, parts_tmp_file.name, articles_tmp_file.name)
+    final_state = await run_agent(prompt, parts_tmp_file.name, articles_tmp_file.name)
     draft = final_state.get("generate", {}).get("draft", "")
 
     return {"draft": draft}
@@ -835,6 +816,6 @@ if __name__ == "__main__":
     articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
     print(prompt)
-    run_agent(prompt, parts_path, articles_path)
+    asyncio.run(run_agent(prompt, parts_path, articles_path))
 
     print("Done! Check results in LangSmith dashboard.")

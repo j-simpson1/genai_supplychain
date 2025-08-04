@@ -1,4 +1,4 @@
-COT_EXAMPLES = """
+chain_of_thought_examples = """
 Q: What is the supply chain structure for the powertrain system of the Honda CR-V?
 A: The powertrain includes the engine block, transmission, control units, and exhaust system.
 Key suppliers: Japan is the leading supplier of engine block, South Korea supplies transmission components, and the 
