@@ -735,19 +735,24 @@ async def run_agent(messages, parts_path, articles_path):
         return serialize_state(final_state)
 
 
-def auto_supplychain_prompt_template(manufacturer, model, component, country, rates):
+def auto_supplychain_prompt_template(manufacturer, model, component, tariff_shock_country, rates, vat_rate, manufacturing_country):
     rates_str = ", ".join(f"{r}%" for r in rates)
     return (
-        f"Write me a report on the supply chain of the {manufacturer} {model} {component}. Including a "
-        f"tariff shock simulation for {country} with rates of {rates_str}."
+        f"Write me a report on the supply chain of the {manufacturer} {model} {component}. "
+        f"Include a tariff shock simulation for {tariff_shock_country} with rates of {rates_str}.\n"
+        f"Assume the following:\n"
+        f" - VAT Rate: {vat_rate}%\n"
+        f" - Manufacturing country: {manufacturing_country}"
     )
 
 prompt = auto_supplychain_prompt_template(
     manufacturer="Toyota",
     model="RAV4",
     component="braking system",
-    country="Japan",
-    rates=[20, 50, 80]
+    tariff_shock_country="Japan",
+    rates=[20, 50, 80],
+    vat_rate=20,
+    manufacturing_country="United Kingdom"
 )
 
 async def target(inputs: dict) -> dict:
@@ -755,7 +760,7 @@ async def target(inputs: dict) -> dict:
         manufacturer=inputs["setup"]["manufacturer"],
         model=inputs["setup"]["model"],
         component=inputs["setup"]["component"],
-        country=inputs["setup"]["country"],
+        tariff_shock_country=inputs["setup"]["country"],
         rates=inputs["setup"]["rates"]
     )
 

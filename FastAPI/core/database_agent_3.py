@@ -95,27 +95,55 @@ def parts_average_price(articles_path: str) -> list:
 
 
 @tool
-def total_component_price(articles_path: str, parts_path: str) -> dict:
-    """Calculates and returns only the total component cost (Excluding VAT) as a dictionary."""
+def total_component_price(articles_path: str, parts_path: str, vat_rate: float) -> dict:
+    """
+    Calculates total component cost using the bottom quartile (Q1 threshold) average
+    prices for each product group, charging VAT only on taxable parts.
+    """
+
     try:
+        # --- Load Data ---
         articles_df = pd.read_csv(articles_path)
         parts_df = pd.read_csv(parts_path)
 
-        # Calculate average price per product group
-        avg_prices = articles_df.groupby('productGroupId')['price'].mean().reset_index()
-        avg_prices.columns = ['productGroupId', 'avg_price']
+        # --- Bottom quartile average calculation ---
+        def bottom_quartile_avg(group):
+            prices = group['price']
+            if len(prices) == 1:
+                return prices.iloc[0]
+            q1 = prices.quantile(0.25)
+            return prices[prices <= q1].mean()
 
-        # Merge with quantity
-        merged = avg_prices.merge(parts_df, on='productGroupId', how='left')
+        # --- Compute bottom quartile prices (pandas ≥ 2.1) ---
+        bottom_quartile_prices = (
+            articles_df.groupby('productGroupId', group_keys=False)
+            .apply(bottom_quartile_avg, include_groups=False)
+            .reset_index(name='avg_price')
+        )
+
+        # --- Merge with quantity & taxable flag ---
+        merged = bottom_quartile_prices.merge(parts_df, on='productGroupId', how='left')
         merged['quantity'] = merged['quantity'].fillna(0).astype(int)
+        merged['taxable'] = merged['taxable'].fillna(False).astype(bool)
 
-        # Compute total cost excl. VAT
-        total_cost = round((merged['avg_price'] * merged['quantity']).sum(), 2)
+        # --- Calculate costs ---
+        taxable_cost = (merged.loc[merged['taxable'], 'avg_price'] *
+                        merged.loc[merged['taxable'], 'quantity']).sum()
+        nontaxable_cost = (merged.loc[~merged['taxable'], 'avg_price'] *
+                           merged.loc[~merged['taxable'], 'quantity']).sum()
 
-        return {"totalComponentCostExclVAT": total_cost}
+        # --- Apply VAT only to taxable parts ---
+        total_cost_incl_vat = round(taxable_cost * (1 + vat_rate) + nontaxable_cost, 2)
+        total_cost_excl_vat = round(taxable_cost + nontaxable_cost, 2)
+
+        return {
+            "totalComponentCostExclVAT": total_cost_excl_vat,
+            "totalComponentCostInclVAT": total_cost_incl_vat
+        }
+
     except Exception as e:
-        print(e)
-        return {"totalComponentCostExclVAT": 0.0}
+        print(f"Error calculating total component price: {e}")
+        return {"totalComponentCostExclVAT": 0.0, "totalComponentCostInclVAT": 0.0}
 
 
 if __name__ == "__main__":
