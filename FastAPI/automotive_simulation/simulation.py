@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import json
 from collections import defaultdict
 import os
@@ -7,7 +8,7 @@ from datetime import datetime
 
 
 class TariffSimulation:
-    """Enhanced tariff simulation with bottom quartile supplier selection and VAT"""
+    """Enhanced tariff simulation with Q1 threshold bottom quartile methodology and VAT"""
 
     def __init__(self, suppliers_data, part_requirements, taxable_info, vat_rate=0.20):
         self.suppliers_data = suppliers_data
@@ -50,10 +51,8 @@ class TariffSimulation:
 
         # Now initialize suppliers after tariff rates are set
         self.suppliers_by_product = self._group_suppliers()
-        # Get bottom quartile suppliers for baseline scenario
-        self.bottom_quartile_suppliers = self._get_bottom_quartile_suppliers()
-        # Set current suppliers to bottom quartile average
-        self.current_suppliers = self._calculate_quartile_average_suppliers()
+        # Calculate bottom quartile average prices using Q1 threshold
+        self.current_suppliers = self._calculate_q1_threshold_suppliers()
 
     def _group_suppliers(self):
         """Group suppliers by product ID"""
@@ -89,91 +88,82 @@ class TariffSimulation:
             'final_price': final_price
         }
 
-    def _get_bottom_quartile_suppliers(self, tariffs=None):
-        """Get bottom quartile suppliers for each product based on article number and full cost (tariff + VAT)"""
-        if tariffs is None:
-            tariffs = self.current_tariff_rates
-
-        quartile_suppliers = {}
-
-        for product_id in self.part_requirements:
-            if product_id in self.suppliers_by_product:
-                # Calculate full cost for all suppliers of this product
-                suppliers_with_data = []
-                for supplier in self.suppliers_by_product[product_id]:
-                    cost_info = self._calculate_full_cost(
-                        supplier['price'],
-                        supplier['countryOfOrigin'],
-                        product_id,
-                        tariffs
-                    )
-
-                    suppliers_with_data.append({
-                        'supplier': supplier,
-                        'final_price': cost_info['final_price'],
-                        'article_no': supplier.get('articleNo', ''),
-                        'cost_breakdown': cost_info
-                    })
-
-                # Sort by article number first, then by final price
-                suppliers_with_data.sort(key=lambda x: (x['article_no'], x['final_price']))
-
-                # Get bottom quartile (25% of suppliers)
-                quartile_size = max(1, len(suppliers_with_data) // 4)
-                bottom_quartile = suppliers_with_data[:quartile_size]
-
-                quartile_suppliers[product_id] = [item['supplier'] for item in bottom_quartile]
-
-        return quartile_suppliers
-
-    def _calculate_quartile_average_suppliers(self, tariffs=None):
-        """Calculate average price from bottom quartile suppliers for each product"""
+    def _calculate_q1_threshold_suppliers(self, tariffs=None):
+        """
+        Calculate bottom quartile average using Q1 threshold methodology.
+        This matches the reference function: finds Q1 (25th percentile) and
+        averages all prices at or below that threshold.
+        """
         if tariffs is None:
             tariffs = self.current_tariff_rates
 
         average_suppliers = {}
 
         for product_id in self.part_requirements:
-            if product_id in self.bottom_quartile_suppliers:
-                quartile_suppliers = self.bottom_quartile_suppliers[product_id]
+            if product_id in self.suppliers_by_product:
+                suppliers = self.suppliers_by_product[product_id]
 
-                # Calculate average final price and select representative supplier
-                total_final_price = 0
-                supplier_count = len(quartile_suppliers)
-
-                for supplier in quartile_suppliers:
+                # Calculate final prices for all suppliers
+                supplier_prices = []
+                for supplier in suppliers:
                     cost_info = self._calculate_full_cost(
                         supplier['price'],
                         supplier['countryOfOrigin'],
                         product_id,
                         tariffs
                     )
-                    total_final_price += cost_info['final_price']
+                    supplier_prices.append({
+                        'supplier': supplier,
+                        'final_price': cost_info['final_price'],
+                        'cost_breakdown': cost_info
+                    })
 
-                average_final_price = total_final_price / supplier_count
+                # Sort by final price
+                supplier_prices.sort(key=lambda x: x['final_price'])
+                prices_array = np.array([sp['final_price'] for sp in supplier_prices])
 
-                # Create a virtual supplier representing the quartile average
-                template_supplier = quartile_suppliers[0].copy()
+                if len(prices_array) == 1:
+                    # Single supplier case
+                    avg_final_price = prices_array[0]
+                    selected_suppliers = supplier_prices[:1]
+                else:
+                    # Calculate Q1 threshold (25th percentile)
+                    q1_threshold = np.percentile(prices_array, 25)
 
-                # Calculate what the base price should be to achieve the average final price
-                countries = [s['countryOfOrigin'] for s in quartile_suppliers]
+                    # Get all suppliers at or below Q1 threshold
+                    below_q1_suppliers = [sp for sp in supplier_prices if sp['final_price'] <= q1_threshold]
+
+                    # Calculate average of prices at or below Q1
+                    below_q1_prices = [sp['final_price'] for sp in below_q1_suppliers]
+                    avg_final_price = np.mean(below_q1_prices)
+                    selected_suppliers = below_q1_suppliers
+
+                # Create a virtual supplier representing the Q1 average
+                # Use the most common country from selected suppliers
+                countries = [sp['supplier']['countryOfOrigin'] for sp in selected_suppliers]
                 most_common_country = max(set(countries), key=countries.count)
+
+                # Get tariff rate for the most common country
                 tariff_rate = tariffs.get(most_common_country, 0)
                 is_taxable = self.taxable_info.get(product_id, False)
 
-                # Back-calculate base price from final price
-                # final_price = base_price * (1 + tariff_rate) * (1 + vat_rate if taxable else 1)
+                # Back-calculate base price from average final price
                 if is_taxable:
-                    base_price = average_final_price / ((1 + tariff_rate) * (1 + self.vat_rate))
+                    base_price = avg_final_price / ((1 + tariff_rate) * (1 + self.vat_rate))
                 else:
-                    base_price = average_final_price / (1 + tariff_rate)
+                    base_price = avg_final_price / (1 + tariff_rate)
 
+                # Use first supplier as template
+                template_supplier = suppliers[0].copy()
                 template_supplier.update({
                     'price': base_price,
                     'countryOfOrigin': most_common_country,
-                    'supplierName': f"Bottom Quartile Average ({supplier_count} suppliers)",
+                    'supplierName': f"Q1 Threshold Average ({len(selected_suppliers)} suppliers)",
                     'articleProductName': template_supplier.get('articleProductName', 'Unknown'),
-                    'articleNo': f"AVG-{product_id}"
+                    'articleNo': f"Q1-AVG-{product_id}",
+                    'q1_threshold': q1_threshold,
+                    'suppliers_below_q1': len(selected_suppliers),
+                    'total_suppliers': len(suppliers)
                 })
 
                 average_suppliers[product_id] = template_supplier
@@ -200,15 +190,21 @@ class TariffSimulation:
         return total
 
     def run_simulation(self, steps=25, shock_step=10, target_country='Germany', tariff_rate=0.30):
-        """Run tariff shock simulation with consistent bottom quartile suppliers"""
+        """Run tariff shock simulation with Q1 threshold methodology"""
         self.cost_history = []
         # Start with current tariff rates
         current_tariffs = self.current_tariff_rates.copy()
+
+        # Keep the original Q1 suppliers selection (don't recalculate after shock)
+        # This maintains consistency - we're testing the same supplier set under different tariff conditions
+        original_suppliers = self.current_suppliers.copy()
 
         for step in range(steps):
             if step == shock_step:
                 # Apply tariff shock to target country
                 current_tariffs[target_country] = tariff_rate
+                # NOTE: We do NOT recalculate suppliers here - we keep the same suppliers
+                # to see how the tariff shock affects the existing supply chain
 
             cost = self.get_total_cost(current_tariffs)
             self.cost_history.append(cost)
@@ -239,7 +235,6 @@ class TariffSimulation:
                     product_id
                 )
 
-                unit_cost_breakdown = cost_info
                 total_base_cost = cost_info['base_price'] * quantity
                 total_tariff_cost = cost_info['tariff_amount'] * quantity
                 total_vat_cost = cost_info['vat_amount'] * quantity
@@ -259,34 +254,25 @@ class TariffSimulation:
                     'total_tariff_cost': total_tariff_cost,
                     'total_vat_cost': total_vat_cost,
                     'total_cost': total_product_cost,
-                    'quartile_suppliers_count': len(self.bottom_quartile_suppliers.get(product_id, []))
+                    'q1_threshold': supplier.get('q1_threshold', 'N/A'),
+                    'suppliers_below_q1': supplier.get('suppliers_below_q1', 'N/A'),
+                    'total_suppliers': supplier.get('total_suppliers', 'N/A')
                 }
                 total_cost += total_product_cost
 
         return cost_breakdown, total_cost
 
-    def get_quartile_analysis(self):
-        """Get detailed analysis of bottom quartile selection including VAT"""
+    def get_q1_analysis(self):
+        """Get detailed analysis of Q1 threshold selection including VAT"""
         analysis = {}
 
         for product_id in self.part_requirements:
-            if product_id in self.bottom_quartile_suppliers:
-                quartile_suppliers = self.bottom_quartile_suppliers[product_id]
-                all_suppliers = self.suppliers_by_product[product_id]
+            if product_id in self.suppliers_by_product:
+                suppliers = self.suppliers_by_product[product_id]
 
-                # Calculate statistics
-                quartile_prices = []
+                # Calculate all final prices
                 all_prices = []
-
-                for supplier in quartile_suppliers:
-                    cost_info = self._calculate_full_cost(
-                        supplier['price'],
-                        supplier['countryOfOrigin'],
-                        product_id
-                    )
-                    quartile_prices.append(cost_info['final_price'])
-
-                for supplier in all_suppliers:
+                for supplier in suppliers:
                     cost_info = self._calculate_full_cost(
                         supplier['price'],
                         supplier['countryOfOrigin'],
@@ -294,37 +280,34 @@ class TariffSimulation:
                     )
                     all_prices.append(cost_info['final_price'])
 
+                all_prices_array = np.array(all_prices)
+
+                if len(all_prices) == 1:
+                    q1_threshold = all_prices[0]
+                    below_q1_prices = all_prices
+                else:
+                    q1_threshold = np.percentile(all_prices_array, 25)
+                    below_q1_prices = all_prices_array[all_prices_array <= q1_threshold]
+
                 analysis[product_id] = {
-                    'total_suppliers': len(all_suppliers),
-                    'quartile_suppliers': len(quartile_suppliers),
-                    'quartile_percentage': (len(quartile_suppliers) / len(all_suppliers)) * 100,
-                    'is_taxable': self.taxable_info.get(product_id, False),
-                    'vat_rate': self.vat_rate if self.taxable_info.get(product_id, False) else 0,
-                    'quartile_price_range': {
-                        'min': min(quartile_prices),
-                        'max': max(quartile_prices),
-                        'average': np.mean(quartile_prices)
+                    'total_suppliers': len(suppliers),
+                    # 'q1_threshold': q1_threshold,
+                    # 'suppliers_below_q1': len(below_q1_prices),
+                    # 'percentage_below_q1': (len(below_q1_prices) / len(suppliers)) * 100,
+                    # 'is_taxable': self.taxable_info.get(product_id, False),
+                    # 'vat_rate': self.vat_rate if self.taxable_info.get(product_id, False) else 0,
+                    'q1_price_stats': {
+                        'min': float(np.min(below_q1_prices)),
+                        'max': float(np.max(below_q1_prices)),
+                        'average': float(np.mean(below_q1_prices))
                     },
-                    'all_suppliers_price_range': {
-                        'min': min(all_prices),
-                        'max': max(all_prices),
-                        'average': np.mean(all_prices)
+                    'all_suppliers_price_stats': {
+                        'min': float(np.min(all_prices_array)),
+                        'max': float(np.max(all_prices_array)),
+                        'average': float(np.mean(all_prices_array)),
+                        'median': float(np.median(all_prices_array))
                     },
-                    'savings_vs_average': np.mean(all_prices) - np.mean(quartile_prices),
-                    'quartile_suppliers_details': [
-                        {
-                            'supplier_name': s['supplierName'],
-                            'article_no': s.get('articleNo', ''),
-                            'country': s['countryOfOrigin'],
-                            'base_price': s['price'],
-                            'cost_breakdown': self._calculate_full_cost(
-                                s['price'],
-                                s['countryOfOrigin'],
-                                product_id
-                            )
-                        }
-                        for s in sorted(quartile_suppliers, key=lambda x: (x.get('articleNo', ''), x['price']))
-                    ]
+                    'savings_vs_average': float(np.mean(all_prices_array) - np.mean(below_q1_prices))
                 }
 
         return analysis
@@ -344,7 +327,7 @@ class TariffSimulation:
             'vat_rate': self.vat_rate,
             'taxable_products_count': len(taxable_products),
             'non_taxable_products_count': len(non_taxable_products),
-            'total_products': len(self.part_requirements),
+            'total_parts': len(self.part_requirements),
             'cost_summary': {
                 'total_base_cost': total_base_cost,
                 'total_tariff_cost': total_tariff_cost,
@@ -352,12 +335,9 @@ class TariffSimulation:
                 'total_final_cost': total_cost
             },
             'vat_percentage_of_total': (total_vat / total_cost) * 100 if total_cost > 0 else 0,
-            'taxable_products': taxable_products,
-            'non_taxable_products': non_taxable_products
+            # 'taxable_products': taxable_products,
+            # 'non_taxable_products': non_taxable_products
         }
-
-
-import pandas as pd
 
 
 def load_data_from_csv(articles_csv_path, parts_csv_path):
@@ -391,7 +371,7 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
                 color=colors[i], linewidth=3, marker='o', markersize=6)
 
     ax.axvline(10, color='red', linestyle='--', alpha=0.7, label='Tariff Shock', linewidth=2)
-    ax.set_title(f'Total Cost Impact - {target_country} Tariff Shock\n(Bottom Quartile with VAT)',
+    ax.set_title(f'Total Cost Impact - {target_country} Tariff Shock\n(Q1 Threshold Method with VAT)',
                  fontweight='bold',
                  fontsize=18)
     ax.set_xlabel('Time Step', fontsize=16)
@@ -408,7 +388,7 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"cost_progression_with_vat_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"cost_progression_q1_method_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
@@ -422,9 +402,9 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     return saved_path
 
 
-def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_country, show_plot=False, save_plot=True,
-                                            output_dir='./charts'):
-    """Create the quartile cost distribution boxplot chart showing total system costs after tariff shocks with VAT"""
+def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, show_plot=False, save_plot=True,
+                                      output_dir='./charts'):
+    """Create the Q1-based cost distribution boxplot chart showing total system costs after tariff shocks with VAT"""
 
     # Calculate cost distributions for each tariff scenario
     cost_distributions = []
@@ -434,59 +414,55 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
         temp_tariffs = simulation.current_tariff_rates.copy()
         temp_tariffs[target_country] = tariff_rate
 
-        # Calculate total system costs for all possible combinations
+        # Calculate total system costs for different supplier combinations
         system_costs = []
 
-        # Get all possible supplier combinations for the complete system
-        # We'll generate multiple system cost scenarios based on different supplier selections
-        # from the bottom quartile of each component
-
-        # First, collect all quartile suppliers for each product
+        # For each product, get all suppliers below Q1 threshold
         product_suppliers = {}
         for product_id in simulation.part_requirements:
-            if product_id in simulation.bottom_quartile_suppliers:
-                quartile_suppliers = simulation.bottom_quartile_suppliers[product_id]
+            if product_id in simulation.suppliers_by_product:
+                suppliers = simulation.suppliers_by_product[product_id]
                 quantity = simulation.part_requirements[product_id]
 
-                product_suppliers[product_id] = []
-                for supplier in quartile_suppliers:
-                    country = supplier['countryOfOrigin']
-                    # Use the shock tariff if it's the target country, otherwise use current tariff
-                    if country == target_country:
-                        tariff_rate_to_use = tariff_rate
-                    else:
-                        tariff_rate_to_use = simulation.current_tariff_rates.get(country, 0)
-
-                    # Create temporary tariff dict for this calculation
-                    temp_tariff_dict = simulation.current_tariff_rates.copy()
-                    temp_tariff_dict[country] = tariff_rate_to_use
-
-                    # Calculate total cost for this component including VAT
+                # Calculate final prices with shock tariffs
+                supplier_prices = []
+                for supplier in suppliers:
                     cost_info = simulation._calculate_full_cost(
                         supplier['price'],
-                        country,
+                        supplier['countryOfOrigin'],
                         product_id,
-                        temp_tariff_dict
+                        temp_tariffs
                     )
-                    total_component_cost = cost_info['final_price'] * quantity
-
-                    product_suppliers[product_id].append({
+                    supplier_prices.append({
                         'supplier': supplier,
-                        'component_cost': total_component_cost,
-                        'product_id': product_id
+                        'final_price': cost_info['final_price'],
+                        'component_cost': cost_info['final_price'] * quantity
                     })
 
-        # Generate system cost scenarios
-        # For computational efficiency, we'll sample combinations rather than generate all permutations
+                # Sort and get Q1 threshold
+                supplier_prices.sort(key=lambda x: x['final_price'])
+                prices_array = np.array([sp['final_price'] for sp in supplier_prices])
+
+                if len(prices_array) == 1:
+                    q1_threshold = prices_array[0]
+                else:
+                    q1_threshold = np.percentile(prices_array, 25)
+
+                # Get suppliers below Q1
+                below_q1 = [sp for sp in supplier_prices if sp['final_price'] <= q1_threshold]
+                product_suppliers[product_id] = below_q1
+
+        # Generate system cost scenarios by sampling combinations
         import itertools
         import random
 
         # Get supplier options for each product
         supplier_options = []
         for product_id in sorted(product_suppliers.keys()):
-            supplier_options.append(product_suppliers[product_id])
+            if product_suppliers[product_id]:
+                supplier_options.append(product_suppliers[product_id])
 
-        # Generate sample combinations (limit to reasonable number for performance)
+        # Generate sample combinations
         max_combinations = 1000
         if supplier_options:
             # Calculate total possible combinations
@@ -507,6 +483,10 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
                     total_system_cost = sum(item['component_cost'] for item in combination)
                     system_costs.append(total_system_cost)
 
+        # If no combinations possible, use the average Q1 cost
+        if not system_costs:
+            system_costs = [simulation.get_total_cost(temp_tariffs)]
+
         cost_distributions.append(system_costs)
 
     # Create the chart
@@ -521,7 +501,7 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
         patch.set_alpha(0.7)
 
     ax.set_title(
-        f'Complete System Cost Distribution - {target_country} Tariff Shock\n(Bottom Quartile with VAT)',
+        f'System Cost Distribution - {target_country} Tariff Shock\n(Q1 Threshold Method with VAT)',
         fontweight='bold', fontsize=18)
     ax.set_xlabel('Tariff Rate', fontsize=16)
     ax.set_ylabel('Total Cost (GBP)', fontsize=16)
@@ -535,7 +515,7 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
             max_cost = max(costs)
             min_cost = min(costs)
             ax.text(i + 1, max_cost * 1.02,
-                    f'Median: ${median_cost:.2f}\nMean: ${mean_cost:.2f}\nRange: ${min_cost:.2f}-${max_cost:.2f}',
+                    f'Median: £{median_cost:.2f}\nMean: £{mean_cost:.2f}\nRange: £{min_cost:.2f}-£{max_cost:.2f}',
                     ha='center', va='bottom', fontsize=9,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
@@ -548,11 +528,11 @@ def create_quartile_cost_distribution_chart(simulation, tariff_rates, target_cou
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"complete_system_cost_distribution_with_vat_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"system_cost_distribution_q1_method_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
-        print(f"Complete system cost distribution chart saved as: {saved_path}")
+        print(f"System cost distribution chart saved as: {saved_path}")
 
     if show_plot:
         plt.show()
@@ -570,13 +550,14 @@ def analyze_tariff_impact(
         save_plots=True,
         output_dir='./charts'
 ):
-    """Analyze tariff impact using bottom quartile average pricing with VAT included"""
+    """Analyze tariff impact using Q1 threshold bottom quartile average pricing with VAT included"""
 
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    articles_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data", "RAV4_brake_articles_data.csv")
+    articles_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data",
+                                     "RAV4_brake_articles_data.csv")
     parts_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data", "RAV4_brake_parts_data.csv")
 
     suppliers_data, part_requirements, taxable_info = load_data_from_csv(
@@ -587,7 +568,7 @@ def analyze_tariff_impact(
     # Get current tariff information
     current_tariffs = sim.get_current_tariff_info()
     current_cost_breakdown, current_total_cost = sim.analyze_current_costs()
-    quartile_analysis = sim.get_quartile_analysis()
+    q1_analysis = sim.get_q1_analysis()
     vat_summary = sim.get_vat_summary()
 
     # Test different shock scenarios
@@ -621,9 +602,7 @@ def analyze_tariff_impact(
                     'original_price': supplier['price'],
                     'current_final_price': current_cost['final_price'],
                     'shock_final_price': shock_cost['final_price'],
-                    'price_increase': shock_cost['final_price'] - current_cost['final_price'],
-                    'current_cost_breakdown': current_cost,
-                    'shock_cost_breakdown': shock_cost
+                    'price_increase': shock_cost['final_price'] - current_cost['final_price']
                 })
 
         # Build result
@@ -661,14 +640,6 @@ def analyze_tariff_impact(
             'severity': 'medium'
         })
 
-    taxable_count = len([s for s in results[0]['affected_suppliers'] if s['is_taxable']])
-    if taxable_count > 0:
-        recommendations.append({
-            'type': 'taxable_supplier_exposure',
-            'message': f"{taxable_count} affected suppliers have taxable parts - tariff increases will compound with VAT",
-            'severity': 'high'
-        })
-
     # Create charts
     chart_paths = {}
 
@@ -680,48 +651,45 @@ def analyze_tariff_impact(
         if cost_chart_path:
             chart_paths['cost_progression'] = cost_chart_path
 
-        # Create box and whisker plot (quartile cost distribution)
-        distribution_chart_path = create_quartile_cost_distribution_chart(
+        # Create box and whisker plot (Q1-based cost distribution)
+        distribution_chart_path = create_q1_cost_distribution_chart(
             sim, tariff_rates, target_country, show_plots, save_plots, output_dir
         )
         if distribution_chart_path:
             chart_paths['cost_distribution'] = distribution_chart_path
 
-    # Return JSON response
+    # Return JSON response with Q1 methodology details
     response = {
         'analysis_type': 'tariff_impact_analysis_with_vat',
-        'methodology': 'bottom_quartile_selection_with_vat_calculation',
+        # 'methodology': 'q1_threshold_bottom_quartile_average',
         'target_country': target_country,
-        'vat_rate': vat_rate,
-        # 'timestamp': datetime.now().isoformat(),
-        # 'current_tariff_rates': current_tariffs,
+        # 'vat_rate': vat_rate,
         'vat_summary': vat_summary,
         'current_cost_analysis': {
             'total_cost': current_total_cost,
-            'cost_breakdown': current_cost_breakdown
+            # 'cost_breakdown': current_cost_breakdown
         },
-        # 'quartile_analysis': quartile_analysis,
+        'q1_analysis': q1_analysis,
         'summary': {
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
             'affected_suppliers': len(results[0]['affected_suppliers']),
-            'taxable_affected_suppliers': len([s for s in results[0]['affected_suppliers'] if s['is_taxable']]),
+            # 'taxable_affected_suppliers': len([s for s in results[0]['affected_suppliers'] if s['is_taxable']]),
             'cost_range': {
                 'min_increase': min(r['cost_analysis']['percentage_increase'] for r in results),
                 'max_increase': max(r['cost_analysis']['percentage_increase'] for r in results)
             },
-            'quartile_summary': {
-                'avg_quartile_size': np.mean([q['quartile_suppliers'] for q in quartile_analysis.values()]),
-                'total_products': len(quartile_analysis),
-                'avg_savings_vs_market': np.mean([q['savings_vs_average'] for q in quartile_analysis.values()])
-            }
+            # 'q1_summary': {
+            #     'avg_suppliers_below_q1': np.mean([q['suppliers_below_q1'] for q in q1_analysis.values()]),
+            #     'total_products': len(q1_analysis),
+            #     'avg_savings_vs_market': np.mean([q['savings_vs_average'] for q in q1_analysis.values()])
+            # }
         },
-        # 'scenarios': results,
-        'recommendations': recommendations,
+        # 'recommendations': recommendations,
         'output_files': {
-            'charts_saved': bool(chart_paths),
+            # 'charts_saved': bool(chart_paths),
             'chart_paths': chart_paths,
-            'output_directory': output_dir if chart_paths else None
+            # 'output_directory': output_dir if chart_paths else None
         }
     }
 
@@ -729,9 +697,9 @@ def analyze_tariff_impact(
 
 
 if __name__ == "__main__":
-    print("Running tariff impact analysis with VAT inclusion...")
+    print("Running tariff impact analysis with Q1 threshold methodology...")
     result = analyze_tariff_impact(
-        target_country='Germany',
+        target_country='Japan',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
         show_plots=True,
