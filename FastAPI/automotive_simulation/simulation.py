@@ -658,7 +658,7 @@ def analyze_tariff_impact(
         if distribution_chart_path:
             chart_paths['cost_distribution'] = distribution_chart_path
 
-    # Return JSON response with Q1 methodology details
+    # Return JSON response with Q1 methodology details and detailed cost impacts
     response = {
         'analysis_type': 'tariff_impact_analysis_with_vat',
         # 'methodology': 'q1_threshold_bottom_quartile_average',
@@ -669,7 +669,23 @@ def analyze_tariff_impact(
             'total_cost': current_total_cost,
             # 'cost_breakdown': current_cost_breakdown
         },
-        'q1_analysis': q1_analysis,
+        # 'q1_analysis': q1_analysis,
+        'tariff_scenarios': [
+            {
+                # 'tariff_rate': scenario['tariff_rate'],
+                'tariff_rate': f"{scenario['tariff_rate']:.1%}",
+                'cost_impact': {
+                    'initial_cost': round(scenario['cost_analysis']['initial_cost'], 2),
+                    'final_cost': round(scenario['cost_analysis']['final_cost'], 2),
+                    'absolute_increase': round(scenario['cost_analysis']['cost_increase'], 2),
+                    # 'percentage_increase': round(scenario['cost_analysis']['percentage_increase'], 2),
+                    # 'cost_increase_formatted': f"£{scenario['cost_analysis']['cost_increase']:,.2f}",
+                    'percentage_increase': f"{scenario['cost_analysis']['percentage_increase']:.1f}%"
+                },
+                # 'suppliers_affected': len(scenario['affected_suppliers'])
+            }
+            for scenario in results
+        ],
         'summary': {
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
@@ -677,7 +693,9 @@ def analyze_tariff_impact(
             # 'taxable_affected_suppliers': len([s for s in results[0]['affected_suppliers'] if s['is_taxable']]),
             'cost_range': {
                 'min_increase': min(r['cost_analysis']['percentage_increase'] for r in results),
-                'max_increase': max(r['cost_analysis']['percentage_increase'] for r in results)
+                'max_increase': max(r['cost_analysis']['percentage_increase'] for r in results),
+                'min_increase_formatted': f"{min(r['cost_analysis']['percentage_increase'] for r in results):.1f}%",
+                'max_increase_formatted': f"{max(r['cost_analysis']['percentage_increase'] for r in results):.1f}%"
             },
             # 'q1_summary': {
             #     'avg_suppliers_below_q1': np.mean([q['suppliers_below_q1'] for q in q1_analysis.values()]),

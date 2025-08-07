@@ -102,6 +102,10 @@ def total_component_price(articles_path: str, parts_path: str, vat_rate: float) 
     """
 
     try:
+        # --- Normalize VAT rate ---
+        if vat_rate > 1:
+            vat_rate = vat_rate / 100.0
+
         # --- Load Data ---
         articles_df = pd.read_csv(articles_path)
         parts_df = pd.read_csv(parts_path)
