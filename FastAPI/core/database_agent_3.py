@@ -4,66 +4,89 @@ import os
 
 @tool
 def parts_summary(articles_path: str, parts_path: str) -> list:
-    """Summarizes product groups by price, count, country of origin, quantity, and % of total cost."""
+    """Summarizes product groups by bottom quartile average price, count, country of origin, quantity, line item total, and % of total cost."""
     try:
         articles_df = pd.read_csv(articles_path)
         parts_df = pd.read_csv(parts_path)
+
+        # Define bottom quartile average price function
+        def bottom_quartile_avg(group):
+            prices = group['price']
+            if len(prices) == 1:
+                return prices.iloc[0]
+            q1 = prices.quantile(0.25)
+            return prices[prices <= q1].mean()
+
         grouped = articles_df.groupby('productGroupId')
         temp_costs = []
 
         for productGroupId, group in grouped:
             partDescription = group['articleProductName'].mode()[0]
-            averagePrice = round(group['price'].mean(), 2)
+            bottomQuartileAvgPrice = round(bottom_quartile_avg(group), 2)
             numArticles = group.shape[0]
             mostCommonCountry = group['countryOfOrigin'].mode()[0]
             quantity_row = parts_df[parts_df['productGroupId'] == productGroupId]
             quantity = int(quantity_row['quantity'].values[0]) if not quantity_row.empty else 0
-            cost = averagePrice * quantity
-            temp_costs.append((productGroupId, partDescription, averagePrice,
-                               numArticles, mostCommonCountry, quantity, cost))
+            lineItemTotalExclVAT = round(bottomQuartileAvgPrice * quantity, 2)
+            temp_costs.append((productGroupId, partDescription, bottomQuartileAvgPrice,
+                               numArticles, mostCommonCountry, quantity, lineItemTotalExclVAT))
 
         total_cost = sum(item[6] for item in temp_costs) or 1
+
         return [{
             "productGroupId": item[0],
             "partDescription": item[1],
-            "averagePrice": item[2],
+            "bottomQuartileAvgPrice": item[2],
             "numArticles": item[3],
             "mostCommonCountryOfOrigin": item[4],
             "quantity": item[5],
+            "lineItemTotalExclVAT": item[6],
             "percentageOfTotalCost": round((item[6] / total_cost) * 100, 2)
         } for item in temp_costs]
+
     except Exception as e:
-        print(e)
+        print(f"Error in parts_summary: {e}")
         return []
 
 
 @tool
 def top_5_parts_by_price(articles_path: str, parts_path: str) -> list:
-    """Returns the top 5 parts by average price including quantity, using total group counts."""
+    """Returns the top 5 parts by bottom quartile average price, including quantity and number of articles."""
     try:
         articles_df = pd.read_csv(articles_path)
         parts_df = pd.read_csv(parts_path)
-        grouped = articles_df.groupby('productGroupId')
+
+        # Bottom quartile average price function
+        def bottom_quartile_avg(group):
+            prices = group['price']
+            if len(prices) == 1:
+                return prices.iloc[0]
+            q1 = prices.quantile(0.25)
+            return prices[prices <= q1].mean()
+
+        # Group by productGroupId and part description
+        grouped = articles_df.groupby(['productGroupId', 'articleProductName'])
         summary_list = []
 
-        for productGroupId, group in grouped:
-            partDescription = group['articleProductName'].mode()[0]
-            avg_price = round(group['price'].mean(), 3)
+        for (productGroupId, partDescription), group in grouped:
+            bottomQuartileAvgPrice = round(bottom_quartile_avg(group), 2)
             num_articles = group.shape[0]
+
             quantity_row = parts_df[parts_df['productGroupId'] == productGroupId]
             quantity = int(quantity_row['quantity'].values[0]) if not quantity_row.empty else 0
 
             summary_list.append({
                 "productGroupId": productGroupId,
                 "partDescription": partDescription,
-                "avg_price": avg_price,
-                "num_articles": num_articles,
+                "bottomQuartileAvgPrice": bottomQuartileAvgPrice,
+                "numArticles": num_articles,
                 "quantity": quantity
             })
 
-        return sorted(summary_list, key=lambda x: x['avg_price'], reverse=True)[:5]
+        return sorted(summary_list, key=lambda x: x['bottomQuartileAvgPrice'], reverse=True)[:5]
+
     except Exception as e:
-        print(e)
+        print(f"Error in top_5_parts_by_price: {e}")
         return []
 
 
@@ -81,14 +104,43 @@ def top_5_part_distribution_by_country(articles_path: str) -> list:
 
 
 @tool
-def parts_average_price(articles_path: str) -> list:
-    """Returns average price of each part grouped by productGroupId."""
+def average_parts_price(articles_path: str, parts_path: str) -> list:
+    """Returns bottom quartile average price of each part, with quantity and line item total."""
     try:
         articles_df = pd.read_csv(articles_path)
-        avg_prices = articles_df.groupby(['productGroupId', 'articleProductName'])['price'].mean().reset_index()
-        avg_prices.columns = ['productGroupId', 'partDescription', 'averagePrice']
-        avg_prices['averagePrice'] = avg_prices['averagePrice'].round(2)
-        return avg_prices.sort_values(by="averagePrice", ascending=False).to_dict(orient='records')
+        parts_df = pd.read_csv(parts_path)
+
+        # Bottom quartile average function
+        def bottom_quartile_avg(group):
+            prices = group['price']
+            if len(prices) == 1:
+                return prices.iloc[0]
+            q1 = prices.quantile(0.25)
+            return prices[prices <= q1].mean()
+
+        # Compute bottom quartile average prices
+        quartile_prices = (
+            articles_df.groupby(['productGroupId', 'articleProductName'], group_keys=False)
+            .apply(bottom_quartile_avg, include_groups=False)
+            .reset_index(name='bottomQuartileAvgPrice')
+        )
+        quartile_prices['bottomQuartileAvgPrice'] = quartile_prices['bottomQuartileAvgPrice'].round(2)
+        quartile_prices.rename(columns={'articleProductName': 'partDescription'}, inplace=True)
+
+        # Merge with quantity and taxable
+        merged = quartile_prices.merge(
+            parts_df[['productGroupId', 'quantity', 'taxable']],
+            on='productGroupId',
+            how='left'
+        )
+        merged['quantity'] = merged['quantity'].fillna(0).astype(int)
+        merged['taxable'] = merged['taxable'].fillna(False).astype(bool)
+
+        # Calculate line item total (excluding VAT)
+        merged['lineItemTotalExclVAT'] = (merged['bottomQuartileAvgPrice'] * merged['quantity']).round(2)
+
+        return merged.sort_values(by="bottomQuartileAvgPrice", ascending=False).to_dict(orient='records')
+
     except Exception as e:
         print(e)
         return []
@@ -149,6 +201,27 @@ def total_component_price(articles_path: str, parts_path: str, vat_rate: float) 
         print(f"Error calculating total component price: {e}")
         return {"totalComponentCostExclVAT": 0.0, "totalComponentCostInclVAT": 0.0}
 
+@tool
+def top_5_suppliers_by_articles(articles_path: str) -> list:
+    """Returns the top 5 suppliers by the number of articles listed in the dataset."""
+    try:
+        articles_df = pd.read_csv(articles_path)
+
+        # Group by supplierName and count number of articles
+        supplier_counts = (
+            articles_df.groupby('supplierName')['articleNo']
+            .nunique()
+            .reset_index(name='article_count')
+        )
+
+        # Sort and return top 5
+        top_suppliers = supplier_counts.sort_values(by='article_count', ascending=False).head(5)
+
+        return top_suppliers.to_dict(orient='records')
+
+    except Exception as e:
+        print(f"Error getting top suppliers: {e}")
+        return []
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -158,8 +231,8 @@ if __name__ == "__main__":
     parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
     # Call one of the tools
-    result = parts_summary.invoke({
+    result = (parts_summary.invoke({
         "articles_path": articles_path,
         "parts_path": parts_path
-    })
+    }))
     print(result)

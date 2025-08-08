@@ -38,18 +38,24 @@ def summarize_simulation_content(sim: dict) -> dict:
         "recommendations": [r["message"] for r in recommendations]
     }
 
+import numpy as np
+
 def convert_numpy(obj):
-    """Recursively convert NumPy types to native Python types (int, float, list)."""
+    """Recursively convert NumPy and pandas types to native Python types."""
     if isinstance(obj, dict):
-        return {k: convert_numpy(v) for k, v in obj.items()}
+        return {str(k): convert_numpy(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [convert_numpy(i) for i in obj]
     elif isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
         return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif hasattr(obj, "item"):
+        return obj.item()
     else:
         return obj
 

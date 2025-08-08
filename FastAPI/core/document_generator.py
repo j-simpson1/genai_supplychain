@@ -14,28 +14,22 @@ import re
 import asyncio
 
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, List, Dict, Annotated, Sequence, Optional
+from typing import List
 from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AnyMessage
-from langgraph.graph.message import add_messages
-from langsmith import evaluate, Client
-from langchain_core.messages import BaseMessage
-from langgraph.prebuilt import ToolNode
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langsmith import Client
 
 from tavily import TavilyClient
 
 from FastAPI.core.pdf_creator import save_to_pdf
 from FastAPI.core.word_creator import save_to_word
-from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, parts_average_price, total_component_price
-from FastAPI.core.evals import report_quality_evaluator
-from FastAPI.core.utils import get_last_tool_result
-from FastAPI.open_deep_research.deep_researcher import deep_researcher
+from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
-from FastAPI.core.prompts import plan_prompt, research_plan_prompt
+from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, simulation_prompt, db_call_model_prompt, db_summary_prompt, writers_prompt, chart_planning_prompt, generate_chart_prompt
 from FastAPI.core.state import AgentState
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
-from FastAPI.core.utils import summarize_simulation_content, convert_numpy, serialize_state
+from FastAPI.core.utils import convert_numpy, serialize_state
 from langchain.agents import tool
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -59,12 +53,7 @@ from langchain_openai import ChatOpenAI
 
 # creating model
 # temperature not supported by o4-mini
-model = ChatOpenAI(model="gpt-4o", temperature=0.3)
-
-# control how we are critiqing the draft of the essay
-REFLECTION_PROMPT = """You are a manager reviewing the analysts report. \
-Generate critique and recommendations for the analysts submission. \
-Provide detailed recommendations, including requests for length, depth, style, etc."""
+model = ChatOpenAI(model="o4-mini")
 
 DATABASE_PLAN_INSTRUCTIONS = """ You are a supply chain data analyst with access to several \
 database tools. Your role is to extract relevant automotive part insights that will inform a \
@@ -128,7 +117,7 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[float])
     response = analyze_tariff_impact(target_country, normalized_rates)
     return convert_numpy(response)
 
-simulation_analysis_model = ChatOpenAI(model="gpt-4o")
+simulation_analysis_model = ChatOpenAI(model="o4-mini")
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
@@ -147,13 +136,13 @@ tools = [
     parts_summary,
     top_5_parts_by_price,
     top_5_part_distribution_by_country,
-    parts_average_price,
-    total_component_price
+    average_parts_price,
+    total_component_price,
+    top_5_suppliers_by_articles
 ]
 
 db_model = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0
+    model="o4-mini"
 ).bind_tools(tools)
 
 tools_by_name = {tool.name: tool for tool in tools}
@@ -172,7 +161,7 @@ def tool_node(state: AgentState):
         if tool_name not in tools_by_name:
             result = "Unknown tool, please retry."
         else:
-            result = tools_by_name[tool_name].invoke(args)
+            result = convert_numpy(tools_by_name[tool_name].invoke(args))
 
         outputs.append(ToolMessage(
             content=json.dumps(result),
@@ -183,30 +172,19 @@ def tool_node(state: AgentState):
 
 # --- Model Node ---
 def call_model(state: AgentState, config=None):
-    system_prompt = SystemMessage(content=f"""
-    You are a database assistant helping with the drafting of an automotive supply chain report. Use the available tools 
-    to retrieve the relevant data for the report.
-    The file paths required by the tools are available from state:
-    - articles_path - path to the articles CSV file
-    - parts_path - path to the parts CSV file
-    
-    Just return a summary of the raw data from the tools.
-    
-    See the following report plan to guide you what data to extract:
-    {state.get('plan', 'No plan provided')}
-    """)
-    response = db_model.invoke([system_prompt] + state["db_content"], config)
+
+    prompt = db_call_model_prompt.format(plan=state.get('plan', 'No plan provided'))
+
+    response = db_model.invoke([prompt] + state["db_content"], config)
+
     return {"db_content": state["db_content"] + [response]}
 
 def summarize_db_node(state: AgentState):
     db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
-    response = model.invoke([
-        SystemMessage(content="Analyse the data from the database agent and provide additional insight."
-                              "All the data is in GBP (£). "
-                              "Be succinct, don't speculate, only use the information provided and make the "
-                              "analysis quantative:"),
-        HumanMessage(content=db_content_text)
-    ])
+
+    prompt = db_summary_prompt.format(db_content=db_content_text)
+
+    response = model.invoke([prompt])
 
     return {
         "db_summary": response.content
@@ -263,8 +241,6 @@ def chart_planning_node(state: AgentState):
     db_summary = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
-    chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_model=False)
-
     formatted_chart_planning_prompt = chart_planning_prompt.format(
         db_summary=db_summary,
         db_content=db_content
@@ -305,13 +281,12 @@ def generate_chart_code_node(state: AgentState):
         msg.content for msg in state['db_content'] if isinstance(msg, ToolMessage)
     )
 
-    GENERATE_CHART_PROMPT = client.pull_prompt("generate_chart_prompt", include_model=False)
-    FORMATTED_GENERATE_CHART_PROMPT = GENERATE_CHART_PROMPT.format(
+    formatted_generate_chart_prompt = generate_chart_prompt.format(
         chart_description=chart_description,
         tool_data=tool_data
     )
 
-    response = model.invoke([SystemMessage(content=FORMATTED_GENERATE_CHART_PROMPT)])
+    response = model.invoke([SystemMessage(content=formatted_generate_chart_prompt)])
     match = re.search(r"```(?:python)?\n(.*?)```", response.content, re.DOTALL)
     chart_code = match.group(1).strip() if match else response.content.strip()
 
@@ -349,33 +324,49 @@ def execute_chart_code_node(state: AgentState):
 
 
 def reflect_chart_node(state: AgentState):
-    # If previous execution failed → fix code
+    # If previous execution failed → try to fix, but cap retries
     if not state.get("chart_generation_success", False):
-        error = state.get("chart_generation_error", "")
-        previous_code = state.get("chart_code", "")
+        retry = state.get("chart_retry_count", 0)
+        max_retries = state.get("max_chart_retries", 2)
 
-        prompt = f"""The previous chart code failed with this error:
-{error}
+        # If we have more retries left, revise the code
+        if retry < max_retries:
+            error = state.get("chart_generation_error", "")
+            previous_code = state.get("chart_code", "")
 
-Here is the failed code:
-{previous_code}
+            prompt = f"""The previous chart code failed with this error:
+            {error}
+            
+            Here is the failed code:
+            {previous_code}
+            
+            Please revise the code so it avoids the error and still meets the requirements.
+            """
+            response = model.invoke([SystemMessage(content=prompt)])
+            return {
+                "chart_code": response.content,
+                "chart_retry_count": retry + 1,
+                "chart_generation_success": False,
+                "chart_generation_error": ""
+            }
 
-Please revise the code so it avoids the error and still meets the requirements.
-"""
-        response = model.invoke([SystemMessage(content=prompt)])
+        # Retries exhausted → skip this chart and move on
         return {
-            "chart_code": response.content,
-            "chart_retry_count": state.get("chart_retry_count", 0) + 1,
-            "chart_generation_success": False,
-            "chart_generation_error": ""
+            # mark as “logically successful” so the router advances the index
+            "chart_generation_success": True,
+            "chart_generation_error": "",
+            "chart_retry_count": 0,
+            "current_chart_index": state.get("current_chart_index", 0) + 1
         }
 
-    # If successful (but still more charts), just continue
+    # If last run was successful, do nothing special
     return {}
 
 
 simulation_tools = [automotive_tariff_simulation]
 
+# model with simulation tool bound
+simulation_model = ChatOpenAI(model="o4-mini").bind_tools(simulation_tools)
 
 def simulation_tool_node(state: AgentState):
     """
@@ -430,20 +421,17 @@ def simulation_tool_node(state: AgentState):
         "chart_metadata": chart_metadata
     }
 
-# Your model with tools bound
-simulation_model = ChatOpenAI(model="gpt-4o").bind_tools(simulation_tools)
-
 def simulation_model_call(state: AgentState):
-    system_prompt = SystemMessage(content=(
-        "You are a professional supply chain analyst. "
-        "When asked for a tariff shock simulation, you must call the automotive_tariff_simulation tool "
-        "with the appropriate parameters before answering. Make sure to call automotive_tariff_simulation before the "
-        "simulation_results_analyst tool."
-    ))
+
+    # task message no longer needed but commented out in case it needs to be added back in
     task_message = HumanMessage(content=state['task'])
 
-    response = simulation_model.invoke([system_prompt, task_message] + state["raw_simulation"])
-    return {"raw_simulation": [response]}
+    simulation_tool_names = [t.name for t in simulation_tools]
+
+    simulation_model_prompt = simulation_prompt.format(tools=simulation_tools, tool_names=simulation_tool_names, task=task_message)
+
+    response = simulation_model.invoke([simulation_model_prompt] + state["raw_simulation"])
+    return {"raw_simulation": state["raw_simulation"] + [response]}
 
 def simulation_clean(state: AgentState):
 
@@ -467,11 +455,11 @@ def generation_node(state: AgentState):
     web = "\n\n".join(state.get("web_content", []))
     chart_metadata = state.get("chart_metadata", [])
     simulation_messages = state.get("clean_simulation", [])
+    print("Simulation message: ", simulation_messages)
 
     charts = "\n\n".join(
         [f"Include these charts in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
-    writers_prompt = client.pull_prompt("writer_prompt", include_model=False)
     formatted_writers_prompt = writers_prompt.format(
         CoT_examples=chain_of_thought_examples,
         task=state['task'],
@@ -492,7 +480,7 @@ def generation_node(state: AgentState):
 def reflection_node(state: AgentState):
     messages = [
         # take the reflection node and the draft
-        SystemMessage(content=REFLECTION_PROMPT),
+        SystemMessage(content=reflection_prompt),
         HumanMessage(content=state['draft'])
     ]
     response = model.invoke(messages)
@@ -541,23 +529,21 @@ def should_continue(state):
     return result
 
 def simulation_should_continue(state: AgentState):
-    messages = state["raw_simulation"]
-    last_message = messages[-1]
-    if not last_message.tool_calls:
+    messages = state.get("raw_simulation", [])
+    if not messages:
         return "end"
-    else:
-        return "continue"
+    last = messages[-1]
+    tool_calls = getattr(last, "tool_calls", None)
+    return "continue" if tool_calls else "end"
 
 def execute_chart_next_node(state: AgentState) -> str:
     if state.get("chart_generation_success", False):
-        # Was successful – check if more charts left
         if state.get("current_chart_index", 0) >= len(state.get("chart_plan", [])):
             return "research_plan"
         else:
-            return "reflect_chart"
+            return "generate_chart_code"  # proceed to next chart
     else:
-        # Failed, need to reflect
-        return "reflect_chart"
+        return "reflect_chart"  # only reflect on failure
 
 def db_should_continue(state: AgentState):
     last_message = state["db_content"][-1]
@@ -614,7 +600,8 @@ builder.add_conditional_edges(
     execute_chart_next_node,
     {
         "reflect_chart": "reflect_chart",
-        "research_plan": "research_plan"
+        "research_plan": "research_plan",
+        "generate_chart_code": "generate_chart_code"
     }
 )
 
@@ -672,7 +659,12 @@ async def run_agent(messages, parts_path, articles_path):
             'parts_path': parts_path,
             'messages': [],
             'remaining_steps': 5
-        }, thread):
+        },
+            config={
+                "recursion_limit": 100,
+                "configurable": {"thread_id": "1"}
+            },
+        ):
             print(s)
 
             final_state = s
