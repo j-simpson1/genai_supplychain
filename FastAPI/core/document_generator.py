@@ -21,11 +21,12 @@ from langsmith import Client
 
 from tavily import TavilyClient
 
-from FastAPI.core.pdf_creator import save_to_pdf
-from FastAPI.core.word_creator import save_to_word
-from FastAPI.core.database_agent_3 import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
+from FastAPI.document_builders.pdf_creator import save_to_pdf
+from FastAPI.document_builders.word_creator import save_to_word
+from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
 from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, simulation_prompt, db_call_model_prompt, db_summary_prompt, writers_prompt, chart_planning_prompt, generate_chart_prompt
+from FastAPI.core.chart_generation import code_editor_agent
 from FastAPI.core.state import AgentState
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
@@ -264,105 +265,6 @@ def chart_planning_node(state: AgentState):
 
     return {"chart_plan": chart_plan}
 
-def generate_chart_code_node(state: AgentState):
-
-    # Determine which chart we are working on
-    chart_index = state.get("current_chart_index", 0)
-    chart_plan = state.get("chart_plan", [])
-
-    if chart_index >= len(chart_plan):
-        # No charts left to process
-        return {"chart_code": "", "chart_generation_success": True}
-
-    chart = chart_plan[chart_index]
-    chart_description = chart.get("chart_description", "No description")
-
-    tool_data = "\n\n".join(
-        msg.content for msg in state['db_content'] if isinstance(msg, ToolMessage)
-    )
-
-    formatted_generate_chart_prompt = generate_chart_prompt.format(
-        chart_description=chart_description,
-        tool_data=tool_data
-    )
-
-    response = model.invoke([SystemMessage(content=formatted_generate_chart_prompt)])
-    match = re.search(r"```(?:python)?\n(.*?)```", response.content, re.DOTALL)
-    chart_code = match.group(1).strip() if match else response.content.strip()
-
-    return {"chart_code": chart_code}
-
-def execute_chart_code_node(state: AgentState):
-    try:
-        code = state["chart_code"]
-
-        # Get chart info
-        chart_index = state.get("current_chart_index", 0)
-        chart_plan = state.get("chart_plan", [])
-        chart_id = chart_plan[chart_index]["chart_id"] if chart_index < len(chart_plan) else f"chart_{chart_index}"
-
-        chart_path = os.path.join(CHARTS_DIR, f"{chart_id}_{uuid.uuid4().hex}.png")
-        exec_globals = {"__file__": chart_path, "chart_path": chart_path}
-        exec(code, exec_globals)
-
-        # Append to chart_metadata
-        chart_metadata = state.get("chart_metadata", [])
-        chart_metadata.append({"id": chart_id, "path": chart_path})
-
-        return {
-            "chart_metadata": chart_metadata,
-            "chart_generation_success": True,
-            "current_chart_index": chart_index + 1,
-            "chart_retry_count": 0
-        }
-    except Exception as e:
-        return {
-            "chart_generation_success": False,
-            "chart_generation_error": traceback.format_exc(),
-            "chart_code": state["chart_code"]
-        }
-
-
-def reflect_chart_node(state: AgentState):
-    # If previous execution failed → try to fix, but cap retries
-    if not state.get("chart_generation_success", False):
-        retry = state.get("chart_retry_count", 0)
-        max_retries = state.get("max_chart_retries", 2)
-
-        # If we have more retries left, revise the code
-        if retry < max_retries:
-            error = state.get("chart_generation_error", "")
-            previous_code = state.get("chart_code", "")
-
-            prompt = f"""The previous chart code failed with this error:
-            {error}
-            
-            Here is the failed code:
-            {previous_code}
-            
-            Please revise the code so it avoids the error and still meets the requirements.
-            """
-            response = model.invoke([SystemMessage(content=prompt)])
-            return {
-                "chart_code": response.content,
-                "chart_retry_count": retry + 1,
-                "chart_generation_success": False,
-                "chart_generation_error": ""
-            }
-
-        # Retries exhausted → skip this chart and move on
-        return {
-            # mark as “logically successful” so the router advances the index
-            "chart_generation_success": True,
-            "chart_generation_error": "",
-            "chart_retry_count": 0,
-            "current_chart_index": state.get("current_chart_index", 0) + 1
-        }
-
-    # If last run was successful, do nothing special
-    return {}
-
-
 simulation_tools = [automotive_tariff_simulation]
 
 # model with simulation tool bound
@@ -458,7 +360,7 @@ def generation_node(state: AgentState):
     print("Simulation message: ", simulation_messages)
 
     charts = "\n\n".join(
-        [f"Include these charts in the report: \n[[FIGURE:{item['id']}]]" for item in chart_metadata])
+        [f"\n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
     formatted_writers_prompt = writers_prompt.format(
         CoT_examples=chain_of_thought_examples,
@@ -536,15 +438,6 @@ def simulation_should_continue(state: AgentState):
     tool_calls = getattr(last, "tool_calls", None)
     return "continue" if tool_calls else "end"
 
-def execute_chart_next_node(state: AgentState) -> str:
-    if state.get("chart_generation_success", False):
-        if state.get("current_chart_index", 0) >= len(state.get("chart_plan", [])):
-            return "research_plan"
-        else:
-            return "generate_chart_code"  # proceed to next chart
-    else:
-        return "reflect_chart"  # only reflect on failure
-
 def db_should_continue(state: AgentState):
     last_message = state["db_content"][-1]
     return "continue" if last_message.tool_calls else "end"
@@ -558,9 +451,7 @@ builder.add_node("db_agent", call_model)
 builder.add_node("db_tools", tool_node)
 builder.add_node("summarize_db", summarize_db_node)
 builder.add_node("chart_planning_node", chart_planning_node)
-builder.add_node("generate_chart_code", generate_chart_code_node)
-builder.add_node("execute_chart_code", execute_chart_code_node)
-builder.add_node("reflect_chart", reflect_chart_node)
+builder.add_node("generate_charts", code_editor_agent)
 builder.add_node("simulation_agent", simulation_model_call)
 builder.add_node("simulation_tools", simulation_tool_node)
 builder.add_node("simulation_clean", simulation_clean)
@@ -577,9 +468,8 @@ builder.set_entry_point("planner")
 builder.add_edge("planner", "db_agent")
 builder.add_edge("db_tools", "db_agent")
 builder.add_edge("summarize_db", "chart_planning_node")
-builder.add_edge("chart_planning_node", "generate_chart_code")
-builder.add_edge("generate_chart_code", "execute_chart_code")
-builder.add_edge("reflect_chart", "generate_chart_code")
+builder.add_edge("chart_planning_node", "generate_charts")
+builder.add_edge("generate_charts", "research_plan")
 builder.add_edge("research_plan", "simulation_agent")
 builder.add_edge("simulation_tools", "simulation_agent")
 builder.add_edge("simulation_clean", "generate")
@@ -592,16 +482,6 @@ builder.add_conditional_edges(
     {
         "continue": "db_tools",
         "end": "summarize_db"
-    }
-)
-
-builder.add_conditional_edges(
-    "execute_chart_code",
-    execute_chart_next_node,
-    {
-        "reflect_chart": "reflect_chart",
-        "research_plan": "research_plan",
-        "generate_chart_code": "generate_chart_code"
     }
 )
 

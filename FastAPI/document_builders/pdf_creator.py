@@ -100,6 +100,22 @@ class PDFReportGenerator:
 
         return doc
 
+    def _normalize_punctuation(self, text: str) -> str:
+        # Map various Unicode dashes/hyphens to ASCII hyphen
+        dash_map = {
+            "\u2010": "-",  # hyphen
+            "\u2011": "-",  # non-breaking hyphen
+            "\u2012": "-",  # figure dash
+            "\u2013": "-",  # en dash
+            "\u2014": "-",  # em dash
+            "\u2212": "-",  # minus sign
+        }
+        # Also normalize non-breaking spaces, just in case
+        text = text.replace("\u00A0", " ")
+        for k, v in dash_map.items():
+            text = text.replace(k, v)
+        return text
+
     @staticmethod
     def _replace_figure_placeholders(text: str, chart_metadata: List[Dict[str, str]]) -> str:
         """Replace figure placeholders with actual image references."""
@@ -115,6 +131,9 @@ class PDFReportGenerator:
 
     def _process_markdown_formatting(self, text: str) -> str:
         """Process markdown-style formatting for bold text and other styles."""
+        # Normalize punctuation before rendering
+        text = self._normalize_punctuation(text)
+
         # Handle bold text: **text** or __text__
         text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
         text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
