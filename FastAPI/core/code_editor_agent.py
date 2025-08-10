@@ -153,6 +153,10 @@ subgraph.add_conditional_edges(
 
 code_editor_agent = subgraph.compile()
 
+output_graph_path = "../reports_and_graphs/code_editor_langgraph.png"
+with open(output_graph_path, "wb") as f:
+    f.write(code_editor_agent.get_graph().draw_mermaid_png())
+
 # ---------- Demo ----------
 if __name__ == "__main__":
     import asyncio

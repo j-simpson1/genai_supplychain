@@ -10,10 +10,6 @@ articles_path = os.path.join(BASE_DIR, "streamlit_data", "articles.csv")
 parts_path = os.path.join(BASE_DIR, "streamlit_data", "parts.csv")
 json_path = os.path.join(BASE_DIR, "streamlit_data", "ai_supplychain_state.json")
 
-
-
-
-
 # Load JSON
 with open(json_path) as f:
     data = json.load(f)

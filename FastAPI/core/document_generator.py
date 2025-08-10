@@ -26,7 +26,8 @@ from FastAPI.document_builders.word_creator import save_to_word
 from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
 from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, simulation_prompt, db_call_model_prompt, db_summary_prompt, writers_prompt, chart_planning_prompt, generate_chart_prompt
-from FastAPI.core.chart_generation import code_editor_agent
+from FastAPI.core.code_editor_agent import code_editor_agent
+from FastAPI.core.database_agent import database_agent
 from FastAPI.core.state import AgentState
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
@@ -131,65 +132,6 @@ def plan_node(state: AgentState):
     response = model.invoke(messages)
     # get the content of the messages and pass to the plan key
     return {"plan": response.content}
-
-
-tools = [
-    parts_summary,
-    top_5_parts_by_price,
-    top_5_part_distribution_by_country,
-    average_parts_price,
-    total_component_price,
-    top_5_suppliers_by_articles
-]
-
-db_model = ChatOpenAI(
-    model="o4-mini"
-).bind_tools(tools)
-
-tools_by_name = {tool.name: tool for tool in tools}
-
-# --- Tool Node ---
-def tool_node(state: AgentState):
-    outputs = []
-    last_message = state["db_content"][-1]
-    for tool_call in last_message.tool_calls:
-        tool_name = tool_call["name"]
-        args = dict(tool_call["args"])
-        # Inject paths
-        args["articles_path"] = state["articles_path"]
-        args["parts_path"] = state["parts_path"]
-
-        if tool_name not in tools_by_name:
-            result = "Unknown tool, please retry."
-        else:
-            result = convert_numpy(tools_by_name[tool_name].invoke(args))
-
-        outputs.append(ToolMessage(
-            content=json.dumps(result),
-            name=tool_name,
-            tool_call_id=tool_call["id"]
-        ))
-    return {"db_content": state["db_content"] + outputs}
-
-# --- Model Node ---
-def call_model(state: AgentState, config=None):
-
-    prompt = db_call_model_prompt.format(plan=state.get('plan', 'No plan provided'))
-
-    response = db_model.invoke([prompt] + state["db_content"], config)
-
-    return {"db_content": state["db_content"] + [response]}
-
-def summarize_db_node(state: AgentState):
-    db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
-
-    prompt = db_summary_prompt.format(db_content=db_content_text)
-
-    response = model.invoke([prompt])
-
-    return {
-        "db_summary": response.content
-    }
 
 # takes in the plan and does some research
 async def research_plan_node(state: AgentState):
@@ -423,8 +365,8 @@ async def research_critique_node(state: AgentState):
 # look at the revision number - if greater than the max revisions will then end.
 def should_continue(state):
     if state["revision_number"] > state["max_revisions"]:
-        print(save_to_pdf(content=state["draft"], filename="report.pdf", chart_metadata=state.get("chart_metadata", [])))
-        print(save_to_word(content=state["draft"], filename="report.docx", chart_metadata=state.get("chart_metadata", [])))
+        print(save_to_pdf(content=state["draft"], filename="../reports_and_graphs/report.pdf", chart_metadata=state.get("chart_metadata", [])))
+        print(save_to_word(content=state["draft"], filename="../reports_and_graphs/report.docx", chart_metadata=state.get("chart_metadata", [])))
         result = END
     else:
         result = "reflect"
@@ -438,18 +380,12 @@ def simulation_should_continue(state: AgentState):
     tool_calls = getattr(last, "tool_calls", None)
     return "continue" if tool_calls else "end"
 
-def db_should_continue(state: AgentState):
-    last_message = state["db_content"][-1]
-    return "continue" if last_message.tool_calls else "end"
-
 # initialise the graph with the agent state
 builder = StateGraph(AgentState)
 
 # add all nodes
 builder.add_node("planner", plan_node)
-builder.add_node("db_agent", call_model)
-builder.add_node("db_tools", tool_node)
-builder.add_node("summarize_db", summarize_db_node)
+builder.add_node("db_agent", database_agent)
 builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_charts", code_editor_agent)
 builder.add_node("simulation_agent", simulation_model_call)
@@ -466,8 +402,7 @@ builder.set_entry_point("planner")
 
 # add in basic edges
 builder.add_edge("planner", "db_agent")
-builder.add_edge("db_tools", "db_agent")
-builder.add_edge("summarize_db", "chart_planning_node")
+builder.add_edge("db_agent", "chart_planning_node")
 builder.add_edge("chart_planning_node", "generate_charts")
 builder.add_edge("generate_charts", "research_plan")
 builder.add_edge("research_plan", "simulation_agent")
@@ -476,14 +411,6 @@ builder.add_edge("simulation_clean", "generate")
 builder.add_edge("reflect", "research_critique")
 builder.add_edge("research_critique", "generate")
 
-builder.add_conditional_edges(
-    "db_agent",
-    db_should_continue,
-    {
-        "continue": "db_tools",
-        "end": "summarize_db"
-    }
-)
 
 # add conditional edge
 builder.add_conditional_edges(
@@ -508,7 +435,7 @@ async def run_agent(messages, parts_path, articles_path):
         graph = builder.compile(checkpointer=checkpointer)
 
         # save the graph
-        output_graph_path = "langgraph.png"
+        output_graph_path = "../reports_and_graphs/langgraph.png"
         with open(output_graph_path, "wb") as f:
             f.write(graph.get_graph().draw_mermaid_png())
 
