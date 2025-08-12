@@ -88,7 +88,7 @@ def get_last_tool_result(messages, tool_name: str) -> dict | None:
                 return {"raw_content": msg.content}
     return None
 
-def _is_non_blank_png(path: str, min_unique_pixels: int = 10) -> tuple[bool, str]:
+def verify_generated_chart(path: str, min_unique_pixels: int = 10) -> tuple[bool, str]:
     """Return (ok, reason). ok=False with reason if missing/empty/blank/unreadable."""
     import os
     if not os.path.exists(path):

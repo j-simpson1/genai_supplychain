@@ -16,7 +16,7 @@ from langchain_openai import ChatOpenAI
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.prompts import generate_chart_prompt
-from FastAPI.core.utils import _is_non_blank_png
+from FastAPI.core.utils import verify_generated_chart
 
 # ---------- Paths / Model ----------
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -92,7 +92,7 @@ def execute_chart_code_node(state: AgentState) -> Dict[str, Any]:
             pass
 
         # validate the chart generated
-        ok, reason = _is_non_blank_png(chart_path)
+        ok, reason = verify_generated_chart(chart_path)
         if not ok:
             raise RuntimeError(f"Chart artifact invalid: {reason}")
 
