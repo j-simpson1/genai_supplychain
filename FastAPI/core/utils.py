@@ -1,6 +1,6 @@
-import numpy as np
 import json
 from langchain_core.messages import ToolMessage
+from PIL import Image, UnidentifiedImageError
 
 def summarize_simulation_content(sim: dict) -> dict:
     summary = sim.get("summary", {})
@@ -87,3 +87,23 @@ def get_last_tool_result(messages, tool_name: str) -> dict | None:
             except json.JSONDecodeError:
                 return {"raw_content": msg.content}
     return None
+
+def _is_non_blank_png(path: str, min_unique_pixels: int = 10) -> tuple[bool, str]:
+    """Return (ok, reason). ok=False with reason if missing/empty/blank/unreadable."""
+    import os
+    if not os.path.exists(path):
+        return (False, "file does not exist")
+    if os.path.getsize(path) == 0:
+        return (False, "file size is zero")
+    try:
+        with Image.open(path) as im:
+            im = im.convert("L")  # grayscale
+            # Avoid loading the whole image into a giant set for huge images
+            pixels = list(im.getdata())
+            if len(set(pixels)) <= min_unique_pixels:
+                return (False, "image appears blank (too few unique pixels)")
+    except UnidentifiedImageError:
+        return (False, "file is not a valid image")
+    except Exception as e:
+        return (False, f"error reading image: {e}")
+    return (True, "")
