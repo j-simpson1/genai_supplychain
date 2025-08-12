@@ -3,13 +3,16 @@ load_dotenv()
 
 import os
 import traceback
+import json, os, inspect
 
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import ToolMessage
+
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
-from FastAPI.core.utils import convert_numpy
+from FastAPI.core.utils import _json_dump_safe
 from FastAPI.core.prompts import db_call_model_prompt, db_summary_prompt
 
 import json
@@ -35,27 +38,77 @@ db_model = ChatOpenAI(
 
 tools_by_name = {tool.name: tool for tool in tools}
 
-# --- Tool Node ---
 def tool_node(state: AgentState):
     outputs = []
-    last_message = state["db_content"][-1]
-    for tool_call in last_message.tool_calls:
-        tool_name = tool_call["name"]
-        args = dict(tool_call["args"])
-        # Inject paths
-        args["articles_path"] = state["articles_path"]
-        args["parts_path"] = state["parts_path"]
 
-        if tool_name not in tools_by_name:
-            result = "Unknown tool, please retry."
+    # no-op if nothing to do
+    msgs = state.get("db_content") or []
+    if not msgs:
+        return {"db_content": outputs}
+    last = msgs[-1]
+    tool_calls = getattr(last, "tool_calls", None) or []
+    if not tool_calls:
+        return {"db_content": outputs}
+
+    # paths from state
+    state_articles = state.get("articles_path")
+    state_parts = state.get("parts_path")
+
+    for call in tool_calls:
+        tool_name = (call or {}).get("name")
+        tool_id = (call or {}).get("id") or ""
+        tool_obj = tools_by_name.get(tool_name)
+
+        # 1) Unknown tool guard
+        if tool_obj is None:
+            outputs.append(ToolMessage(
+                content=json.dumps({"error": "unknown_tool", "tool": tool_name}),
+                name=tool_name or "unknown",
+                tool_call_id=tool_id,
+            ))
+            continue
+
+        # Start from model args but 2) prevent path override
+        model_args = dict((call or {}).get("args") or {})
+        model_args.pop("articles_path", None)
+        model_args.pop("parts_path", None)
+
+        # Quietly filter to the tool's accepted params
+        fn = getattr(tool_obj, "func", None) or getattr(tool_obj, "coroutine", None)
+        accepted = set(inspect.signature(fn).parameters.keys()) if fn else set()
+
+        args = {k: v for k, v in model_args.items() if k in accepted}
+        if "articles_path" in accepted and isinstance(state_articles, str):
+            args["articles_path"] = state_articles
+        if "parts_path" in accepted and isinstance(state_parts, str):
+            args["parts_path"] = state_parts
+
+        # 3) File existence check
+        for p in ("articles_path", "parts_path"):
+            if p in args and not os.path.isfile(args[p]):
+                outputs.append(ToolMessage(
+                    content=json.dumps({"error": "path_not_found", p+"_exists": False}),
+                    name=tool_name,
+                    tool_call_id=tool_id,
+                ))
+                break
         else:
-            result = convert_numpy(tools_by_name[tool_name].invoke(args))
+            # 4) JSON‑safe output and catch any tool exception
+            try:
+                raw = tool_obj.invoke(args)
+                content_str = _json_dump_safe(raw)
+                outputs.append(ToolMessage(
+                    content=content_str,
+                    name=tool_name,
+                    tool_call_id=tool_id,
+                ))
+            except Exception as e:
+                outputs.append(ToolMessage(
+                    content=json.dumps({"error": "tool_execution_failed", "tool": tool_name, "message": str(e)}),
+                    name=tool_name,
+                    tool_call_id=tool_id,
+                ))
 
-        outputs.append(ToolMessage(
-            content=json.dumps(result),
-            name=tool_name,
-            tool_call_id=tool_call["id"]
-        ))
     return {"db_content": outputs}
 
 # --- Model Node ---

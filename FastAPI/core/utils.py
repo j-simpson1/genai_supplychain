@@ -107,3 +107,7 @@ def verify_generated_chart(path: str, min_unique_pixels: int = 10) -> tuple[bool
     except Exception as e:
         return (False, f"error reading image: {e}")
     return (True, "")
+
+def _json_dump_safe(obj: object) -> str:
+    # Ensures no NaN/Inf and converts numpy types
+    return json.dumps(convert_numpy(obj), ensure_ascii=False, allow_nan=False)
