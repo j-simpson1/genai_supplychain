@@ -5,9 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-from pydantic import BaseModel, Field
+import math
 import json
 from typing import List, Union
+from pydantic import BaseModel, Field
 
 from langchain_core.messages import ToolMessage
 from langgraph.graph import StateGraph, START, END
@@ -16,9 +17,9 @@ from langchain.agents import tool
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.prompts import simulation_prompt
+from FastAPI.core.prompts import simulation_clean_prompt
 from FastAPI.core.utils import convert_numpy
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
-from FastAPI.core.prompts import simulation_clean_prompt
 
 
 class SimulationResultsInput(BaseModel):
@@ -26,32 +27,65 @@ class SimulationResultsInput(BaseModel):
 
 class simulation_inputs(BaseModel):
     target_country: str = Field(..., description="Country to simulate tariff shock for")
-    tariff_rates: List[Union[int, float]] = Field(..., description="Tariff rates; either decimals (0.1) or integers (10).")
+    tariff_rates: List[Union[int, float]] = Field(
+        ..., description="Tariff rates; decimals (0.1) or integers (10)."
+    )
 
+def _normalize_rates(rates: List[Union[int, float]]) -> List[float]:
+    cleaned = []
+    for r in rates:
+        if isinstance(r, bool):  # avoid True/False becoming 1/0
+            continue
+        val = float(r)
+        if val > 1:
+            val /= 100.0
+        if math.isfinite(val) and 0 <= val <= 1:
+            cleaned.append(val)
+    return sorted(set(cleaned))
 
-@tool(args_schema=simulation_inputs)
+def _assert_finite_numbers(obj, path="root"):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            _assert_finite_numbers(v, f"{path}.{k}")
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            _assert_finite_numbers(v, f"{path}[{i}]")
+    elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
+        if not math.isfinite(obj):
+            raise ValueError(f"Non-finite number at {path}: {obj}")
+
+@tool(
+    args_schema=simulation_inputs,
+    description="Run an automotive tariff shock simulation after normalising and validating inputs."
+)
 def automotive_tariff_simulation(target_country: str, tariff_rates: List[Union[int, float]]) -> dict:
     """
     Run an automotive tariff shock simulation for the given country at the specified rates.
-    Accepts decimals (e.g., 0.1 for 10%) or integers (e.g., 10 for 10%) and normalizes
-    everything to decimals in [0, 1]. Returns a JSON-serializable dict from analyze_tariff_impact().
+    - Normalises tariff rates: integers like 20 -> 0.2; keeps decimals in [0,1].
+    - Validates: non-blank target_country; at least one valid rate.
+    - Post-checks: result is a non-empty dict; all numbers finite; JSON-serialisable via convert_numpy.
+    Returns the simulation result dict from analyze_tariff_impact(...).
     """
-    normalized_rates = []
-    for r in tariff_rates:
-        if isinstance(r, (int, float)):
-            if 0 <= r <= 1:
-                normalized_rates.append(float(r))
-            elif 1 < r <= 100:
-                normalized_rates.append(float(r) / 100.0)
-            elif r == 1:
-                # Treat 1 as 1% to match user expectations
-                normalized_rates.append(0.01)
-            else:
-                raise ValueError(f"Invalid rate {r}. Use 0–1 or 0–100.")
-        else:
-            raise ValueError(f"Non-numeric rate {r!r}")
-    response = analyze_tariff_impact(target_country, normalized_rates)
-    return convert_numpy(response)
+    # --- Input checks ---
+    if not target_country.strip():
+        raise ValueError("target_country cannot be blank.")
+    rates = _normalize_rates(tariff_rates)
+    if not rates:
+        raise ValueError("No valid tariff rates after normalization.")
+
+    # --- Run simulation ---
+    result = analyze_tariff_impact(target_country=target_country.strip(), tariff_rates=rates)
+
+    # --- Output checks ---
+    if not isinstance(result, dict) or not result:
+        raise ValueError("Simulation returned empty or non-dict result.")
+    _assert_finite_numbers(result)
+    try:
+        json.dumps(result, default=convert_numpy)
+    except Exception as e:
+        raise TypeError(f"Output not JSON-serialisable: {e}")
+
+    return result
 
 
 simulation_tools = [automotive_tariff_simulation]
