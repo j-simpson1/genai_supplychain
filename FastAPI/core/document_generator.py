@@ -6,8 +6,6 @@ matplotlib.use("Agg")
 
 import os
 import json
-import uuid
-import traceback
 import tempfile
 import pandas as pd
 import re
@@ -15,19 +13,19 @@ import asyncio
 
 from langgraph.graph import StateGraph, END
 from typing import List
-from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from pydantic import BaseModel
+from langchain_core.messages import SystemMessage, HumanMessage
 from langsmith import Client
 
 from tavily import TavilyClient
 
 from FastAPI.document_builders.pdf_creator import save_to_pdf
 from FastAPI.document_builders.word_creator import save_to_word
-from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
-from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, simulation_prompt, db_call_model_prompt, db_summary_prompt, writers_prompt, chart_planning_prompt, generate_chart_prompt
+from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, writers_prompt, chart_planning_prompt
 from FastAPI.core.code_editor_agent import code_editor_agent
 from FastAPI.core.database_agent import database_agent
+from FastAPI.core.simulation_agent import simulation_agent
 from FastAPI.core.state import AgentState
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
@@ -89,37 +87,8 @@ Generate a list of search queries that will gather any relevant information. Onl
 class ResearchQueries(BaseModel):
     queries: List[str]
 
-class DBQueries(BaseModel):
-    queries: List[str]
-
-class SimulationResultsInput(BaseModel):
-    simulation_result: dict
-
-class simulation_inputs(BaseModel):
-    target_country: str = Field(..., description="Country to simulate tariff shock for")
-    tariff_rates: List[int] = Field(description="tariff rates to use in the tariff shock simulation.")
-
 # importing taviliy as using it in a slightly unconventional way
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
-
-@tool(args_schema=simulation_inputs)
-def automotive_tariff_simulation(target_country: str, tariff_rates: List[float]) -> dict:
-    """
-    Run an automotive simulation on the component/vehicle showing the impact of tariff shocks of a certain country
-    on the component/vehicle.
-
-    Accepts either decimals (e.g., 0.1 for 10%) or integers (e.g., 10 for 10%) and normalizes all to decimals.
-    """
-    # Normalize rates: if any rate > 1, treat it as a percentage (e.g., 10 becomes 0.10)
-    normalized_rates = [
-        r / 100 if r > 1 else r
-        for r in tariff_rates
-    ]
-
-    response = analyze_tariff_impact(target_country, normalized_rates)
-    return convert_numpy(response)
-
-simulation_analysis_model = ChatOpenAI(model="o4-mini")
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
@@ -174,8 +143,6 @@ async def research_plan_node(state: AgentState):
 
     return {"web_content": content}
 
-model_with_tools = model.bind_tools([automotive_tariff_simulation])
-
 def chart_planning_node(state: AgentState):
     """
     Decides what charts to generate based on DB summary & content.
@@ -207,99 +174,11 @@ def chart_planning_node(state: AgentState):
 
     return {"chart_plan": chart_plan}
 
-simulation_tools = [automotive_tariff_simulation]
-
-# model with simulation tool bound
-simulation_model = ChatOpenAI(model="o4-mini").bind_tools(simulation_tools)
-
-def simulation_tool_node(state: AgentState):
-    """
-    Enhanced tool node that handles both automotive_tariff_simulation and simulation_results_analyst
-    """
-    outputs = []
-    messages = state.get("raw_simulation", [])
-    if not messages:
-        return {"raw_simulation": []}
-
-    last_message = messages[-1]
-    chart_metadata = list(state.get("chart_metadata", []))
-
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        for tool_call in last_message.tool_calls:
-            tool_name = tool_call["name"]
-            args = tool_call["args"]
-            tool_call_id = tool_call["id"]
-
-            if tool_name == "automotive_tariff_simulation":
-                # Execute the tariff simulation tool
-                result = automotive_tariff_simulation.invoke(args)
-
-                # Extract chart metadata from simulation results
-                if "output_files" in result and "chart_paths" in result["output_files"]:
-                    chart_paths = result["output_files"]["chart_paths"]
-                    for chart_id, chart_path in chart_paths.items():
-                        chart_id_clean = os.path.splitext(os.path.basename(chart_path))[0]
-                        existing_paths = [meta["path"] for meta in chart_metadata]
-                        if chart_path not in existing_paths:
-                            chart_metadata.append({
-                                "id": chart_id_clean,
-                                "path": chart_path
-                            })
-
-                # Create the tool message with full result
-                outputs.append(ToolMessage(
-                    content=json.dumps(result),
-                    name=tool_name,
-                    tool_call_id=tool_call_id
-                ))
-            else:
-                # Handle unknown tools
-                outputs.append(ToolMessage(
-                    content="Unknown tool",
-                    name=tool_name,
-                    tool_call_id=tool_call_id
-                ))
-
-    return {
-        "raw_simulation": messages + outputs,
-        "chart_metadata": chart_metadata
-    }
-
-def simulation_model_call(state: AgentState):
-
-    # task message no longer needed but commented out in case it needs to be added back in
-    task_message = HumanMessage(content=state['task'])
-
-    simulation_tool_names = [t.name for t in simulation_tools]
-
-    simulation_model_prompt = simulation_prompt.format(tools=simulation_tools, tool_names=simulation_tool_names, task=task_message)
-
-    response = simulation_model.invoke([simulation_model_prompt] + state["raw_simulation"])
-    return {"raw_simulation": state["raw_simulation"] + [response]}
-
-def simulation_clean(state: AgentState):
-
-    system_prompt = SystemMessage(content=(
-        """
-        All above messages are from a supply chain simulation tool. Please clean up these findings.
-        DO NOT summarize the information. Return the raw information, just in a cleaner format. 
-        Make sure all relevant information is preserved - you can rewrite findings verbatim.
-        """
-    ))
-
-    response = model.invoke([
-        system_prompt,
-        HumanMessage(content="\n\n".join(str(m.content) for m in state['raw_simulation']))
-    ])
-
-    return {"clean_simulation": response}
-
 def generation_node(state: AgentState):
     db = state.get("db_summary", "")
     web = "\n\n".join(state.get("web_content", []))
     chart_metadata = state.get("chart_metadata", [])
     simulation_messages = state.get("clean_simulation", [])
-    print("Simulation message: ", simulation_messages)
 
     charts = "\n\n".join(
         [f"\n[[FIGURE:{item['id']}]]" for item in chart_metadata])
@@ -388,9 +267,7 @@ builder.add_node("planner", plan_node)
 builder.add_node("db_agent", database_agent)
 builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_charts", code_editor_agent)
-builder.add_node("simulation_agent", simulation_model_call)
-builder.add_node("simulation_tools", simulation_tool_node)
-builder.add_node("simulation_clean", simulation_clean)
+builder.add_node("simulation", simulation_agent)
 builder.add_node("generate", generation_node)
 builder.add_node("reflect", reflection_node)
 builder.add_node("research_plan", research_plan_node)
@@ -405,9 +282,8 @@ builder.add_edge("planner", "db_agent")
 builder.add_edge("db_agent", "chart_planning_node")
 builder.add_edge("chart_planning_node", "generate_charts")
 builder.add_edge("generate_charts", "research_plan")
-builder.add_edge("research_plan", "simulation_agent")
-builder.add_edge("simulation_tools", "simulation_agent")
-builder.add_edge("simulation_clean", "generate")
+builder.add_edge("research_plan", "simulation")
+builder.add_edge("simulation", "generate")
 builder.add_edge("reflect", "research_critique")
 builder.add_edge("research_critique", "generate")
 
@@ -417,15 +293,6 @@ builder.add_conditional_edges(
     "generate",
     should_continue,
     {END: END, "reflect": "reflect"}
-)
-
-builder.add_conditional_edges(
-    "simulation_agent",
-    simulation_should_continue,
-    {
-        "continue": "simulation_tools",
-        "end": "simulation_clean",
-    },
 )
 
 async def run_agent(messages, parts_path, articles_path):
@@ -567,8 +434,8 @@ if __name__ == "__main__":
     # )
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
-    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_corrupted_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_corrupted_data/RAV4_brake_articles_data.csv")
 
     print(prompt)
     asyncio.run(run_agent(prompt, parts_path, articles_path))

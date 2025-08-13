@@ -23,6 +23,8 @@ research_plan_prompt = client.pull_prompt("research_plan_prompt", include_model=
 
 simulation_prompt = client.pull_prompt("simulation_prompt", include_model=False)
 
+simulation_clean_prompt = client.pull_prompt("simulation_clean_prompt", include_model=False)
+
 writers_prompt = client.pull_prompt("writer_prompt", include_model=False)
 
 reflection_prompt = client.pull_prompt("reflection_prompt", include_model=False).format()
