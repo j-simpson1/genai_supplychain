@@ -322,7 +322,7 @@ class TariffSimulation:
             'non_taxable_products_count': len(non_taxable_products),
             'total_parts': len(self.part_requirements),
             'cost_summary': {
-                # 'total_base_cost': total_base_cost,
+                'total_base_cost': total_base_cost,
                 'total_tariff_cost': total_tariff_cost,
                 'total_vat_cost': total_vat,
                 'total_final_cost': total_cost

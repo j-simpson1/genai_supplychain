@@ -26,6 +26,8 @@ from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_p
 from FastAPI.core.code_editor_agent import code_editor_agent
 from FastAPI.core.database_agent import database_agent
 from FastAPI.core.simulation_agent import simulation_agent
+from FastAPI.core.research_agent import research_agent
+from FastAPI.core.research_critique import research_critique_agent
 from FastAPI.core.state import AgentState
 from FastAPI.open_deep_research.deep_researcher import deep_researcher
 
@@ -75,21 +77,12 @@ any relevant information. Only generate 4 queries max."""
 # after we've made the critique will pass the list of queries to pass to tavily
 RESEARCH_CRITIQUE_PROMPT = """You are a researcher charged with providing information that can \
 be used when making any requested revisions (as outlined below). \
-Generate a list of search queries that will gather any relevant information. Only generate 4 queries max."""
+Generate a list of search queries that will gather any relevant information. Only generate 3 queries max."""
 # RESEARCH_CRITIQUE_PROMPT = """You are a research analyst charged with providing information that can \
 # be used when making any requested revisions (as outlined below). Generate a detailed deep search query \
 # (50 words max) which can be used as input into a deep search agent. Your query can contain multiple areas of \
 # research and the deep search agent will be able to break these areas down and handle them individually. Can your ask \
 # for the response to be a maximum of 800 words."""
-
-# for generating a list of queries to pass to tavily will use function calling so we get a list of strings
-# from tavily
-
-class ResearchQueries(BaseModel):
-    queries: List[str]
-
-# importing taviliy as using it in a slightly unconventional way
-tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
@@ -102,47 +95,6 @@ def plan_node(state: AgentState):
     response = model.invoke(messages)
     # get the content of the messages and pass to the plan key
     return {"plan": response.content}
-
-# takes in the plan and does some research
-async def research_plan_node(state: AgentState):
-
-    # using Tavily by creating a finite list of queries
-    # response with what we will invoke this with is the
-    # response will be pydantic model which has the list of queries
-    queries = model.with_structured_output(ResearchQueries).invoke([
-        # researching planning prompt and planning prompt
-        SystemMessage(content=research_plan_prompt),
-        HumanMessage(content=state['task'])
-    ])
-    # original content
-    content = state['web_content'] or []
-    # loop over the queries and search for them in Tavily
-    for q in queries.queries:
-        response = tavily.search(query=q, max_results=2)
-        for r in response['results']:
-            # get the list of results and append them to the content
-            content.append(f"Source: {r['url']}\n{r['content']}")
-    # return the content key which is equal to the original content plus the accumulated content
-
-
-    # # using open-deep-research
-    # query = await model.ainvoke([
-    #     SystemMessage(content=RESEARCH_PLAN_PROMPT),
-    #     HumanMessage(content=state['task'])
-    # ])
-    # # original content
-    # content = state['web_content'] or []
-    #
-    # response = await deep_researcher.ainvoke({
-    #     "messages": [HumanMessage(content=query.content)],
-    # })
-    #
-    # output = response['messages'][-1].content
-    # print(output)
-    #
-    # content.append(output)
-
-    return {"web_content": content}
 
 def chart_planning_node(state: AgentState):
     """
@@ -212,37 +164,6 @@ def reflection_node(state: AgentState):
     # going to generate the critique
     return {"critique": response.content}
 
-async def research_critique_node(state: AgentState):
-
-    # creating a list of tavily queries
-    queries = model.with_structured_output(ResearchQueries).invoke([
-        SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
-        HumanMessage(content=state['critique'])
-    ])
-    # get the original content and append with new queries
-    content = state['web_content'] or []
-    for q in queries.queries:
-        response = tavily.search(query=q, max_results=2)
-        for r in response['results']:
-            content.append(r['content'])
-
-    # # using open-deep-research
-    # query = await model.ainvoke([
-    #     SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
-    #     HumanMessage(content=state['critique'])
-    # ])
-    # # get the original content and append with new queries
-    # content = state['web_content'] or []
-    #
-    # response = await deep_researcher.ainvoke({
-    #     "messages": [HumanMessage(content=query.content)],
-    # })
-    #
-    # output = response['messages'][-1].content
-    # content.append(output)
-
-    return {"web_content": content}
-
 # look at the revision number - if greater than the max revisions will then end.
 def should_continue(state):
     if state["revision_number"] > state["max_revisions"]:
@@ -272,8 +193,8 @@ builder.add_node("generate_charts", code_editor_agent)
 builder.add_node("simulation", simulation_agent)
 builder.add_node("generate", generation_node)
 builder.add_node("reflect", reflection_node)
-builder.add_node("research_plan", research_plan_node)
-builder.add_node("research_critique", research_critique_node)
+builder.add_node("research_agent", research_agent)
+builder.add_node("research_critique", research_critique_agent)
 
 # set entry point
 builder.set_entry_point("planner")
@@ -283,8 +204,8 @@ builder.set_entry_point("planner")
 builder.add_edge("planner", "db_agent")
 builder.add_edge("db_agent", "chart_planning_node")
 builder.add_edge("chart_planning_node", "generate_charts")
-builder.add_edge("generate_charts", "research_plan")
-builder.add_edge("research_plan", "simulation")
+builder.add_edge("generate_charts", "research_agent")
+builder.add_edge("research_agent", "simulation")
 builder.add_edge("simulation", "generate")
 builder.add_edge("reflect", "research_critique")
 builder.add_edge("research_critique", "generate")

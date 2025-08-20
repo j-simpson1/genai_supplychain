@@ -29,3 +29,5 @@ writers_prompt = client.pull_prompt("writer_prompt", include_model=False)
 
 reflection_prompt = client.pull_prompt("reflection_prompt", include_model=False).format()
 
+research_critique_prompt = client.pull_prompt("research_critique_prompt_2", include_model=False).format()
+

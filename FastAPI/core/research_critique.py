@@ -12,7 +12,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langsmith import traceable
 
 from FastAPI.core.state import AgentState
-from FastAPI.core.prompts import research_plan_prompt
+from FastAPI.core.prompts import research_critique_prompt
 
 from tavily import TavilyClient
 
@@ -128,11 +128,11 @@ def traced_tavily_search(params: dict):
     # LangSmith gets a single dict[str, Any]; Tavily gets kwargs.
     return tavily.search(**params)
 
-async def research_plan_node(state: AgentState):
+async def research_critique_node(state: AgentState):
     # 1) Ask the model for a parametrized plan
     plan: TavilyPlan = planner.invoke([
-        SystemMessage(content=research_plan_prompt),
-        HumanMessage(content=state['task'])
+        SystemMessage(content=research_critique_prompt),
+        HumanMessage(content=state['critique'])
     ])
 
     # 2) Map jobs to your three Focus Areas (+ optional 4th misc)
@@ -184,16 +184,16 @@ async def research_plan_node(state: AgentState):
 subgraph = StateGraph(AgentState)
 
 # add all nodes
-subgraph.add_node("research_agent", research_plan_node)
+subgraph.add_node("research_critique", research_critique_node)
 
-subgraph.add_edge(START, "research_agent")
-subgraph.add_edge("research_agent", END)
+subgraph.add_edge(START, "research_critique")
+subgraph.add_edge("research_critique", END)
 
-research_agent = subgraph.compile()
+research_critique_agent = subgraph.compile()
 
 output_graph_path = "../reports_and_graphs/research_agent_langgraph.png"
 with open(output_graph_path, "wb") as f:
-    f.write(research_agent.get_graph().draw_mermaid_png())
+    f.write(research_critique_agent.get_graph().draw_mermaid_png())
 
 if __name__ == "__main__":
     import asyncio
@@ -212,7 +212,7 @@ if __name__ == "__main__":
                     "- Manufacturing country: United Kingdom",
             "plan": "",
             "draft": "",
-            "critique": "",
+            "critique": "Your submission demonstrates strong structuring and coverage, but it needs greater depth, consistency, and integration of data. Key improvements include expanding the Executive Summary with precise quantitative insights and clear implications for Toyota, reorganizing Key Points into focused highlights, and ensuring data alignment with short tables and a methodology note. The analysis should also incorporate deeper web research, sensitivity testing (e.g. FX swings), and prioritized recommendations with ownership, timelines, and ROI estimates. Finally, standardize references, refine visuals, and target a polished 10–12 page report plus appendix for a more professional finish.",
             "web_content": [],
             "db_content": [],
             "db_summary": "",
@@ -235,11 +235,11 @@ if __name__ == "__main__":
             "remaining_steps": 10,
         }
 
-        print("\n--- Running Research Agent Test ---\n")
+        print("\n--- Running Research Critique Test ---\n")
         try:
-            async for step in research_agent.astream(initial_state):
+            async for step in research_critique.astream(initial_state):
                 print("Step Output:", step)
-            print("\n--- Research Agent Test Completed ---\n")
+            print("\n--- Research Critique Test Completed ---\n")
         except Exception as e:
             print("Error during test run:")
             traceback.print_exc()
@@ -250,10 +250,10 @@ if __name__ == "__main__":
 
 # # using open-deep-research
 # query = await model.ainvoke([
-#     SystemMessage(content=RESEARCH_PLAN_PROMPT),
-#     HumanMessage(content=state['task'])
+#     SystemMessage(content=RESEARCH_CRITIQUE_PROMPT),
+#     HumanMessage(content=state['critique'])
 # ])
-# # original content
+# # get the original content and append with new queries
 # content = state['web_content'] or []
 #
 # response = await deep_researcher.ainvoke({
@@ -261,8 +261,4 @@ if __name__ == "__main__":
 # })
 #
 # output = response['messages'][-1].content
-# print(output)
-#
 # content.append(output)
-
-# return the content key which is equal to the original content plus the accumulated content
