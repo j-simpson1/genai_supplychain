@@ -6,9 +6,10 @@ import os
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from langsmith import traceable
 
-from typing import List
-from pydantic import BaseModel
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.prompts import research_plan_prompt
@@ -25,45 +26,162 @@ model = ChatOpenAI(
     model="o4-mini"
 )
 
+class TavilyJob(BaseModel):
+    # ≤400 chars, focused, single-topic
+    query: str = Field(..., max_length=400)
+    # Planner may set; we also enforce via enrich_job()
+    topic: Literal["general", "news"] = "general"
+    search_depth: Literal["basic", "advanced"] = "advanced"
+    max_results: int = 5
+    time_range: Optional[Literal["day", "week", "month", "year"]] = None
+    include_domains: Optional[List[str]] = None
+    exclude_domains: Optional[List[str]] = None
+    chunks_per_source: int = 3
+    include_raw_content: bool = True
+    include_answer: Literal[False, "basic", "advanced"] = False
 
-# takes in the plan and does some research
+class TavilyPlan(BaseModel):
+    # Enforce ≤4 parametrized jobs
+    jobs: List[TavilyJob] = Field(default_factory=list, max_items=4)
+
+# --- NEW: Domain policies & guardrails ---
+
+TARIFF_NEWS_DOMAINS = [
+    "reuters.com",
+    "bloomberg.com",
+    "wsj.com",
+    "ft.com",
+    "trade.gov",
+    "oecd.org",
+    "wto.org",
+    "imf.org",
+    "worldbank.org",
+    "japantimes.co.jp",
+    "nikkei.com",
+    "asia.nikkei.com",
+    "business-standard.com",
+    "economist.com",
+    "politico.com",
+]
+
+AUTO_SUPPLY_DOMAINS = [
+    "oica.net",
+    "acea.auto",
+    "jama.or.jp",
+    "siam.in",
+    "vda.de",
+    "statista.com",
+    "ihsmarkit.com",
+    "autonews.com",
+    "just-auto.com",
+    "wardsauto.com",
+    "motortrend.com",
+    "carscoops.com",
+    "globalsupplychainnews.com",
+    "supplychaindigital.com",
+    "supplychainquarterly.com",
+    "smmt.co.uk",
+    "nist.gov",
+    "epa.gov",
+    "ec.europa.eu",
+    "nhtsa.gov",
+]
+
+DEFAULT_DENYLIST = [
+    "wikipedia.org", "reddit.com", "quora.com", "pinterest.",
+    "autodoc.", "made-in-china."
+]
+
+def enrich_job(job: TavilyJob, focus_area: str) -> TavilyJob:
+    """
+    Apply domain/recency defaults and denylist per Focus Area:
+      - Supply chain of the manufacturer
+      - Tariff news – target country
+      - Tariff news – automotive sector
+    """
+    j = job.copy()
+
+    # Sane bounds
+    j.search_depth = j.search_depth if j.search_depth in ("basic", "advanced") else "advanced"
+    j.chunks_per_source = min(max(j.chunks_per_source or 3, 1), 3)
+    j.max_results = min(max(j.max_results or 5, 1), 8)
+
+    # Merge denylist
+    j.exclude_domains = list(set((j.exclude_domains or []) + DEFAULT_DENYLIST))
+
+    # Focus-specific allowlists / freshness
+    if "Tariff news" in focus_area:
+        j.topic = "news"
+        j.time_range = j.time_range or "month"
+        if not j.include_domains:
+            j.include_domains = TARIFF_NEWS_DOMAINS
+    elif "Supply chain" in focus_area:
+        j.topic = "general"
+        if not j.include_domains:
+            j.include_domains = AUTO_SUPPLY_DOMAINS
+
+    return j
+
+# --- NEW: Structured planner (model emits TavilyPlan) ---
+
+planner = model.with_structured_output(TavilyPlan)
+
+# --- UPDATED: research_plan_node using parametrized searches ---
+
+@traceable(name="tavily.search")
+def traced_tavily_search(params: dict):
+    # LangSmith gets a single dict[str, Any]; Tavily gets kwargs.
+    return tavily.search(**params)
+
 async def research_plan_node(state: AgentState):
-
-    # using Tavily by creating a finite list of queries
-    # response with what we will invoke this with is the
-    # response will be pydantic model which has the list of queries
-    queries = model.with_structured_output(ResearchQueries).invoke([
-        # researching planning prompt and planning prompt
+    # 1) Ask the model for a parametrized plan
+    plan: TavilyPlan = planner.invoke([
         SystemMessage(content=research_plan_prompt),
         HumanMessage(content=state['task'])
     ])
-    # original content
-    content = state['web_content'] or []
-    # loop over the queries and search for them in Tavily
-    for q in queries.queries:
-        response = tavily.search(query=q, max_results=2)
-        for r in response['results']:
-            # get the list of results and append them to the content
-            content.append(f"Source: {r['url']}\n{r['content']}")
 
-    # # using open-deep-research
-    # query = await model.ainvoke([
-    #     SystemMessage(content=RESEARCH_PLAN_PROMPT),
-    #     HumanMessage(content=state['task'])
-    # ])
-    # # original content
-    # content = state['web_content'] or []
-    #
-    # response = await deep_researcher.ainvoke({
-    #     "messages": [HumanMessage(content=query.content)],
-    # })
-    #
-    # output = response['messages'][-1].content
-    # print(output)
-    #
-    # content.append(output)
+    # 2) Map jobs to your three Focus Areas (+ optional 4th misc)
+    focus_labels = [
+        "Supply chain of the manufacturer",
+        "Tariff news – target country",
+        "Tariff news – automotive sector",
+        "Misc – supporting",
+    ]
 
-    # return the content key which is equal to the original content plus the accumulated content
+    jobs: List[TavilyJob] = []
+    for i, job in enumerate(plan.jobs[:4]):
+        area = focus_labels[i] if i < len(focus_labels) else "Misc – supporting"
+        jobs.append(enrich_job(job, area))
+
+    # 3) Execute searches with parameters and append to web_content
+    content = state.get('web_content') or []
+    for j in jobs:
+        try:
+            params = {
+                "query": j.query,
+                "topic": j.topic,
+                "search_depth": j.search_depth,
+                "chunks_per_source": j.chunks_per_source,
+                "include_raw_content": j.include_raw_content,
+                "include_answer": j.include_answer,
+                "max_results": j.max_results,
+                "time_range": j.time_range,
+                "include_domains": j.include_domains or [],
+                "exclude_domains": j.exclude_domains or [],
+            }
+
+            response = traced_tavily_search(params)
+
+            for r in response.get("results", []):
+                content.append(
+                    f"Source: {r.get('url')}\n"
+                    f"Title: {r.get('title', '')}\n"
+                    f"{r.get('content', '')}"
+                )
+
+        except Exception as e:
+            content.append(f"[Tavily error on '{j.query}': {e}]")
+
     return {"web_content": content}
 
 
@@ -132,3 +250,24 @@ if __name__ == "__main__":
             traceback.print_exc()
 
     asyncio.run(run_research_test())
+
+# script to run open_deep_researcher
+
+# # using open-deep-research
+# query = await model.ainvoke([
+#     SystemMessage(content=RESEARCH_PLAN_PROMPT),
+#     HumanMessage(content=state['task'])
+# ])
+# # original content
+# content = state['web_content'] or []
+#
+# response = await deep_researcher.ainvoke({
+#     "messages": [HumanMessage(content=query.content)],
+# })
+#
+# output = response['messages'][-1].content
+# print(output)
+#
+# content.append(output)
+
+# return the content key which is equal to the original content plus the accumulated content
