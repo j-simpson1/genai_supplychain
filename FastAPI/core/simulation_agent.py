@@ -21,6 +21,8 @@ from FastAPI.core.prompts import simulation_clean_prompt
 from FastAPI.core.utils import convert_numpy
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
 
 class SimulationResultsInput(BaseModel):
     simulation_result: dict
@@ -214,7 +216,7 @@ subgraph.add_conditional_edges(
 
 simulation_agent = subgraph.compile()
 
-output_graph_path = "../reports_and_graphs/simulation_agent_langgraph.png"
+output_graph_path = os.path.join(REPORTS_DIR, "simulation_agent_langgraph.png")
 with open(output_graph_path, "wb") as f:
     f.write(simulation_agent.get_graph().draw_mermaid_png())
 

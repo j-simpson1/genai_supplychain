@@ -18,6 +18,8 @@ from FastAPI.core.prompts import db_call_model_prompt, db_summary_prompt
 import json
 from langchain_core.messages import SystemMessage, ToolMessage
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
 
 model = ChatOpenAI(
     model="o4-mini"
@@ -194,7 +196,7 @@ subgraph.add_conditional_edges(
 
 database_agent = subgraph.compile()
 
-output_graph_path = "../reports_and_graphs/database_agent_langgraph.png"
+output_graph_path = os.path.join(REPORTS_DIR, "database_agent_langgraph.png")
 with open(output_graph_path, "wb") as f:
     f.write(database_agent.get_graph().draw_mermaid_png())
 

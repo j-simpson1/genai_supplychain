@@ -20,6 +20,7 @@ from FastAPI.core.utils import verify_generated_chart
 
 # ---------- Paths / Model ----------
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
 CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
 os.makedirs(CHARTS_DIR, exist_ok=True)
 
@@ -165,7 +166,7 @@ subgraph.add_conditional_edges(
 
 code_editor_agent = subgraph.compile()
 
-output_graph_path = "../reports_and_graphs/code_editor_langgraph.png"
+output_graph_path = os.path.join(REPORTS_DIR, "code_editor_langgraph.png")
 with open(output_graph_path, "wb") as f:
     f.write(code_editor_agent.get_graph().draw_mermaid_png())
 
