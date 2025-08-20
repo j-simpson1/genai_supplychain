@@ -159,7 +159,6 @@ class TariffSimulation:
                     'price': base_price,
                     'countryOfOrigin': most_common_country,
                     'supplierName': f"Q1 Threshold Average ({len(selected_suppliers)} suppliers)",
-                    'articleProductName': template_supplier.get('articleProductName', 'Unknown'),
                     'articleNo': f"Q1-AVG-{product_id}",
                     'q1_threshold': q1_threshold,
                     'suppliers_below_q1': len(selected_suppliers),
@@ -241,7 +240,6 @@ class TariffSimulation:
                 total_product_cost = cost_info['final_price'] * quantity
 
                 cost_breakdown[product_id] = {
-                    'product_name': supplier.get('articleProductName', 'Unknown'),
                     'supplier': supplier['supplierName'],
                     'country': country,
                     'quantity': quantity,
@@ -291,11 +289,6 @@ class TariffSimulation:
 
                 analysis[product_id] = {
                     'total_suppliers': len(suppliers),
-                    # 'q1_threshold': q1_threshold,
-                    # 'suppliers_below_q1': len(below_q1_prices),
-                    # 'percentage_below_q1': (len(below_q1_prices) / len(suppliers)) * 100,
-                    # 'is_taxable': self.taxable_info.get(product_id, False),
-                    # 'vat_rate': self.vat_rate if self.taxable_info.get(product_id, False) else 0,
                     'q1_price_stats': {
                         'min': float(np.min(below_q1_prices)),
                         'max': float(np.max(below_q1_prices)),
@@ -329,34 +322,67 @@ class TariffSimulation:
             'non_taxable_products_count': len(non_taxable_products),
             'total_parts': len(self.part_requirements),
             'cost_summary': {
-                'total_base_cost': total_base_cost,
+                # 'total_base_cost': total_base_cost,
                 'total_tariff_cost': total_tariff_cost,
                 'total_vat_cost': total_vat,
                 'total_final_cost': total_cost
             },
             'vat_percentage_of_total': (total_vat / total_cost) * 100 if total_cost > 0 else 0,
-            # 'taxable_products': taxable_products,
-            # 'non_taxable_products': non_taxable_products
         }
 
+    def bottom_quartile_avg_verification(self, product_id):
+        """
+        Verification function that uses the exact same logic as your reference function
+        to confirm our Q1 implementation is correct
+        """
+        if product_id not in self.suppliers_by_product:
+            return None
 
-def load_data_from_csv(articles_csv_path, parts_csv_path):
+        suppliers = self.suppliers_by_product[product_id]
+
+        # Get all final prices (same as our main calculation)
+        prices = []
+        for supplier in suppliers:
+            cost_info = self._calculate_full_cost(
+                supplier['price'],
+                supplier['countryOfOrigin'],
+                product_id
+            )
+            prices.append(cost_info['final_price'])
+
+        # Convert to pandas Series and apply your exact logic
+        s = pd.Series(prices)
+        s = pd.to_numeric(s, errors="coerce").dropna()
+
+        if s.empty:
+            return 0.0
+        if len(s) == 1:
+            return round(float(s.iloc[0]), 2)
+
+        q1 = s.quantile(0.25)  # default 'linear' interpolation
+        val = float(s[s <= q1].mean())
+        return round(val, 2)
+
+
+def load_data_from_csv(suppliers_csv_path, parts_csv_path):
     """
-    Load supplier articles and part requirements from CSV.
+    Load supplier data and part requirements from the new CSV format.
+
+    Suppliers CSV: productId,articleNo,price,countryOfOrigin,supplierId,supplierName
+    Parts CSV: productId,partDescription,quantity,taxable
     """
-    # Articles (suppliers)
-    articles_df = pd.read_csv(articles_csv_path)
+    # Load suppliers data
+    suppliers_df = pd.read_csv(suppliers_csv_path)
 
-    suppliers_data = articles_df.rename(columns={
-        "productGroupId": "productId"
-    }).to_dict(orient="records")
+    # Convert to list of dictionaries (no column renaming needed now)
+    suppliers_data = suppliers_df.to_dict(orient="records")
 
-    # Parts requirements
+    # Load parts requirements
     parts_df = pd.read_csv(parts_csv_path)
-    part_requirements = dict(zip(parts_df["productGroupId"], parts_df["quantity"]))
+    part_requirements = dict(zip(parts_df["productId"], parts_df["quantity"]))
 
-    # Taxable flag
-    taxable_info = dict(zip(parts_df["productGroupId"], parts_df["taxable"]))
+    # Load taxable information
+    taxable_info = dict(zip(parts_df["productId"], parts_df["taxable"]))
 
     return suppliers_data, part_requirements, taxable_info
 
@@ -543,9 +569,11 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
 
 
 def analyze_tariff_impact(
+        suppliers_csv_path,
+        parts_csv_path,
         target_country='Germany',
         tariff_rates=None,
-        vat_rate=0.20,  # UK VAT rate
+        vat_rate=0.20,
         show_plots=False,
         save_plots=True,
         output_dir='./charts'
@@ -555,14 +583,11 @@ def analyze_tariff_impact(
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    articles_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data",
-                                     "RAV4_brake_articles_data.csv")
-    parts_csv_path = os.path.join(BASE_DIR, "..", "core", "Toyota_RAV4_brake_dummy_data", "RAV4_brake_parts_data.csv")
-
+    # Load data using new CSV format
     suppliers_data, part_requirements, taxable_info = load_data_from_csv(
-        articles_csv_path, parts_csv_path
+        suppliers_csv_path, parts_csv_path
     )
+
     sim = TariffSimulation(suppliers_data, part_requirements, taxable_info, vat_rate)
 
     # Get current tariff information
@@ -658,31 +683,23 @@ def analyze_tariff_impact(
         if distribution_chart_path:
             chart_paths['cost_distribution'] = distribution_chart_path
 
-    # Return JSON response with Q1 methodology details and detailed cost impacts
+    # Return simplified response
     response = {
         'analysis_type': 'tariff_impact_analysis_with_vat',
-        # 'methodology': 'q1_threshold_bottom_quartile_average',
         'target_country': target_country,
-        # 'vat_rate': vat_rate,
         'vat_summary': vat_summary,
         'current_cost_analysis': {
             'total_cost': current_total_cost,
-            # 'cost_breakdown': current_cost_breakdown
         },
-        # 'q1_analysis': q1_analysis,
         'tariff_scenarios': [
             {
-                # 'tariff_rate': scenario['tariff_rate'],
                 'tariff_rate': f"{scenario['tariff_rate']:.1%}",
                 'cost_impact': {
                     'initial_cost': round(scenario['cost_analysis']['initial_cost'], 2),
                     'final_cost': round(scenario['cost_analysis']['final_cost'], 2),
                     'absolute_increase': round(scenario['cost_analysis']['cost_increase'], 2),
-                    # 'percentage_increase': round(scenario['cost_analysis']['percentage_increase'], 2),
-                    # 'cost_increase_formatted': f"£{scenario['cost_analysis']['cost_increase']:,.2f}",
                     'percentage_increase': f"{scenario['cost_analysis']['percentage_increase']:.1f}%"
                 },
-                # 'suppliers_affected': len(scenario['affected_suppliers'])
             }
             for scenario in results
         ],
@@ -690,38 +707,43 @@ def analyze_tariff_impact(
             'tariff_rates_tested': tariff_rates,
             'total_suppliers': len(suppliers_data),
             'affected_suppliers': len(results[0]['affected_suppliers']),
-            # 'taxable_affected_suppliers': len([s for s in results[0]['affected_suppliers'] if s['is_taxable']]),
             'cost_range': {
                 'min_increase': min(r['cost_analysis']['percentage_increase'] for r in results),
                 'max_increase': max(r['cost_analysis']['percentage_increase'] for r in results),
                 'min_increase_formatted': f"{min(r['cost_analysis']['percentage_increase'] for r in results):.1f}%",
                 'max_increase_formatted': f"{max(r['cost_analysis']['percentage_increase'] for r in results):.1f}%"
             },
-            # 'q1_summary': {
-            #     'avg_suppliers_below_q1': np.mean([q['suppliers_below_q1'] for q in q1_analysis.values()]),
-            #     'total_products': len(q1_analysis),
-            #     'avg_savings_vs_market': np.mean([q['savings_vs_average'] for q in q1_analysis.values()])
-            # }
         },
-        # 'recommendations': recommendations,
         'output_files': {
-            # 'charts_saved': bool(chart_paths),
             'chart_paths': chart_paths,
-            # 'output_directory': output_dir if chart_paths else None
         }
     }
 
     return response
 
 
-if __name__ == "__main__":
-    print("Running tariff impact analysis with Q1 threshold methodology...")
+# Example usage function
+def run_example_analysis():
+    """Example of how to use the updated simulation with new CSV format"""
+
+    # Example file paths - update these to your actual file locations
+    suppliers_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"  # productId,articleNo,price,countryOfOrigin,supplierId,supplierName
+    parts_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"  # productId,partDescription,quantity,taxable
+
     result = analyze_tariff_impact(
+        suppliers_csv_path=suppliers_csv,
+        parts_csv_path=parts_csv,
         target_country='Japan',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
-        show_plots=True,
+        show_plots=True,  # Changed to True to display charts
         save_plots=True
     )
 
     print(json.dumps(result, indent=2, default=str))
+    return result
+
+
+if __name__ == "__main__":
+    # Run the example
+    run_example_analysis()

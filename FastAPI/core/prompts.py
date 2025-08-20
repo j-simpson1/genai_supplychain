@@ -19,7 +19,7 @@ chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_mode
 
 generate_chart_prompt = client.pull_prompt("generate_chart_prompt", include_model=False)
 
-research_plan_prompt = client.pull_prompt("research_plan_prompt", include_model=False).format()
+research_plan_prompt = client.pull_prompt("research_plan_prompt_2", include_model=False).format()
 
 simulation_prompt = client.pull_prompt("simulation_prompt", include_model=False)
 

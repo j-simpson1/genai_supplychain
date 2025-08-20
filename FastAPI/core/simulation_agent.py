@@ -97,7 +97,8 @@ model = ChatOpenAI(model="o4-mini")
 
 def simulation_tool_node(state: AgentState):
     """
-    Enhanced tool node that handles both automotive_tariff_simulation and simulation_results_analyst
+    Enhanced tool node that handles both automotive_tariff_simulation and simulation_results_analyst.
+    Uses articles_path and parts_path from AgentState.
     """
     outputs = []
     messages = state.get("raw_simulation", [])
@@ -114,13 +115,21 @@ def simulation_tool_node(state: AgentState):
             tool_call_id = tool_call["id"]
 
             if tool_name == "automotive_tariff_simulation":
-                # Execute the tariff simulation tool
                 try:
-                    result = automotive_tariff_simulation.invoke(args)
+                    articles_path = state.get("articles_path")
+                    parts_path = state.get("parts_path")
+
+                    result = analyze_tariff_impact(
+                        suppliers_csv_path=articles_path,
+                        parts_csv_path=parts_path,
+                        target_country=args["target_country"].strip(),
+                        tariff_rates=_normalize_rates(args["tariff_rates"])
+                    )
+
                 except Exception as e:
                     result = {"error": str(e)}
 
-                # Extract chart metadata from simulation results
+                # Extract chart metadata if charts were generated
                 if "output_files" in result and "chart_paths" in result["output_files"]:
                     chart_paths = result["output_files"]["chart_paths"]
                     for chart_id, chart_path in chart_paths.items():
@@ -132,14 +141,12 @@ def simulation_tool_node(state: AgentState):
                                 "path": chart_path
                             })
 
-                # Create the tool message with full result
                 outputs.append(ToolMessage(
                     content=json.dumps(result),
                     name=tool_name,
                     tool_call_id=tool_call_id
                 ))
             else:
-                # Handle unknown tools
                 outputs.append(ToolMessage(
                     content="Unknown tool",
                     name=tool_name,
@@ -207,6 +214,9 @@ subgraph.add_conditional_edges(
 
 simulation_agent = subgraph.compile()
 
+output_graph_path = "../reports_and_graphs/simulation_agent_langgraph.png"
+with open(output_graph_path, "wb") as f:
+    f.write(simulation_agent.get_graph().draw_mermaid_png())
 
 if __name__ == "__main__":
     import asyncio

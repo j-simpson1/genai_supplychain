@@ -1,4 +1,4 @@
-productGroupId,partDescription,quantity,taxable
+productId,partDescription,quantity,taxable
 100630,Accessories/Parts,2,True
 100807,Brake Caliper Mounting,4,True
 100032,Brake Disc,4,True

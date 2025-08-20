@@ -11,7 +11,7 @@ from langchain_core.messages import ToolMessage
 
 
 from FastAPI.core.state import AgentState
-from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, average_parts_price, total_component_price, top_5_suppliers_by_articles
+from FastAPI.core.database_tools import parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country, bottom_quartile_average_price, total_component_price, top_5_suppliers_by_articles, calculator
 from FastAPI.core.utils import _json_dump_safe
 from FastAPI.core.prompts import db_call_model_prompt, db_summary_prompt
 
@@ -27,7 +27,7 @@ tools = [
     parts_summary,
     top_5_parts_by_price,
     top_5_part_distribution_by_country,
-    average_parts_price,
+    bottom_quartile_average_price,
     total_component_price,
     top_5_suppliers_by_articles
 ]
@@ -123,16 +123,51 @@ def call_model(state: AgentState, config=None):
     response = db_model.invoke([SystemMessage(content=prompt)] + state["db_content"], config)
     return {"db_content": [response]}
 
-def summarize_db_node(state: AgentState):
+db_analyst_tools = [calculator]
+db_analyst_model = ChatOpenAI(model="o4-mini").bind_tools(db_analyst_tools)
+
+def db_analyst_node(state: AgentState):
     db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
-    prompt = db_summary_prompt.format(db_content=db_content_text)
+    # Encourage calculator use without touching your global prompt template
+    tool_hint = (
+        "You may call the `calculator` tool for any arithmetic "
+        "(e.g., totals, percentages, weighted averages, medians). "
+        "Return a concise executive summary at the end."
+    )
 
-    response = model.invoke([SystemMessage(content=prompt)])
+    prompt = db_summary_prompt.format(db_content=db_content_text) + "\n\n" + tool_hint
 
-    return {
-        "db_summary": response.content
-    }
+    messages = [SystemMessage(content=prompt)]
+    response = db_analyst_model.invoke(messages)
+
+    # resolve calculator tool calls (usually 0–2 iterations)
+    tool_msgs = []
+    while getattr(response, "tool_calls", None):
+        for call in (response.tool_calls or []):
+            if call.get("name") == "calculator":
+                args = (call.get("args") or {})
+                # Normalize arg name; accept expression as either 'expression' or 'expr'
+                expression = args.get("expression") or args.get("expr") or ""
+                tool_output = calculator.invoke({"expression": expression})
+                tool_msgs.append(ToolMessage(
+                    content=_json_dump_safe(tool_output),
+                    name="calculator",
+                    tool_call_id=call.get("id", "")
+                ))
+            else:
+                # Unknown tool safeguard
+                tool_msgs.append(ToolMessage(
+                    content=_json_dump_safe({"error": "unknown_tool", "tool": call.get("name")}),
+                    name=call.get("name") or "unknown",
+                    tool_call_id=call.get("id", "")
+                ))
+
+        messages.extend([response] + tool_msgs)
+        response = db_analyst_model.invoke(messages)
+        tool_msgs = []
+
+    return {"db_summary": response.content}
 
 def db_should_continue(state: AgentState):
     last_message = state["db_content"][-1]
@@ -142,18 +177,18 @@ subgraph = StateGraph(AgentState)
 
 subgraph.add_node("db_agent", call_model)
 subgraph.add_node("db_tools", tool_node)
-subgraph.add_node("summarize_db", summarize_db_node)
+subgraph.add_node("db_analyst", db_analyst_node)
 
 subgraph.add_edge(START, "db_agent")
 subgraph.add_edge("db_tools", "db_agent")
-subgraph.add_edge("summarize_db", END)
+subgraph.add_edge("db_analyst", END)
 
 subgraph.add_conditional_edges(
     "db_agent",
     db_should_continue,
     {
         "continue": "db_tools",
-        "end": "summarize_db"
+        "end": "db_analyst"
     }
 )
 

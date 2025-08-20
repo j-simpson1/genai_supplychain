@@ -27,6 +27,7 @@ from FastAPI.core.code_editor_agent import code_editor_agent
 from FastAPI.core.database_agent import database_agent
 from FastAPI.core.simulation_agent import simulation_agent
 from FastAPI.core.state import AgentState
+from FastAPI.open_deep_research.deep_researcher import deep_researcher
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import convert_numpy, serialize_state
@@ -175,7 +176,8 @@ def chart_planning_node(state: AgentState):
     return {"chart_plan": chart_plan}
 
 def generation_node(state: AgentState):
-    db = state.get("db_summary", "")
+    db_analyst = state.get("db_summary", "")
+    db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
     chart_metadata = state.get("chart_metadata", [])
     simulation_messages = state.get("clean_simulation", [])
@@ -187,7 +189,7 @@ def generation_node(state: AgentState):
         CoT_examples=chain_of_thought_examples,
         task=state['task'],
         plan=state['plan'],
-        db=db,
+        db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
         web=web,
         charts=charts,
         simulation=simulation_messages
@@ -335,7 +337,7 @@ async def run_agent(messages, parts_path, articles_path):
             'remaining_steps': 5
         },
             config={
-                "recursion_limit": 100,
+                "recursion_limit": 500,
                 "configurable": {"thread_id": "1"}
             },
         ):
@@ -434,8 +436,8 @@ if __name__ == "__main__":
     # )
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_corrupted_data/RAV4_brake_parts_data.csv")
-    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_corrupted_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
     print(prompt)
     asyncio.run(run_agent(prompt, parts_path, articles_path))
