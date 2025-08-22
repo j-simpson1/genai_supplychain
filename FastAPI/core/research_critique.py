@@ -16,6 +16,9 @@ from FastAPI.core.prompts import research_critique_prompt
 
 from tavily import TavilyClient
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
+
 class ResearchQueries(BaseModel):
     queries: List[str]
 
@@ -191,7 +194,7 @@ subgraph.add_edge("research_critique", END)
 
 research_critique_agent = subgraph.compile()
 
-output_graph_path = "../reports_and_graphs/research_agent_langgraph.png"
+output_graph_path = os.path.join(REPORTS_DIR, "research_critique_langgraph.png")
 with open(output_graph_path, "wb") as f:
     f.write(research_critique_agent.get_graph().draw_mermaid_png())
 
@@ -237,7 +240,7 @@ if __name__ == "__main__":
 
         print("\n--- Running Research Critique Test ---\n")
         try:
-            async for step in research_critique.astream(initial_state):
+            async for step in research_critique_agent.astream(initial_state):
                 print("Step Output:", step)
             print("\n--- Research Critique Test Completed ---\n")
         except Exception as e:
