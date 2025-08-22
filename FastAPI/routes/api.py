@@ -157,6 +157,7 @@ async def run_simulation(
         tariff_rate_1: str = Form(..., description="First tariff rate percentage"),
         tariff_rate_2: str = Form(..., description="Second tariff rate percentage"),
         tariff_rate_3: str = Form(..., description="Third tariff rate percentage"),
+        vat_rate: str = Form(..., description="VAT rate percentage"),  # New VAT rate parameter
         parts_data_file: UploadFile = File(..., description="CSV file with parts data"),
         articles_data_file: UploadFile = File(..., description="CSV file with articles data")
 ):
@@ -169,6 +170,7 @@ async def run_simulation(
     - Manufacturing location
     - Tariff shock simulation country
     - Three tariff rate percentages for simulation scenarios
+    - VAT rate percentage
     - Parts data CSV file
     - Articles data CSV file
     """
@@ -181,7 +183,7 @@ async def run_simulation(
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid vehicle_details JSON: {str(e)}")
 
-        # Parse and validate tariff rates
+        # Parse and validate tariff rates and VAT rate
         try:
             tariff_rates = []
             for rate_str, rate_name in [(tariff_rate_1, "tariff_rate_1"),
@@ -200,11 +202,25 @@ async def run_simulation(
                 except ValueError:
                     raise HTTPException(status_code=400, detail=f"Invalid {rate_name}: must be a valid number")
 
+            # Validate VAT rate
+            if not vat_rate or vat_rate.strip() == "":
+                raise HTTPException(status_code=400, detail="vat_rate cannot be empty")
+
+            try:
+                vat_rate_float = float(vat_rate)
+                if vat_rate_float < 0:
+                    raise HTTPException(status_code=400, detail="vat_rate cannot be negative")
+                if vat_rate_float > 100:  # Reasonable upper limit for VAT
+                    raise HTTPException(status_code=400, detail="vat_rate cannot exceed 100%")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid vat_rate: must be a valid number")
+
             logger.info(f"Parsed tariff rates: {tariff_rates}")
+            logger.info(f"Parsed VAT rate: {vat_rate_float}")
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error parsing tariff rates: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Error parsing rates: {str(e)}")
 
         # Validate file types
         if not parts_data_file.filename.endswith('.csv'):
@@ -266,6 +282,7 @@ async def run_simulation(
         logger.info(f"Using category: {category_name} (ID: {category_filter})")
         logger.info(f"Manufacturing location: {manufacturing_location_name} ({manufacturing_location})")
         logger.info(f"Tariff shock country: {tariff_shock_country_name} ({tariff_shock_country})")
+        logger.info(f"VAT rate: {vat_rate_float}%")  # Log VAT rate
 
         # Log all received form data
         form_data_summary = {
@@ -289,7 +306,8 @@ async def run_simulation(
                     "code": tariff_shock_country,
                     "name": tariff_shock_country_name
                 },
-                "tariff_rates": tariff_rates
+                "tariff_rates": tariff_rates,
+                "vat_rate": vat_rate_float  # Include VAT rate in summary
             },
             "uploaded_files": {
                 "parts_data": {
@@ -315,13 +333,15 @@ async def run_simulation(
         model_name = vehicle_data.get("modelName")
         clean_model_name = re.sub(r"\s*\([^)]*\)", "", model_name)
 
-        # Generate prompt with actual received data
+        # Generate prompt with actual received data including VAT rate
         prompt = auto_supplychain_prompt_template(
             manufacturer=normalized_manufacturer,
             model=clean_model_name,
             component=category_name,  # Now using the actual category name from frontend
-            country=tariff_shock_country_name,  # Using country name instead of code
-            rates=tariff_rates
+            manufacturing_country=manufacturing_location_name,
+            tariff_shock_country=tariff_shock_country_name,  # Using country name instead of code
+            rates=tariff_rates,
+            vat_rate=vat_rate_float  # Pass VAT rate to prompt template
         )
 
         import tempfile
@@ -334,7 +354,7 @@ async def run_simulation(
         articles_df.to_csv(articles_path, index=False)
 
         # Call agent using file paths
-        result = run_agent(prompt, parts_path, articles_path)
+        result = await run_agent(prompt, parts_path, articles_path)
 
         # Clean up temporary files
         try:

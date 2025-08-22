@@ -225,7 +225,7 @@ async def run_agent(messages, parts_path, articles_path):
         graph = builder.compile(checkpointer=checkpointer)
 
         # save the graph
-        output_graph_path = "../reports_and_graphs/langgraph.png"
+        output_graph_path = os.path.join(REPORTS_DIR, "langgraph.png")
         with open(output_graph_path, "wb") as f:
             f.write(graph.get_graph().draw_mermaid_png())
 
@@ -278,11 +278,11 @@ async def run_agent(messages, parts_path, articles_path):
 def auto_supplychain_prompt_template(manufacturer, model, component, tariff_shock_country, rates, vat_rate, manufacturing_country):
     rates_str = ", ".join(f"{r}%" for r in rates)
     return (
-        f"Write me a report on the supply chain of the {manufacturer} {model} {component}. "
-        f"Include a tariff shock simulation for {tariff_shock_country} with rates of {rates_str}.\n"
-        f"Assume the following:\n"
-        f" - VAT Rate: {vat_rate}%\n"
-        f" - Manufacturing country: {manufacturing_country}"
+        f"Write a professional supply chain analysis report on the {manufacturer} {model} {component}. "
+        f"The analysis should focus on the manufacturing in {manufacturing_country} and include a tariff shock simulation "
+        f"applied to parts imported from {tariff_shock_country} at the following tariff rates: {rates_str}.\n"
+        f"Assume:\n"
+        f"- VAT Rate: {vat_rate}%.\n\n"
     )
 
 prompt = auto_supplychain_prompt_template(

@@ -39,6 +39,7 @@ interface FormData {
   tariffRate1: string;
   tariffRate2: string;
   tariffRate3: string;
+  vatRate: string; // New VAT rate field
 }
 
 interface EngineOption {
@@ -173,6 +174,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     tariffRate1: '',
     tariffRate2: '',
     tariffRate3: '',
+    vatRate: '', // Initialize VAT rate
   });
 
   // Data state
@@ -190,7 +192,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     engines: false,
     categories: false,
     countries: false,
-    simulation: false, // Add simulation loading state
+    simulation: false,
   });
 
   // Error state
@@ -364,6 +366,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       formDataToSend.append('tariff_rate_1', formData.tariffRate1);
       formDataToSend.append('tariff_rate_2', formData.tariffRate2);
       formDataToSend.append('tariff_rate_3', formData.tariffRate3);
+      formDataToSend.append('vat_rate', formData.vatRate); // Add VAT rate to form data
 
       // Add files
       formDataToSend.append('parts_data_file', partsDataFile);
@@ -388,6 +391,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           tariffRate1: formData.tariffRate1,
           tariffRate2: formData.tariffRate2,
           tariffRate3: formData.tariffRate3,
+          vatRate: formData.vatRate, // Log VAT rate
           partsDataFile: partsDataFile?.name,
           articlesDataFile: articlesDataFile?.name
         });
@@ -421,6 +425,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       tariffRate1: '',
       tariffRate2: '',
       tariffRate3: '',
+      vatRate: '', // Reset VAT rate
     });
     setModels([]);
     setEngineOptions([]);
@@ -456,6 +461,18 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       setFormData(prev => ({
         ...prev,
         [field]: value
+      }));
+    }
+  };
+
+  // Handler for VAT rate change
+  const handleVatRateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    // Allow empty string or valid numbers (including decimals)
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setFormData(prev => ({
+        ...prev,
+        vatRate: value
       }));
     }
   };
@@ -741,6 +758,22 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             />
           </StyledFormControl>
 
+          {/* New VAT Rate Field */}
+          <StyledFormControl fullWidth required>
+            <TextField
+              label="VAT Rate (%)"
+              value={formData.vatRate}
+              onChange={handleVatRateChange}
+              required
+              placeholder="e.g. 20"
+              type="text"
+              inputProps={{
+                pattern: '^\\d*\\.?\\d*$',
+                inputMode: 'decimal'
+              }}
+            />
+          </StyledFormControl>
+
           <StyledFormControl fullWidth required>
             <Box sx={{
               border: '2px dashed #e5e7eb',
@@ -861,7 +894,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               type="submit"
               variant="contained"
               size="medium"
-              disabled={!formData.type || !formData.manufacturingLocation || !formData.tariffShockCountry || !formData.categoryFilter || !formData.tariffRate1 || !formData.tariffRate2 || !formData.tariffRate3 || !partsDataFile || !articlesDataFile || loading.simulation}
+              disabled={!formData.type || !formData.manufacturingLocation || !formData.tariffShockCountry || !formData.categoryFilter || !formData.tariffRate1 || !formData.tariffRate2 || !formData.tariffRate3 || !formData.vatRate || !partsDataFile || !articlesDataFile || loading.simulation}
             >
               {loading.simulation ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
