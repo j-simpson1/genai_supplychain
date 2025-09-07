@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
+  Divider,
   Paper,
   Typography,
   FormControl,
@@ -484,7 +485,32 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           Select Vehicle & Configure Report
         </Typography>
 
-        <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 400, mx: 'auto' }}>
+      <Box sx={{ mx: -5 }}>
+        <Divider sx={{ mt: 4.0, mb: 6 }} />
+      </Box>
+
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
+      sx={{ maxWidth: 880, mx: 'auto' }}   // optional: widen the form
+    >
+      <Box
+        sx={{
+          display: 'grid',
+          rowGap: 0,
+          columnGap: 2,
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          mb: 2,
+        }}
+      >
+        {/* Vehicle Selection */}
+        <Box sx={{ gridColumn: '1 / -1', mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            Vehicle Selection
+          </Typography>
+        </Box>
+
+          {/* Vehicle Brand */}
           <StyledFormControl fullWidth required>
             <Autocomplete
               options={vehicleBrands}
@@ -502,15 +528,12 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 }));
               }}
               disableClearable
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>{option.label}</li>
-              )}
-              renderInput={(params) => (
-                <TextField {...params} label="Vehicle Brand" required />
-              )}
+              renderOption={(props, option) => <li {...props} key={option.id}>{option.label}</li>}
+              renderInput={(params) => <TextField {...params} label="Vehicle Brand" required />}
             />
           </StyledFormControl>
 
+          {/* Model */}
           <StyledFormControl fullWidth required>
             <Autocomplete
               options={models}
@@ -529,9 +552,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               disabled={!formData.vehicleId || loading.models}
               loading={loading.models}
               disableClearable
-              renderOption={(props, option) => (
-                <li {...props} key={option.modelId}>{option.modelName}</li>
-              )}
+              renderOption={(props, option) => <li {...props} key={option.modelId}>{option.modelName}</li>}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -550,10 +571,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 />
               )}
               noOptionsText={
-                !formData.vehicleId ? 'Select a brand to load models' :
-                loading.models ? 'Loading models...' :
-                errors.models ? errors.models :
-                'No models found'
+                !formData.vehicleId ? 'Select a brand to load models'
+                : loading.models ? 'Loading models...'
+                : errors.models ? errors.models
+                : 'No models found'
               }
             />
           </StyledFormControl>
@@ -628,259 +649,282 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               )}
             </Select>
           </StyledFormControl>
+        </Box>
 
-          <StyledFormControl fullWidth required>
-            <Autocomplete
-              options={manufacturingLocations}
-              getOptionLabel={(option) => option.name}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              value={manufacturingLocations.find(location => location.id === formData.manufacturingLocation) || null}
-              onChange={(event, newValue) => {
-                setFormData(prev => ({
-                  ...prev,
-                  manufacturingLocation: newValue?.id || ''
-                }));
-              }}
-              disabled={loading.countries}
-              loading={loading.countries}
-              disableClearable
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>
-                  <Typography sx={{ flexGrow: 1 }}>
-                    {option.name}
-                  </Typography>
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Manufacturing Location"
-                  required
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-              noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
-            />
-          </StyledFormControl>
+        {/* --- Manufacturing Location & VAT rate section --- */}
+        <Box sx={{ gridColumn: '1 / -1', mt: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 3 }}>
+            Manufacturing Location & VAT rate
+          </Typography>
 
-          <StyledFormControl fullWidth required>
-            <Autocomplete
-              options={manufacturingLocations}
-              getOptionLabel={(option) => option.name}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              value={manufacturingLocations.find(location => location.id === formData.tariffShockCountry) || null}
-              onChange={(event, newValue) => {
-                setFormData(prev => ({
-                  ...prev,
-                  tariffShockCountry: newValue?.id || ''
-                }));
-              }}
-              disabled={loading.countries}
-              loading={loading.countries}
-              disableClearable
-              renderOption={(props, option) => (
-                <li {...props} key={`tariff-${option.id}`}>
-                  <Typography sx={{ flexGrow: 1 }}>
-                    {option.name}
-                  </Typography>
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Tariff Shock Simulation: Country"
-                  required
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-              noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
-            />
-          </StyledFormControl>
-
-          <StyledFormControl fullWidth required>
-            <TextField
-              label="Tariff Shock Simulation: Rate 1 (%)"
-              value={formData.tariffRate1}
-              onChange={handleTariffRateChange('tariffRate1')}
-              required
-              placeholder="e.g. 25"
-              type="text"
-              inputProps={{
-                pattern: '^\\d*\\.?\\d*$',
-                inputMode: 'decimal'
-              }}
-            />
-          </StyledFormControl>
-
-          <StyledFormControl fullWidth required>
-            <TextField
-              label="Tariff Shock Simulation: Rate 2 (%)"
-              value={formData.tariffRate2}
-              onChange={handleTariffRateChange('tariffRate2')}
-              required
-              placeholder="e.g. 50"
-              type="text"
-              inputProps={{
-                pattern: '^\\d*\\.?\\d*$',
-                inputMode: 'decimal'
-              }}
-            />
-          </StyledFormControl>
-
-          <StyledFormControl fullWidth required>
-            <TextField
-              label="Tariff Shock Simulation: Rate 3 (%)"
-              value={formData.tariffRate3}
-              onChange={handleTariffRateChange('tariffRate3')}
-              required
-              placeholder="e.g. 75"
-              type="text"
-              inputProps={{
-                pattern: '^\\d*\\.?\\d*$',
-                inputMode: 'decimal'
-              }}
-            />
-          </StyledFormControl>
-
-          {/* New VAT Rate Field */}
-          <StyledFormControl fullWidth required>
-            <TextField
-              label="VAT Rate (%)"
-              value={formData.vatRate}
-              onChange={handleVatRateChange}
-              required
-              placeholder="e.g. 20"
-              type="text"
-              inputProps={{
-                pattern: '^\\d*\\.?\\d*$',
-                inputMode: 'decimal'
-              }}
-            />
-          </StyledFormControl>
-
-          <StyledFormControl fullWidth required>
-            <Box sx={{
-              border: '2px dashed #e5e7eb',
-              borderRadius: 2,
-              p: 3,
-              textAlign: 'center',
-              backgroundColor: '#f9fafb',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                borderColor: '#d1d5db',
-                backgroundColor: '#f3f4f6',
-              }
-            }}>
-              <input
-                accept=".csv"
-                id="parts-data-upload"
-                type="file"
-                onChange={(e) => handleFileUpload(e, 'parts')}
-                style={{ display: 'none' }}
-                required
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            }}
+          >
+            {/* Manufacturing Location */}
+            <StyledFormControl fullWidth required>
+              <Autocomplete
+                options={manufacturingLocations}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                value={
+                  manufacturingLocations.find(
+                    (location) => location.id === formData.manufacturingLocation
+                  ) || null
+                }
+                onChange={(event, newValue) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    manufacturingLocation: newValue?.id || '',
+                  }));
+                }}
+                disabled={loading.countries}
+                loading={loading.countries}
+                disableClearable
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Typography sx={{ flexGrow: 1 }}>{option.name}</Typography>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Manufacturing Location"
+                    required
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
               />
-              <label htmlFor="parts-data-upload">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  sx={{
-                    textTransform: 'none',
-                    color: '#6b7280',
-                    borderColor: '#d1d5db',
-                    '&:hover': {
-                      borderColor: '#9ca3af',
-                      backgroundColor: 'transparent',
-                    }
-                  }}
-                >
-                  Upload Parts Data (CSV) *
-                </Button>
-              </label>
-              {partsDataFile && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ color: '#059669', fontWeight: 500 }}>
-                    ✓ {partsDataFile.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                    {(partsDataFile.size / 1024).toFixed(2)} KB
-                  </Typography>
-                </Box>
-              )}
-              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#9ca3af' }}>
-                Required: Upload CSV file with parts data
-              </Typography>
-            </Box>
-          </StyledFormControl>
+            </StyledFormControl>
 
-          <StyledFormControl fullWidth required>
-            <Box sx={{
-              border: '2px dashed #e5e7eb',
-              borderRadius: 2,
-              p: 3,
-              textAlign: 'center',
-              backgroundColor: '#f9fafb',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                borderColor: '#d1d5db',
-                backgroundColor: '#f3f4f6',
-              }
-            }}>
-              <input
-                accept=".csv"
-                id="articles-data-upload"
-                type="file"
-                onChange={(e) => handleFileUpload(e, 'articles')}
-                style={{ display: 'none' }}
+            {/* VAT Rate */}
+            <StyledFormControl fullWidth required>
+              <TextField
+                label="VAT Rate (%)"
+                value={formData.vatRate}
+                onChange={handleVatRateChange}
                 required
+                placeholder="e.g. 20"
+                type="text"
+                inputProps={{
+                  pattern: '^\\d*\\.?\\d*$',
+                  inputMode: 'decimal',
+                }}
               />
-              <label htmlFor="articles-data-upload">
-                <Button
-                  variant="outlined"
-                  component="span"
-                  sx={{
-                    textTransform: 'none',
-                    color: '#6b7280',
-                    borderColor: '#d1d5db',
-                    '&:hover': {
-                      borderColor: '#9ca3af',
-                      backgroundColor: 'transparent',
-                    }
-                  }}
-                >
-                  Upload Articles Data (CSV) *
-                </Button>
-              </label>
-              {articlesDataFile && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ color: '#059669', fontWeight: 500 }}>
-                    ✓ {articlesDataFile.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                    {(articlesDataFile.size / 1024).toFixed(2)} KB
-                  </Typography>
-                </Box>
-              )}
-              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#9ca3af' }}>
-                Required: Upload CSV file with articles data
-              </Typography>
-            </Box>
-          </StyledFormControl>
+              {/* If you prefer a % prefix:
+              InputProps={{ startAdornment: <InputAdornment position="start">%</InputAdornment> }}
+              */}
+            </StyledFormControl>
+          </Box>
+        </Box>
+
+        {/* --- Tariff Shock configuration --- */}
+        <Box
+          sx={{
+            display: 'grid',
+            rowGap: 0,
+            columnGap: 2,
+            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            mb: 2,
+          }}
+        >
+          {/* Subheading spanning both columns */}
+          <Box sx={{ gridColumn: '1 / -1', mt: 2, mb: 3  }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Tariff Simulation Configuration
+            </Typography>
+          </Box>
+
+            <StyledFormControl fullWidth required>
+              <Autocomplete
+                options={manufacturingLocations}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                value={manufacturingLocations.find(location => location.id === formData.tariffShockCountry) || null}
+                onChange={(event, newValue) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    tariffShockCountry: newValue?.id || ''
+                  }));
+                }}
+                disabled={loading.countries}
+                loading={loading.countries}
+                disableClearable
+                renderOption={(props, option) => (
+                  <li {...props} key={`tariff-${option.id}`}>
+                    <Typography sx={{ flexGrow: 1 }}>
+                      {option.name}
+                    </Typography>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Tariff Shock Simulation: Country"
+                    required
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
+              />
+            </StyledFormControl>
+
+            <StyledFormControl fullWidth required>
+              <TextField
+                label="Tariff Shock Simulation: Rate 1 (%)"
+                value={formData.tariffRate1}
+                onChange={handleTariffRateChange('tariffRate1')}
+                required
+                placeholder="e.g. 25"
+                type="text"
+                inputProps={{
+                  pattern: '^\\d*\\.?\\d*$',
+                  inputMode: 'decimal'
+                }}
+              />
+            </StyledFormControl>
+
+            <StyledFormControl fullWidth required>
+              <TextField
+                label="Tariff Shock Simulation: Rate 2 (%)"
+                value={formData.tariffRate2}
+                onChange={handleTariffRateChange('tariffRate2')}
+                required
+                placeholder="e.g. 50"
+                type="text"
+                inputProps={{
+                  pattern: '^\\d*\\.?\\d*$',
+                  inputMode: 'decimal'
+                }}
+              />
+            </StyledFormControl>
+
+            <StyledFormControl fullWidth required>
+              <TextField
+                label="Tariff Shock Simulation: Rate 3 (%)"
+                value={formData.tariffRate3}
+                onChange={handleTariffRateChange('tariffRate3')}
+                required
+                placeholder="e.g. 75"
+                type="text"
+                inputProps={{
+                  pattern: '^\\d*\\.?\\d*$',
+                  inputMode: 'decimal'
+                }}
+              />
+            </StyledFormControl>
+        </Box>
+
+        {/* --- Upload Data --- */}
+        <Box sx={{ gridColumn: '1 / -1', mt: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 3 }}>
+            Upload Data
+          </Typography>
+
+            {/* Upload Parts */}
+            <StyledFormControl fullWidth required>
+              <Box sx={{
+                border: '2px dashed #e5e7eb',
+                borderRadius: 2,
+                p: 3,
+                textAlign: 'center',
+                backgroundColor: '#f9fafb',
+                transition: 'all 0.2s ease',
+                '&:hover': { borderColor: '#d1d5db', backgroundColor: '#f3f4f6' }
+              }}>
+                <input
+                  accept=".csv"
+                  id="parts-data-upload"
+                  type="file"
+                  onChange={(e) => handleFileUpload(e, 'parts')}
+                  style={{ display: 'none' }}
+                  required
+                />
+                <label htmlFor="parts-data-upload">
+                  <Button variant="outlined" component="span" sx={{ textTransform: 'none' }}>
+                    Upload Parts Data (CSV) *
+                  </Button>
+                </label>
+
+                {partsDataFile && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ color: '#059669', fontWeight: 500 }}>
+                      ✓ {partsDataFile.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#6b7280' }}>
+                      {(partsDataFile.size / 1024).toFixed(2)} KB
+                    </Typography>
+                  </Box>
+                )}
+
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#9ca3af' }}>
+                  Required: Upload CSV file with parts data
+                </Typography>
+              </Box>
+            </StyledFormControl>
+
+            {/* Upload Articles */}
+            <StyledFormControl fullWidth required>
+              <Box sx={{
+                border: '2px dashed #e5e7eb',
+                borderRadius: 2,
+                p: 3,
+                textAlign: 'center',
+                backgroundColor: '#f9fafb',
+                transition: 'all 0.2s ease',
+                '&:hover': { borderColor: '#d1d5db', backgroundColor: '#f3f4f6' }
+              }}>
+                <input
+                  accept=".csv"
+                  id="articles-data-upload"
+                  type="file"
+                  onChange={(e) => handleFileUpload(e, 'articles')}
+                  style={{ display: 'none' }}
+                  required
+                />
+                <label htmlFor="articles-data-upload">
+                  <Button variant="outlined" component="span" sx={{ textTransform: 'none' }}>
+                    Upload Articles Data (CSV) *
+                  </Button>
+                </label>
+
+                {articlesDataFile && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ color: '#059669', fontWeight: 500 }}>
+                      ✓ {articlesDataFile.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#6b7280' }}>
+                      {(articlesDataFile.size / 1024).toFixed(2)} KB
+                    </Typography>
+                  </Box>
+                )}
+
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#9ca3af' }}>
+                  Required: Upload CSV file with articles data
+                </Typography>
+              </Box>
+            </StyledFormControl>
+        </Box>
 
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3 }}>
             <StyledButton
