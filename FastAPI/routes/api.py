@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest, Message, ChatRequest
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 import pandas as pd
 import datetime
 import os
@@ -31,6 +31,8 @@ from dotenv import load_dotenv
 import json
 import traceback
 import re
+import uuid
+from io import StringIO
 
 router = APIRouter()
 
@@ -143,6 +145,62 @@ async def process_bill_of_materials_with_ai(request: BillOfMaterialsRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
+
+# One-time temp dir for intermediate storage
+TMP_DIR = Path("tmp_uploads")
+TMP_DIR.mkdir(exist_ok=True)
+
+@router.post("/find_countries")
+async def find_countries(
+    parts_data_file: UploadFile = File(..., description="CSV file with parts data"),
+    articles_data_file: UploadFile = File(..., description="CSV file with articles data"),
+):
+    try:
+        if not parts_data_file.filename.endswith(".csv"):
+            raise HTTPException(status_code=400, detail="parts_data_file must be a CSV")
+        if not articles_data_file.filename.endswith(".csv"):
+            raise HTTPException(status_code=400, detail="articles_data_file must be a CSV")
+
+        parts_text = (await parts_data_file.read()).decode("utf-8", errors="ignore")
+        articles_text = (await articles_data_file.read()).decode("utf-8", errors="ignore")
+
+        csvs_valid, csv_errors = validate_uploaded_csvs(parts_text, articles_text)
+        if not csvs_valid:
+            raise HTTPException(status_code=400, detail=f"CSV validation failed: {'; '.join(csv_errors)}")
+
+        parts_df = pd.read_csv(StringIO(parts_text))
+        articles_df = pd.read_csv(StringIO(articles_text))
+
+        parts_df.columns = parts_df.columns.str.strip()
+        articles_df.columns = articles_df.columns.str.strip()
+
+        if "countryOfOrigin" not in articles_df.columns:
+            raise HTTPException(status_code=400, detail="Articles CSV missing 'countryOfOrigin' column")
+
+        countries_series = articles_df["countryOfOrigin"].astype(str).str.strip()
+        unique_countries = sorted({c for c in countries_series if c})
+
+        temp_id = str(uuid.uuid4())
+        temp_dir = TMP_DIR / temp_id
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        parts_df.to_csv(temp_dir / "parts.csv", index=False)
+        articles_df.to_csv(temp_dir / "articles.csv", index=False)
+
+        return {
+            "temp_id": temp_id,
+            "countries": unique_countries,   # <--- just labels
+            "counts": {
+                "parts_rows": int(len(parts_df)),
+                "articles_rows": int(len(articles_df)),
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"/find_countries failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"find_countries failed: {e}")
 
 
 @router.post("/run_simulation")
