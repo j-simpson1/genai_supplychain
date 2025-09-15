@@ -42,3 +42,11 @@ class AgentState(TypedDict):
     # required by the supervisor
     messages: Annotated[List[AnyMessage], add_messages]
     remaining_steps: int
+    # Magentic-One coordination fields
+    coordination_decision: str
+    trajectory: List[str] = []
+    coordination_decision: str = ""
+    # Database plan progress tracking
+    current_db_step: int
+    total_db_steps: int
+    db_plan_complete: bool
