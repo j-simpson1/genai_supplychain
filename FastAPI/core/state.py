@@ -1,8 +1,24 @@
-from typing import TypedDict, List, Dict, Annotated
+from typing import TypedDict, List, Dict, Annotated, Optional, Any
 from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph.message import add_messages
+from datetime import datetime
 
-# keeping
+# Magentic-One Task Ledger structure
+class TaskLedger(TypedDict):
+    facts: List[str]  # Verified information from analysis
+    hypotheses: List[str]  # Working assumptions being tested
+    current_plan: Dict[str, Any]  # Current execution plan with steps and rationale
+
+# Magentic-One Progress Ledger entry structure
+class ProgressEntry(TypedDict):
+    agent: str  # Which agent performed the action
+    action: str  # What action was performed
+    timestamp: str  # When it happened
+    success: bool  # Whether it succeeded
+    details: str  # Description of what happened
+    artifacts: Optional[List[str]]  # Any outputs/data produced
+    stall_reason: Optional[str]  # If failed, why it stalled
+
 class AgentState(TypedDict):
     # human input
     task: str
@@ -44,9 +60,13 @@ class AgentState(TypedDict):
     remaining_steps: int
     # Magentic-One coordination fields
     coordination_decision: str
-    trajectory: List[str] = []
-    coordination_decision: str = ""
+    trajectory: List[str]
+
     # Database plan progress tracking
     current_db_step: int
     total_db_steps: int
     db_plan_complete: bool
+
+    # Magentic-One Ledgers
+    task_ledger: TaskLedger
+    progress_ledger: List[ProgressEntry]
