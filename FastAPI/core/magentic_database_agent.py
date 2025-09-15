@@ -59,29 +59,30 @@ def db_planner_node(state: AgentState):
         analysis_context = f"\n\nExisting analysis results:\n{str(existing_analysis[-3:])}"  # Last 3 messages
     
     planning_prompt = f"""
-    You are a Data Analysis Planner for automotive supply chain reports. Your role is to create a strategic 
-    data analysis plan based on the overall report requirements.
+    You are a Data Analysis Planner for automotive supply chain reports. Create a comprehensive execution plan.
 
     REPORT TASK: {task}
     REPORT PLAN: {plan}
     {analysis_context}
 
-    Your job is to determine what data insights are needed to support this report. Consider:
-    1. What key metrics and KPIs would be most valuable?
-    2. Which suppliers, parts, or countries should be analyzed?
-    3. What cost analysis would support decision-making?
-    4. What comparisons or distributions would provide insights?
+    Based on the detailed report requirements, create a systematic data collection plan that covers ALL required components.
     
     Available tools for analysis:
-    - parts_summary: Get overall parts statistics
-    - top_5_parts_by_price: Find most expensive parts
-    - top_5_part_distribution_by_country: Analyze geographic distribution
-    - bottom_quartile_average_price: Find cost-effective options
-    - total_component_price: Calculate total costs
-    - top_5_suppliers_by_articles: Analyze supplier landscape
+    - parts_summary: Get parts count, VAT breakdown, origin countries, component costs
+    - top_5_parts_by_price: Identify most expensive parts and their cost share
+    - top_5_part_distribution_by_country: Analyze geographic distribution (key for Japan exposure)
+    - bottom_quartile_average_price: Find cost-effective alternatives
+    - total_component_price: Calculate total system costs with VAT
+    - top_5_suppliers_by_articles: Identify supplier concentration and volumes
     
-    Create a strategic plan with 2-4 specific analysis steps. Be concrete about what insights each step will provide.
-    Format as a clear, numbered list.
+    Create a SPECIFIC execution plan with 4-5 steps, each specifying:
+    1. EXACT TOOL(S) to use
+    2. SPECIFIC DATA to extract
+    3. HOW this supports the report requirements
+    
+    Format as: "Step X: Use [TOOL_NAME] to get [SPECIFIC_DATA] for [REPORT_SECTION]"
+    
+    Focus on the Component Analysis requirements: parts count, most expensive part, VAT breakdown, country origins, top suppliers.
     """
     
     response = planner_model.invoke([SystemMessage(content=planning_prompt)])
@@ -103,15 +104,120 @@ def db_executor_node(state: AgentState):
     msgs = state.get("db_content", [])
     trajectory = state.get("trajectory", [])
     
-    # Get the latest plan/instruction from planner or coordinator
-    latest_instruction = msgs[-1].content if msgs else "Perform general data analysis"
+    # Get the next step from the plan rather than the entire plan
+    latest_instruction = "Perform general data analysis"
+
+    # Find the most recent planning message
+    plan_content = None
+    for msg in reversed(msgs):
+        if (hasattr(msg, 'content') and
+            not getattr(msg, 'name', None) and  # Not a tool response
+            not getattr(msg, 'tool_calls', None)):  # Not an executor with tool calls
+
+            content = msg.content
+            if any(keyword in content.lower() for keyword in ['step 1:', 'step 2:', 'step 3:', 'step 4:', 'step 5:']):
+                plan_content = content
+                break
+
+    if plan_content:
+        # Extract individual steps from the plan
+        import re
+        steps = re.findall(r'Step \d+:.*?(?=Step \d+:|$)', plan_content, re.DOTALL)
+        if steps:
+            # Count how many tools have been used to determine which step to execute
+            tools_used = set()
+            for msg in msgs:
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    for call in msg.tool_calls:
+                        tools_used.add(call.get('name', ''))
+
+            # Check if steps are already completed (look for completion signal in previous messages)
+            steps_already_complete = any('ALL STEPS COMPLETE' in str(msg.content) for msg in msgs if hasattr(msg, 'content'))
+
+            if steps_already_complete:
+                latest_instruction = "All planned steps have been completed. Provide final summary."
+                is_final_step = False  # We're past the final step now
+            else:
+                # Count how many execution cycles we've had to determine step progression
+                execution_cycles = sum(1 for t in trajectory if 'EXECUTE:' in t)
+                step_index = min(execution_cycles, len(steps) - 1)
+
+                # Check if this is the final step
+                is_final_step = step_index >= len(steps) - 1
+                latest_instruction = steps[step_index].strip()
+        else:
+            is_final_step = False
+    else:
+        is_final_step = False
+
+    # Fallback: if no structured plan found, look for any planning content
+    if latest_instruction == "Perform general data analysis":
+        for msg in reversed(msgs):
+            if (hasattr(msg, 'content') and
+                not getattr(msg, 'name', None) and
+                not getattr(msg, 'tool_calls', None)):
+                content = msg.content
+                if any(keyword in content.lower() for keyword in ['plan', 'analysis', 'execute']):
+                    latest_instruction = content
+                    break
     
-    # Check if we already have tool results and should wrap up execution
-    recent_tool_outputs = [msg for msg in msgs[-5:] if getattr(msg, 'name', None)]
+    # Check if we have critique feedback indicating more analysis needed
+    recent_critique = [msg for msg in msgs[-3:] if hasattr(msg, 'content') and 'NEEDS_MORE' in msg.content.upper()]
+    recent_tool_outputs = [msg for msg in msgs[-8:] if getattr(msg, 'name', None)]
     
-    if len(recent_tool_outputs) >= 2:  # If we have enough tool outputs, summarize instead of calling more tools
+    if recent_critique:
+        # Critic wants more analysis - be comprehensive and systematic
+        tools_used = set()
+        for msg in msgs:  # Check ALL messages, not just last 10
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for call in msg.tool_calls:
+                    tools_used.add(call.get('name', ''))
+        
+        # Identify which tools haven't been used yet
+        available_tools = [
+            'parts_summary', 'top_5_parts_by_price', 'top_5_part_distribution_by_country',
+            'bottom_quartile_average_price', 'total_component_price', 'top_5_suppliers_by_articles'
+        ]
+        unused_tools = [t for t in available_tools if t not in tools_used]
+
+        # If all tools have been used, switch to summary mode
+        if not unused_tools:
+            execution_prompt = f"""
+            You are a Database Executor for automotive supply chain analysis. All available tools have been used.
+
+            ORIGINAL INSTRUCTION: {latest_instruction}
+
+            All tools have been used: {', '.join(tools_used)}
+
+            Based on the comprehensive data gathered, provide a summary of your findings.
+            Do NOT call more tools. Just summarize the results you have gathered.
+            """
+        else:
+            execution_prompt = f"""
+            You are a Database Executor for automotive supply chain analysis. The critic has requested more comprehensive analysis.
+
+            ORIGINAL INSTRUCTION: {latest_instruction}
+
+            Tools already used: {', '.join(tools_used) if tools_used else 'None'}
+            Priority tools to use: {', '.join(unused_tools[:3]) if unused_tools else 'All tools used'}
+
+            Execute systematic analysis using different tools to address the gaps identified by the critic:
+
+            Available tools (call with NO PARAMETERS - file paths are handled automatically):
+            - parts_summary(): Get parts count, VAT breakdown, country origins, component costs
+            - top_5_parts_by_price(): Identify most expensive parts and their cost share
+            - top_5_part_distribution_by_country(): Analyze geographic distribution (CRITICAL for Japan exposure)
+            - bottom_quartile_average_price(): Find cost-effective alternatives
+            - total_component_price(): Calculate total system costs with VAT
+            - top_5_suppliers_by_articles(): Identify supplier concentration and volumes
+
+            Use 2-3 DIFFERENT tools to gather comprehensive data. Prioritize unused tools first.
+            CRITICAL: Call tools with empty parameters - the system handles file paths automatically.
+            """
+    elif len(recent_tool_outputs) >= 5:
+        # We have comprehensive tool outputs, provide summary
         execution_prompt = f"""
-        You are a Database Executor. You have gathered data from tools. Now summarize your findings concisely.
+        You are a Database Executor. You have gathered comprehensive data from multiple tools. Now summarize your findings.
         
         ORIGINAL INSTRUCTION: {latest_instruction}
         
@@ -119,21 +225,53 @@ def db_executor_node(state: AgentState):
         Do NOT call more tools. Just summarize the results in 2-3 sentences.
         """
     else:
-        execution_prompt = f"""
-        You are a Database Executor for automotive supply chain analysis. Execute the analysis plan using available tools.
-        
-        CURRENT INSTRUCTION: {latest_instruction}
-        
-        Use 1-2 database tools to gather the required data. Focus on the most relevant analysis.
-        
-        Available tools:
-        - parts_summary: Get overall parts statistics  
-        - top_5_parts_by_price: Find most expensive parts
-        - top_5_part_distribution_by_country: Analyze geographic distribution  
-        - bottom_quartile_average_price: Find cost-effective options
-        - total_component_price: Calculate total costs
-        - top_5_suppliers_by_articles: Analyze supplier landscape
-        """
+        # Initial or continued execution - be systematic about tool selection
+        tools_used = set()
+        for msg in msgs:  # Check ALL messages, not just last 8
+            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for call in msg.tool_calls:
+                    tools_used.add(call.get('name', ''))
+
+        # Identify which tools haven't been used yet in general execution
+        available_tools = [
+            'parts_summary', 'top_5_parts_by_price', 'top_5_part_distribution_by_country',
+            'bottom_quartile_average_price', 'total_component_price', 'top_5_suppliers_by_articles'
+        ]
+        unused_tools = [t for t in available_tools if t not in tools_used]
+
+        # If all tools have been used OR this is the final step, switch to completion mode
+        if not unused_tools or is_final_step:
+            execution_prompt = f"""
+            You are a Database Executor for automotive supply chain analysis. {'All available tools have been used.' if not unused_tools else 'This is the final step of the plan.'}
+
+            CURRENT INSTRUCTION: {latest_instruction}
+
+            {'All tools have been used: ' + ', '.join(tools_used) if not unused_tools else 'Final step completion'}
+
+            Based on the comprehensive data gathered, provide a summary of your findings.
+            {'If this is the final step, end your response with: "ALL STEPS COMPLETE"' if is_final_step else ''}
+            Do NOT call more tools. Just summarize the results you have gathered.
+            """
+        else:
+            execution_prompt = f"""
+            You are a Database Executor for automotive supply chain analysis. Execute the analysis plan systematically.
+
+            CURRENT INSTRUCTION: {latest_instruction}
+
+            Tools already used: {', '.join(tools_used) if tools_used else 'None'}
+            Remaining tools to use: {', '.join(unused_tools)}
+
+            For comprehensive analysis, use 2-3 DIFFERENT tools from the available set:
+            - parts_summary(): Get parts count, VAT breakdown, country origins, component costs
+            - top_5_parts_by_price(): Identify most expensive parts and their cost share
+            - top_5_part_distribution_by_country(): Analyze geographic distribution (CRITICAL for Japan exposure)
+            - bottom_quartile_average_price(): Find cost-effective alternatives
+            - total_component_price(): Calculate total system costs with VAT
+            - top_5_suppliers_by_articles(): Identify supplier concentration and volumes
+
+            Prioritize tools you haven't used yet to gather diverse data insights.
+            CRITICAL: Call tools with empty parameters - the system handles file paths automatically.
+            """
     
     # Use only the latest instruction for context to avoid message order issues
     context_msg = HumanMessage(content=f"Execute this analysis plan: {latest_instruction}")
@@ -182,14 +320,18 @@ def db_tool_node(state: AgentState):
 
         # Prepare arguments
         model_args = dict((call or {}).get("args") or {})
+        
+        # Remove any file path arguments (including empty strings) - we'll inject correct ones
         model_args.pop("articles_path", None)
         model_args.pop("parts_path", None)
-
-        # Filter to accepted params
+        
+        # Filter to accepted params (excluding file paths which we handle separately)
         fn = getattr(tool_obj, "func", None) or getattr(tool_obj, "coroutine", None)
         accepted = set(inspect.signature(fn).parameters.keys()) if fn else set()
 
-        args = {k: v for k, v in model_args.items() if k in accepted}
+        args = {k: v for k, v in model_args.items() if k in accepted and k not in ("articles_path", "parts_path")}
+        
+        # Always inject correct file paths if tool expects them
         if "articles_path" in accepted and isinstance(state_articles, str):
             args["articles_path"] = state_articles
         if "parts_path" in accepted and isinstance(state_parts, str):
@@ -221,7 +363,9 @@ def db_tool_node(state: AgentState):
                     tool_call_id=tool_id,
                 ))
 
-    return {"db_content": outputs}
+    # Append tool results to existing db_content instead of overwriting
+    existing_content = msgs or []
+    return {"db_content": existing_content + outputs}
 
 def db_critic_node(state: AgentState):
     """
@@ -288,9 +432,18 @@ def db_coordinator_node(state: AgentState):
     critique_count = sum(1 for action in recent_actions if "CRITIQUE" in action)
     coordination_count = sum(1 for action in recent_actions if "COORDINATION" in action)
     
-    # Prevent infinite loops - if we've coordinated too much, force synthesis
+    # Check if executor has signaled plan completion
+    plan_complete = False
+    for msg in db_content[-3:]:  # Check last few messages
+        if hasattr(msg, 'content') and 'ALL STEPS COMPLETE' in msg.content:
+            plan_complete = True
+            break
+
+    # Prevent infinite loops and handle plan completion
     if coordination_count > 8:
         decision = "SYNTHESIZE"
+    elif plan_complete:
+        decision = "SYNTHESIZE"  # Plan is complete, proceed to synthesis
     # Progressive workflow: Plan -> Execute -> Critique -> Synthesize
     elif planning_count == 0:
         decision = "PLAN"
@@ -303,10 +456,12 @@ def db_coordinator_node(state: AgentState):
         last_message = db_content[-1] if db_content else None
         if last_message and hasattr(last_message, 'content'):
             content = last_message.content.upper()
-            if "NEEDS_MORE" in content and execution_count < 3:  # Limit re-execution
+            if "NEEDS_MORE" in content and execution_count < 6:  # Allow more re-execution for complex tasks
                 decision = "EXECUTE"
-            elif "REFOCUS" in content and planning_count < 2:  # Limit re-planning
+            elif "REFOCUS" in content and planning_count < 3:  # Allow more re-planning
                 decision = "PLAN"
+            elif "SUFFICIENT" in content:
+                decision = "SYNTHESIZE"
             else:
                 decision = "SYNTHESIZE"
         else:
@@ -323,7 +478,8 @@ def db_coordinator_node(state: AgentState):
     }
     
     # Update trajectory
-    trajectory.append(f"COORDINATION: {decision} (P:{planning_count}, E:{execution_count}, C:{critique_count}, Coord:{coordination_count})")
+    completion_note = " [PLAN_COMPLETE]" if plan_complete else ""
+    trajectory.append(f"COORDINATION: {decision} (P:{planning_count}, E:{execution_count}, C:{critique_count}, Coord:{coordination_count}){completion_note}")
     
     return {
         "trajectory": trajectory,
@@ -410,8 +566,8 @@ def should_continue_execution(state: AgentState):
     # Count recent tool calls to prevent loops - look at last 10 messages
     recent_tool_calls = sum(1 for msg in db_content[-10:] if getattr(msg, "tool_calls", None))
     
-    # Limit consecutive tool calls - after 3 tool calls, go to coordination
-    if has_tool_calls and recent_tool_calls < 3:
+    # Limit consecutive tool calls - after 6 tool calls, go to coordination
+    if has_tool_calls and recent_tool_calls < 6:
         return "tools"
     else:
         return "coordinate"
