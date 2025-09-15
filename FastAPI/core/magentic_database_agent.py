@@ -90,10 +90,18 @@ def db_planner_node(state: AgentState):
     # Store the analysis plan in the trajectory for coordination
     trajectory = state.get("trajectory", [])
     trajectory.append(f"PLANNING: {response.content}")
-    
+
+    # Extract total steps from the plan
+    import re
+    steps = re.findall(r'Step \d+:.*?(?=Step \d+:|$)', response.content, re.DOTALL)
+    total_steps = len(steps)
+
     return {
         "trajectory": trajectory,
-        "db_content": state.get("db_content", []) + [response]
+        "db_content": state.get("db_content", []) + [response],
+        "total_db_steps": total_steps,
+        "current_db_step": 0,  # Reset step counter when new plan is created
+        "db_plan_complete": False  # Reset completion flag
     }
 
 def db_executor_node(state: AgentState):
@@ -131,16 +139,16 @@ def db_executor_node(state: AgentState):
                     for call in msg.tool_calls:
                         tools_used.add(call.get('name', ''))
 
-            # Check if steps are already completed (look for completion signal in previous messages)
-            steps_already_complete = any('ALL STEPS COMPLETE' in str(msg.content) for msg in msgs if hasattr(msg, 'content'))
+            # Use explicit step tracking from state
+            current_step = state.get('current_db_step', 0)
+            plan_complete = state.get('db_plan_complete', False)
 
-            if steps_already_complete:
+            if plan_complete:
                 latest_instruction = "All planned steps have been completed. Provide final summary."
                 is_final_step = False  # We're past the final step now
             else:
-                # Count how many execution cycles we've had to determine step progression
-                execution_cycles = sum(1 for t in trajectory if 'EXECUTE:' in t)
-                step_index = min(execution_cycles, len(steps) - 1)
+                # Use current step index, clamped to available steps
+                step_index = min(current_step, len(steps) - 1)
 
                 # Check if this is the final step
                 is_final_step = step_index >= len(steps) - 1
@@ -249,7 +257,6 @@ def db_executor_node(state: AgentState):
             {'All tools have been used: ' + ', '.join(tools_used) if not unused_tools else 'Final step completion'}
 
             Based on the comprehensive data gathered, provide a summary of your findings.
-            {'If this is the final step, end your response with: "ALL STEPS COMPLETE"' if is_final_step else ''}
             Do NOT call more tools. Just summarize the results you have gathered.
             """
         else:
@@ -280,10 +287,32 @@ def db_executor_node(state: AgentState):
     
     # Update trajectory to track execution
     trajectory.append(f"EXECUTE: Generated response ({'with tools' if getattr(response, 'tool_calls', None) else 'summary only'})")
-    
+
+    # Update step progress based on plan structure
+    current_step = state.get('current_db_step', 0)
+    plan_complete = state.get('db_plan_complete', False)
+    total_steps = state.get('total_db_steps', 0)
+
+    # Extract total steps from plan if not already set
+    if total_steps == 0 and plan_content:
+        import re
+        steps = re.findall(r'Step \d+:.*?(?=Step \d+:|$)', plan_content, re.DOTALL)
+        total_steps = len(steps)
+
+    # Always advance step when executor runs, regardless of tool calls
+    if not plan_complete:
+        current_step += 1
+
+    # Check completion based on step progression, not magic strings
+    if total_steps > 0 and current_step >= total_steps:
+        plan_complete = True
+
     return {
         "db_content": msgs + [response],
-        "trajectory": trajectory
+        "trajectory": trajectory,
+        "current_db_step": current_step,
+        "db_plan_complete": plan_complete,
+        "total_db_steps": total_steps
     }
 
 def db_tool_node(state: AgentState):
@@ -432,12 +461,8 @@ def db_coordinator_node(state: AgentState):
     critique_count = sum(1 for action in recent_actions if "CRITIQUE" in action)
     coordination_count = sum(1 for action in recent_actions if "COORDINATION" in action)
     
-    # Check if executor has signaled plan completion
-    plan_complete = False
-    for msg in db_content[-3:]:  # Check last few messages
-        if hasattr(msg, 'content') and 'ALL STEPS COMPLETE' in msg.content:
-            plan_complete = True
-            break
+    # Check explicit plan completion status from state
+    plan_complete = state.get('db_plan_complete', False)
 
     # Prevent infinite loops and handle plan completion
     if coordination_count > 8:
@@ -656,6 +681,8 @@ if __name__ == "__main__":
         initial_state: AgentState = {
             "task": "Write a supply chain analysis report on Toyota RAV4 braking system with tariff shock simulation for Japan",
             "plan": "Analyze the cost structure, supplier dependencies, and geographic risks in the RAV4 brake system supply chain. Focus on identifying vulnerable suppliers and cost optimization opportunities.",
+            "draft": "",
+            "critique": "",
             "articles_path": articles_path,
             "parts_path": parts_path,
             "db_content": [],
@@ -676,7 +703,10 @@ if __name__ == "__main__":
             "clean_simulation": "",
             "web_content": [],
             "messages": [],
-            "remaining_steps": 10
+            "remaining_steps": 10,
+            "current_db_step": 0,
+            "total_db_steps": 0,
+            "db_plan_complete": False
         }
 
         print("\n--- Running Magentic-One Database Agent Test ---\n")
