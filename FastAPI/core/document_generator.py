@@ -30,7 +30,6 @@ from FastAPI.core.research_agent import research_agent
 from FastAPI.core.research_critique import research_critique_agent
 from FastAPI.core.state import AgentState
 from FastAPI.open_deep_research.deep_researcher import deep_researcher
-from FastAPI.core.magentic_database_agent import magentic_database_agent
 
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 from FastAPI.core.utils import convert_numpy, serialize_state
@@ -188,7 +187,7 @@ builder = StateGraph(AgentState)
 
 # add all nodes
 builder.add_node("planner", plan_node)
-builder.add_node("db_agent", magentic_database_agent)
+builder.add_node("db_agent", database_agent)
 builder.add_node("chart_planning_node", chart_planning_node)
 builder.add_node("generate_charts", code_editor_agent)
 builder.add_node("simulation", simulation_agent)
