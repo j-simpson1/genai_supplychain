@@ -1,61 +1,53 @@
-from dotenv import load_dotenv
-load_dotenv()
+import asyncio
+import json
+import os
+import re
+import tempfile
+from typing import Dict, Any, List
 
 import matplotlib
-matplotlib.use("Agg")
-
-import os
-import json
-import tempfile
 import pandas as pd
-import re
-import asyncio
-
-from langgraph.graph import StateGraph, END
-from typing import List
-from pydantic import BaseModel
+from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.graph import StateGraph, END
 from langsmith import Client
 
-from tavily import TavilyClient
-
-from FastAPI.document_builders.pdf_creator import save_to_pdf
-from FastAPI.document_builders.word_creator import save_to_word
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
-from FastAPI.core.prompts import plan_prompt, research_plan_prompt, reflection_prompt, writers_prompt, chart_planning_prompt
 from FastAPI.core.code_editor_agent import code_editor_agent
 from FastAPI.core.database_agent import database_agent
-from FastAPI.core.simulation_agent import simulation_agent
+from FastAPI.core.prompts import (
+    plan_prompt,
+    reflection_prompt,
+    writers_prompt,
+    chart_planning_prompt
+)
 from FastAPI.core.research_agent import research_agent
 from FastAPI.core.research_critique import research_critique_agent
+from FastAPI.core.simulation_agent import simulation_agent
 from FastAPI.core.state import AgentState
-from FastAPI.open_deep_research.deep_researcher import deep_researcher
+from FastAPI.core.utils import serialize_state
+from FastAPI.document_builders.pdf_creator import save_to_pdf
+from FastAPI.document_builders.word_creator import save_to_word
 
-from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
-from FastAPI.core.utils import convert_numpy, serialize_state
-from langchain.agents import tool
+load_dotenv()
+matplotlib.use("Agg")
 
+# Configuration constants
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
+MAX_REVISIONS = 2
+MAX_CHART_RETRIES = 2
+RECURSION_LIMIT = 500
+
+# Ensure directories exist
 os.makedirs(CHARTS_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
+# Initialize clients and model
 client = Client()
-
-# setup inmemory sqlite checkpointers
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-async def get_checkpointer():
-    return AsyncSqliteSaver.from_conn_string(":memory:")
-
-# We'll initialize this in the run_agent function
-memory = None
-
 from langchain_openai import ChatOpenAI
-
-# creating model
-# temperature not supported by o4-mini
 model = ChatOpenAI(model="o4-mini")
 
 DATABASE_PLAN_INSTRUCTIONS = """ You are a supply chain data analyst with access to several \
@@ -64,43 +56,27 @@ detailed written report. Do not hallucinate numbers. Only use tool outputs. Pick
 picking the most appropriate tool.
 """
 
-# given a plan will generate a bunch of queries and pass to tavily
+# Prompt templates
 RESEARCH_PLAN_PROMPT = """You are a researcher charged with providing information that can \
 be used when writing the following essay. Generate a list of search queries that will gather \
 any relevant information. Only generate 4 queries max."""
-# RESEARCH_PLAN_PROMPT = """You are a research analyst charged with providing information that can \
-# be used when writing the following supply chain report. Generate a detailed deep search query (50 words max) which \
-# can be used as input into a deep search agent. Your query can contain multiple areas of research and the deep search \
-# agent will be able to break these areas down and handle them individually. Can your ask for the response to be a \
-# maximum of 800 words."""
-
-# after we've made the critique will pass the list of queries to pass to tavily
 RESEARCH_CRITIQUE_PROMPT = """You are a researcher charged with providing information that can \
 be used when making any requested revisions (as outlined below). \
 Generate a list of search queries that will gather any relevant information. Only generate 3 queries max."""
-# RESEARCH_CRITIQUE_PROMPT = """You are a research analyst charged with providing information that can \
-# be used when making any requested revisions (as outlined below). Generate a detailed deep search query \
-# (50 words max) which can be used as input into a deep search agent. Your query can contain multiple areas of \
-# research and the deep search agent will be able to break these areas down and handle them individually. Can your ask \
-# for the response to be a maximum of 800 words."""
 
 # take in the state and create list of messages, one of them is going to be the planning prompt
 # then create a human message which is what we want system to do
-def plan_node(state: AgentState):
+def plan_node(state: AgentState) -> Dict[str, str]:
+    """Generate a plan based on the task."""
     messages = [
         SystemMessage(content=plan_prompt),
         HumanMessage(content=state['task'])
     ]
-    # pass these messages to the model
     response = model.invoke(messages)
-    # get the content of the messages and pass to the plan key
     return {"plan": response.content}
 
-def chart_planning_node(state: AgentState):
-    """
-    Decides what charts to generate based on DB summary & content.
-    Returns `chart_plan` for the next node to consume.
-    """
+def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
+    """Decide what charts to generate based on DB summary and content."""
     db_summary = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
@@ -110,10 +86,9 @@ def chart_planning_node(state: AgentState):
     )
 
     response = model.invoke([SystemMessage(content=formatted_chart_planning_prompt)])
-
     raw = response.content.strip()
 
-    # Remove ```json or ``` from start/end if present
+    # Clean up JSON formatting
     if raw.startswith("```"):
         raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
         raw = re.sub(r"```$", "", raw).strip()
@@ -121,13 +96,14 @@ def chart_planning_node(state: AgentState):
     try:
         chart_plan = json.loads(raw)
         if isinstance(chart_plan, dict):
-            chart_plan = [chart_plan]  # wrap single dict as list
+            chart_plan = [chart_plan]
     except json.JSONDecodeError:
         chart_plan = [{"chart_id": "chart1", "chart_description": raw}]
 
     return {"chart_plan": chart_plan}
 
-def generation_node(state: AgentState):
+def generation_node(state: AgentState) -> Dict[str, Any]:
+    """Generate the report draft based on collected data."""
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
@@ -154,27 +130,35 @@ def generation_node(state: AgentState):
         "revision_number": state.get("revision_number", 1) + 1
     }
 
-def reflection_node(state: AgentState):
+def reflection_node(state: AgentState) -> Dict[str, str]:
+    """Generate critique of the current draft."""
     messages = [
-        # take the reflection node and the draft
         SystemMessage(content=reflection_prompt),
         HumanMessage(content=state['draft'])
     ]
     response = model.invoke(messages)
-    # going to generate the critique
     return {"critique": response.content}
 
-# look at the revision number - if greater than the max revisions will then end.
-def should_continue(state):
+def should_continue(state: AgentState) -> str:
+    """Determine whether to continue revising or finish the report."""
     if state["revision_number"] > state["max_revisions"]:
-        print(save_to_pdf(content=state["draft"], filename="../reports_and_graphs/report.pdf", chart_metadata=state.get("chart_metadata", [])))
-        print(save_to_word(content=state["draft"], filename="../reports_and_graphs/report.docx", chart_metadata=state.get("chart_metadata", [])))
-        result = END
+        # Save final reports
+        print(save_to_pdf(
+            content=state["draft"],
+            filename="../reports_and_graphs/report.pdf",
+            chart_metadata=state.get("chart_metadata", [])
+        ))
+        print(save_to_word(
+            content=state["draft"],
+            filename="../reports_and_graphs/report.docx",
+            chart_metadata=state.get("chart_metadata", [])
+        ))
+        return END
     else:
-        result = "reflect"
-    return result
+        return "reflect"
 
-def simulation_should_continue(state: AgentState):
+def simulation_should_continue(state: AgentState) -> str:
+    """Determine whether simulation should continue based on tool calls."""
     messages = state.get("raw_simulation", [])
     if not messages:
         return "end"
@@ -182,60 +166,60 @@ def simulation_should_continue(state: AgentState):
     tool_calls = getattr(last, "tool_calls", None)
     return "continue" if tool_calls else "end"
 
-# initialise the graph with the agent state
-builder = StateGraph(AgentState)
+def create_graph() -> StateGraph:
+    """Create and configure the LangGraph workflow."""
+    builder = StateGraph(AgentState)
 
-# add all nodes
-builder.add_node("planner", plan_node)
-builder.add_node("db_agent", database_agent)
-builder.add_node("chart_planning_node", chart_planning_node)
-builder.add_node("generate_charts", code_editor_agent)
-builder.add_node("simulation", simulation_agent)
-builder.add_node("generate", generation_node)
-builder.add_node("reflect", reflection_node)
-builder.add_node("research_agent", research_agent)
-builder.add_node("research_critique", research_critique_agent)
+    # Add all nodes
+    builder.add_node("planner", plan_node)
+    builder.add_node("db_agent", database_agent)
+    builder.add_node("chart_planning_node", chart_planning_node)
+    builder.add_node("generate_charts", code_editor_agent)
+    builder.add_node("simulation", simulation_agent)
+    builder.add_node("generate", generation_node)
+    builder.add_node("reflect", reflection_node)
+    builder.add_node("research_agent", research_agent)
+    builder.add_node("research_critique", research_critique_agent)
 
-# set entry point
-builder.set_entry_point("planner")
+    # Set entry point
+    builder.set_entry_point("planner")
 
+    # Add edges
+    builder.add_edge("planner", "db_agent")
+    builder.add_edge("db_agent", "chart_planning_node")
+    builder.add_edge("chart_planning_node", "generate_charts")
+    builder.add_edge("generate_charts", "research_agent")
+    builder.add_edge("research_agent", "simulation")
+    builder.add_edge("simulation", "generate")
+    builder.add_edge("reflect", "research_critique")
+    builder.add_edge("research_critique", "generate")
 
-# add in basic edges
-builder.add_edge("planner", "db_agent")
-builder.add_edge("db_agent", "chart_planning_node")
-builder.add_edge("chart_planning_node", "generate_charts")
-builder.add_edge("generate_charts", "research_agent")
-builder.add_edge("research_agent", "simulation")
-builder.add_edge("simulation", "generate")
-builder.add_edge("reflect", "research_critique")
-builder.add_edge("research_critique", "generate")
+    # Add conditional edge
+    builder.add_conditional_edges(
+        "generate",
+        should_continue,
+        {END: END, "reflect": "reflect"}
+    )
 
+    return builder
 
-# add conditional edge
-builder.add_conditional_edges(
-    "generate",
-    should_continue,
-    {END: END, "reflect": "reflect"}
-)
-
-async def run_agent(messages, parts_path, articles_path):
-    # Initialize the async checkpointer
+async def run_agent(messages: str, parts_path: str, articles_path: str) -> Dict[str, Any]:
+    """Run the document generation agent workflow."""
     async with AsyncSqliteSaver.from_conn_string(":memory:") as checkpointer:
-        # compile graph and add in checkpointer
+        builder = create_graph()
         graph = builder.compile(checkpointer=checkpointer)
 
-        # save the graph
+        # Save graph visualization
         output_graph_path = os.path.join(REPORTS_DIR, "langgraph.png")
         with open(output_graph_path, "wb") as f:
             f.write(graph.get_graph().draw_mermaid_png())
 
         final_state = {}
 
-        # adding in graph.astream so can see all the steps
-        thread = {"configurable": {"thread_id": "1"}}
-        async for s in graph.astream({
+        # Initialize state for the graph
+        initial_state = {
             'task': messages,
-            'max_revisions': 2,
+            'max_revisions': MAX_REVISIONS,
             'revision_number': 1,
             'db_content': [],
             'web_content': [],
@@ -249,33 +233,43 @@ async def run_agent(messages, parts_path, articles_path):
             'chart_generation_success': False,
             'chart_generation_error': '',
             'chart_retry_count': 0,
-            'max_chart_retries': 2,
+            'max_chart_retries': MAX_CHART_RETRIES,
             'chart_plan': [],
             'current_chart_index': 0,
             'articles_path': articles_path,
             'parts_path': parts_path,
             'messages': [],
             'remaining_steps': 5
-        },
-            config={
-                "recursion_limit": 500,
-                "configurable": {"thread_id": "1"}
-            },
-        ):
-            print(s)
+        }
 
+        config = {
+            "recursion_limit": RECURSION_LIMIT,
+            "configurable": {"thread_id": "1"}
+        }
+
+        async for s in graph.astream(initial_state, config=config):
+            print(s)
             final_state = s
 
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        SAVE_PATH = os.path.join(BASE_DIR, "streamlit_data/ai_supplychain_state.json")
+        # Save final state
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        save_path = os.path.join(current_dir, "streamlit_data/ai_supplychain_state.json")
 
-        with open(SAVE_PATH, "w") as f:
+        with open(save_path, "w") as f:
             json.dump(serialize_state(final_state), f, indent=2)
 
         return serialize_state(final_state)
 
 
-def auto_supplychain_prompt_template(manufacturer, model, component, tariff_shock_country, rates, vat_rate, manufacturing_country):
+def auto_supplychain_prompt_template(
+    manufacturer: str,
+    model: str,
+    component: str,
+    tariff_shock_country: str,
+    rates: List[int],
+    vat_rate: float,
+    manufacturing_country: str
+) -> str:
     rates_str = ", ".join(f"{r}%" for r in rates)
     return (
         f"Write a professional supply chain analysis report on the {manufacturer} {model} {component}. "
@@ -295,13 +289,15 @@ prompt = auto_supplychain_prompt_template(
     manufacturing_country="United Kingdom"
 )
 
-async def target(inputs: dict) -> dict:
+async def target(inputs: Dict[str, Any]) -> Dict[str, str]:
     prompt = auto_supplychain_prompt_template(
         manufacturer=inputs["setup"]["manufacturer"],
         model=inputs["setup"]["model"],
         component=inputs["setup"]["component"],
         tariff_shock_country=inputs["setup"]["country"],
-        rates=inputs["setup"]["rates"]
+        rates=inputs["setup"]["rates"],
+        vat_rate=inputs["setup"].get("vat_rate", 20.0),
+        manufacturing_country=inputs["setup"].get("manufacturing_country", "United Kingdom")
     )
 
     parts_order = [
@@ -356,9 +352,9 @@ if __name__ == "__main__":
     #     experiment_prefix = "Toyota RAV4 Brake System experiment"
     # )
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
-    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    parts_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
     print(prompt)
     asyncio.run(run_agent(prompt, parts_path, articles_path))
