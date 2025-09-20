@@ -1,16 +1,27 @@
+"""Tariff simulation module for automotive supply chain analysis."""
+
+import itertools
+import json
+import os
+import random
+from collections import defaultdict
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import json
-from collections import defaultdict
-import os
-from datetime import datetime
 
 
 class TariffSimulation:
-    """Enhanced tariff simulation with Q1 threshold bottom quartile methodology and VAT"""
+    """Enhanced tariff simulation with Q1 threshold bottom quartile methodology and VAT.
 
-    def __init__(self, suppliers_data, part_requirements, taxable_info, vat_rate=0.20):
+    This class simulates the impact of tariff changes on automotive supply chain costs,
+    using Q1 threshold methodology for supplier selection and including VAT calculations.
+    """
+
+    def __init__(self, suppliers_data: List[Dict], part_requirements: Dict[str, int],
+                 taxable_info: Dict[str, bool], vat_rate: float = 0.20):
         self.suppliers_data = suppliers_data
         self.part_requirements = part_requirements
         self.taxable_info = taxable_info
@@ -54,15 +65,30 @@ class TariffSimulation:
         # Calculate bottom quartile average prices using Q1 threshold
         self.current_suppliers = self._calculate_q1_threshold_suppliers()
 
-    def _group_suppliers(self):
-        """Group suppliers by product ID"""
+    def _group_suppliers(self) -> Dict[str, List[Dict]]:
+        """Group suppliers by product ID.
+
+        Returns:
+            Dictionary mapping product IDs to lists of suppliers.
+        """
         groups = defaultdict(list)
         for supplier in self.suppliers_data:
             groups[supplier['productId']].append(supplier)
         return groups
 
-    def _calculate_full_cost(self, base_price, country, product_id, tariffs=None):
-        """Calculate full cost including tariffs and VAT"""
+    def _calculate_full_cost(self, base_price: float, country: str, product_id: str,
+                            tariffs: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        """Calculate full cost including tariffs and VAT.
+
+        Args:
+            base_price: Base price before tariffs and VAT
+            country: Country of origin for tariff calculation
+            product_id: Product identifier for VAT lookup
+            tariffs: Optional custom tariff rates, defaults to current rates
+
+        Returns:
+            Dictionary containing cost breakdown details.
+        """
         if tariffs is None:
             tariffs = self.current_tariff_rates
 
@@ -88,11 +114,17 @@ class TariffSimulation:
             'final_price': final_price
         }
 
-    def _calculate_q1_threshold_suppliers(self, tariffs=None):
-        """
-        Calculate bottom quartile average using Q1 threshold methodology.
+    def _calculate_q1_threshold_suppliers(self, tariffs: Optional[Dict[str, float]] = None) -> Dict[str, Dict]:
+        """Calculate bottom quartile average using Q1 threshold methodology.
+
         This matches the reference function: finds Q1 (25th percentile) and
         averages all prices at or below that threshold.
+
+        Args:
+            tariffs: Optional custom tariff rates
+
+        Returns:
+            Dictionary mapping product IDs to average supplier information.
         """
         if tariffs is None:
             tariffs = self.current_tariff_rates
@@ -169,8 +201,15 @@ class TariffSimulation:
 
         return average_suppliers
 
-    def get_total_cost(self, tariffs=None):
-        """Calculate total cost with current suppliers including VAT"""
+    def get_total_cost(self, tariffs: Optional[Dict[str, float]] = None) -> float:
+        """Calculate total cost with current suppliers including VAT.
+
+        Args:
+            tariffs: Optional custom tariff rates
+
+        Returns:
+            Total cost across all required parts.
+        """
         if tariffs is None:
             tariffs = self.current_tariff_rates
 
@@ -178,18 +217,33 @@ class TariffSimulation:
         for product_id, quantity in self.part_requirements.items():
             if product_id in self.current_suppliers:
                 supplier = self.current_suppliers[product_id]
-                cost_info = self._calculate_full_cost(
-                    supplier['price'],
-                    supplier['countryOfOrigin'],
-                    product_id,
-                    tariffs
-                )
-                cost = cost_info['final_price'] * quantity
-                total += cost
+                try:
+                    cost_info = self._calculate_full_cost(
+                        supplier['price'],
+                        supplier['countryOfOrigin'],
+                        product_id,
+                        tariffs
+                    )
+                    cost = cost_info['final_price'] * quantity
+                    total += cost
+                except (KeyError, TypeError) as e:
+                    print(f"Warning: Error calculating cost for product {product_id}: {e}")
+                    continue
         return total
 
-    def run_simulation(self, steps=25, shock_step=10, target_country='Germany', tariff_rate=0.30):
-        """Run tariff shock simulation with Q1 threshold methodology"""
+    def run_simulation(self, steps: int = 25, shock_step: int = 10,
+                      target_country: str = 'Germany', tariff_rate: float = 0.30) -> Dict[str, float]:
+        """Run tariff shock simulation with Q1 threshold methodology.
+
+        Args:
+            steps: Number of simulation steps
+            shock_step: Step at which to apply tariff shock
+            target_country: Country to apply tariff shock to
+            tariff_rate: New tariff rate to apply
+
+        Returns:
+            Dictionary containing simulation results.
+        """
         self.cost_history = []
         # Start with current tariff rates
         current_tariffs = self.current_tariff_rates.copy()
@@ -214,12 +268,20 @@ class TariffSimulation:
             'cost_increase': self.cost_history[-1] - self.cost_history[0]
         }
 
-    def get_current_tariff_info(self):
-        """Return current tariff rates for all countries"""
+    def get_current_tariff_info(self) -> Dict[str, float]:
+        """Return current tariff rates for all countries.
+
+        Returns:
+            Copy of current tariff rates dictionary.
+        """
         return self.current_tariff_rates.copy()
 
-    def analyze_current_costs(self):
-        """Analyze costs with current tariff rates including VAT breakdown"""
+    def analyze_current_costs(self) -> Tuple[Dict[str, Dict], float]:
+        """Analyze costs with current tariff rates including VAT breakdown.
+
+        Returns:
+            Tuple of (cost breakdown by product, total cost).
+        """
         cost_breakdown = {}
         total_cost = 0
 
@@ -260,8 +322,12 @@ class TariffSimulation:
 
         return cost_breakdown, total_cost
 
-    def get_q1_analysis(self):
-        """Get detailed analysis of Q1 threshold selection including VAT"""
+    def get_q1_analysis(self) -> Dict[str, Dict]:
+        """Get detailed analysis of Q1 threshold selection including VAT.
+
+        Returns:
+            Dictionary containing Q1 analysis for each product.
+        """
         analysis = {}
 
         for product_id in self.part_requirements:
@@ -305,8 +371,12 @@ class TariffSimulation:
 
         return analysis
 
-    def get_vat_summary(self):
-        """Get summary of VAT impact across all products"""
+    def get_vat_summary(self) -> Dict[str, Any]:
+        """Get summary of VAT impact across all products.
+
+        Returns:
+            Dictionary containing VAT summary statistics.
+        """
         taxable_products = [pid for pid, is_taxable in self.taxable_info.items() if is_taxable]
         non_taxable_products = [pid for pid, is_taxable in self.taxable_info.items() if not is_taxable]
 
@@ -330,10 +400,17 @@ class TariffSimulation:
             'vat_percentage_of_total': (total_vat / total_cost) * 100 if total_cost > 0 else 0,
         }
 
-    def bottom_quartile_avg_verification(self, product_id):
-        """
-        Verification function that uses the exact same logic as your reference function
-        to confirm our Q1 implementation is correct
+    def bottom_quartile_avg_verification(self, product_id: str) -> Optional[float]:
+        """Verification function for Q1 implementation.
+
+        Uses the exact same logic as the reference function to confirm
+        our Q1 implementation is correct.
+
+        Args:
+            product_id: Product ID to verify
+
+        Returns:
+            Verified Q1 average price or None if product not found.
         """
         if product_id not in self.suppliers_by_product:
             return None
@@ -351,6 +428,9 @@ class TariffSimulation:
             prices.append(cost_info['final_price'])
 
         # Convert to pandas Series and apply your exact logic
+        if not prices:
+            return None
+
         s = pd.Series(prices)
         s = pd.to_numeric(s, errors="coerce").dropna()
 
@@ -359,7 +439,7 @@ class TariffSimulation:
         if len(s) == 1:
             return round(float(s.iloc[0]), 2)
 
-        q1 = s.quantile(0.25)  # default 'linear' interpolation
+        q1 = s.quantile(0.25)
         val = float(s[s <= q1].mean())
         return round(val, 2)
 
@@ -387,8 +467,20 @@ def load_data_from_csv(suppliers_csv_path, parts_csv_path):
     return suppliers_data, part_requirements, taxable_info
 
 
-def create_cost_progression_chart(results, target_country, show_plot=False, save_plot=True, output_dir='./charts'):
-    """Create the cost progression chart separately"""
+def create_cost_progression_chart(results: List[Dict], target_country: str, show_plot: bool = False,
+                                 save_plot: bool = True, output_dir: str = './charts') -> Optional[str]:
+    """Create cost progression chart showing tariff impact over time.
+
+    Args:
+        results: List of simulation results
+        target_country: Country being analyzed
+        show_plot: Whether to display the plot
+        save_plot: Whether to save the plot to file
+        output_dir: Directory to save charts
+
+    Returns:
+        Path to saved chart file or None if not saved.
+    """
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 
     colors = ['blue', 'green', 'red']
@@ -428,9 +520,24 @@ def create_cost_progression_chart(results, target_country, show_plot=False, save
     return saved_path
 
 
-def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, show_plot=False, save_plot=True,
-                                      output_dir='./charts'):
-    """Create the Q1-based cost distribution boxplot chart showing total system costs after tariff shocks with VAT"""
+def create_q1_cost_distribution_chart(simulation: TariffSimulation, tariff_rates: List[float],
+                                     target_country: str, show_plot: bool = False,
+                                     save_plot: bool = True, output_dir: str = './charts') -> Optional[str]:
+    """Create Q1-based cost distribution boxplot chart.
+
+    Shows total system costs after tariff shocks with VAT.
+
+    Args:
+        simulation: TariffSimulation instance
+        tariff_rates: List of tariff rates to analyze
+        target_country: Country being analyzed
+        show_plot: Whether to display the plot
+        save_plot: Whether to save the plot to file
+        output_dir: Directory to save charts
+
+    Returns:
+        Path to saved chart file or None if not saved.
+    """
 
     # Calculate cost distributions for each tariff scenario
     cost_distributions = []
@@ -479,8 +586,6 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
                 product_suppliers[product_id] = below_q1
 
         # Generate system cost scenarios by sampling combinations
-        import itertools
-        import random
 
         # Get supplier options for each product
         supplier_options = []
@@ -491,10 +596,7 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
         # Generate sample combinations
         max_combinations = 1000
         if supplier_options:
-            # Calculate total possible combinations
-            total_combinations = 1
-            for options in supplier_options:
-                total_combinations *= len(options)
+            total_combinations = np.prod([len(options) for options in supplier_options])
 
             if total_combinations <= max_combinations:
                 # Generate all combinations if small enough
@@ -503,7 +605,7 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
                     system_costs.append(total_system_cost)
             else:
                 # Sample random combinations if too many
-                random.seed(42)  # For reproducibility
+                random.seed(42)
                 for _ in range(max_combinations):
                     combination = [random.choice(options) for options in supplier_options]
                     total_system_cost = sum(item['component_cost'] for item in combination)
@@ -535,13 +637,17 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
 
     # Add summary statistics as text
     for i, (costs, rate) in enumerate(zip(cost_distributions, tariff_rates)):
-        if costs:  # Check if costs list is not empty
-            median_cost = np.median(costs)
-            mean_cost = np.mean(costs)
-            max_cost = max(costs)
-            min_cost = min(costs)
-            ax.text(i + 1, max_cost * 1.02,
-                    f'Median: £{median_cost:.2f}\nMean: £{mean_cost:.2f}\nRange: £{min_cost:.2f}-£{max_cost:.2f}',
+        if costs:
+            stats = {
+                'median': np.median(costs),
+                'mean': np.mean(costs),
+                'max': max(costs),
+                'min': min(costs)
+            }
+            ax.text(i + 1, stats['max'] * 1.02,
+                    f"Median: £{stats['median']:.2f}\n"
+                    f"Mean: £{stats['mean']:.2f}\n"
+                    f"Range: £{stats['min']:.2f}-£{stats['max']:.2f}",
                     ha='center', va='bottom', fontsize=9,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
@@ -569,24 +675,40 @@ def create_q1_cost_distribution_chart(simulation, tariff_rates, target_country, 
 
 
 def analyze_tariff_impact(
-        suppliers_csv_path,
-        parts_csv_path,
-        target_country='Germany',
-        tariff_rates=None,
-        vat_rate=0.20,
-        show_plots=False,
-        save_plots=True,
-        output_dir='./charts'
-):
-    """Analyze tariff impact using Q1 threshold bottom quartile average pricing with VAT included"""
+        suppliers_csv_path: str,
+        parts_csv_path: str,
+        target_country: str = 'Germany',
+        tariff_rates: Optional[List[float]] = None,
+        vat_rate: float = 0.20,
+        show_plots: bool = False,
+        save_plots: bool = True,
+        output_dir: str = './charts'
+) -> Dict[str, Any]:
+    """Analyze tariff impact using Q1 threshold methodology with VAT.
+
+    Args:
+        suppliers_csv_path: Path to suppliers CSV file
+        parts_csv_path: Path to parts CSV file
+        target_country: Country to apply tariff shock to
+        tariff_rates: List of tariff rates to test
+        vat_rate: VAT rate to apply
+        show_plots: Whether to display charts
+        save_plots: Whether to save charts
+        output_dir: Directory to save output files
+
+    Returns:
+        Dictionary containing comprehensive analysis results.
+    """
 
     if tariff_rates is None:
         tariff_rates = [0.10, 0.30, 0.60]
 
-    # Load data using new CSV format
-    suppliers_data, part_requirements, taxable_info = load_data_from_csv(
-        suppliers_csv_path, parts_csv_path
-    )
+    try:
+        suppliers_data, part_requirements, taxable_info = load_data_from_csv(
+            suppliers_csv_path, parts_csv_path
+        )
+    except (FileNotFoundError, ValueError) as e:
+        return {'error': f"Failed to load data: {e}"}
 
     sim = TariffSimulation(suppliers_data, part_requirements, taxable_info, vat_rate)
 
@@ -657,11 +779,10 @@ def analyze_tariff_impact(
             'severity': 'high'
         })
 
-    # VAT-specific recommendations
     if vat_summary['vat_percentage_of_total'] > 15:
         recommendations.append({
             'type': 'vat_impact',
-            'message': f"VAT accounts for {vat_summary['vat_percentage_of_total']:.1f}% of total costs - consider VAT optimization strategies",
+            'message': f"VAT accounts for {vat_summary['vat_percentage_of_total']:.1f}% of total costs",
             'severity': 'medium'
         })
 
@@ -723,12 +844,15 @@ def analyze_tariff_impact(
 
 
 # Example usage function
-def run_example_analysis():
-    """Example of how to use the updated simulation with new CSV format"""
+def run_example_analysis() -> Dict[str, Any]:
+    """Example of how to use the updated simulation with CSV format.
 
-    # Example file paths - update these to your actual file locations
-    suppliers_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"  # productId,articleNo,price,countryOfOrigin,supplierId,supplierName
-    parts_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"  # productId,partDescription,quantity,taxable
+    Returns:
+        Analysis results dictionary.
+    """
+
+    suppliers_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
+    parts_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
 
     result = analyze_tariff_impact(
         suppliers_csv_path=suppliers_csv,
@@ -736,7 +860,7 @@ def run_example_analysis():
         target_country='Japan',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
-        show_plots=True,  # Changed to True to display charts
+        show_plots=True,
         save_plots=True
     )
 
