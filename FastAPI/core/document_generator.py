@@ -272,11 +272,9 @@ def auto_supplychain_prompt_template(
 ) -> str:
     rates_str = ", ".join(f"{r}%" for r in rates)
     return (
-        f"Write a professional supply chain analysis report on the {manufacturer} {model} {component}. "
-        f"The analysis should focus on the manufacturing in {manufacturing_country} and include a tariff shock simulation "
-        f"applied to parts imported from {tariff_shock_country} at the following tariff rates: {rates_str}.\n"
-        f"Assume:\n"
-        f"- VAT Rate: {vat_rate}%.\n\n"
+        f"Write me a professional report on the supply chain of the {manufacturer} {model} {component}. "
+        f"Include a tariff shock simulation for parts imported from {tariff_shock_country} with rates of {rates_str}. "
+        f"Assume VAT is {vat_rate}% and the manufacturing country is {manufacturing_country}."
     )
 
 prompt = auto_supplychain_prompt_template(
