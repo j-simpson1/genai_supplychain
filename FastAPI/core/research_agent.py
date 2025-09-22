@@ -1,38 +1,30 @@
+import asyncio
+import os
+import traceback
+from typing import List, Literal, Optional
+
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
-
-from langgraph.graph import StateGraph, START, END
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
-
-from FastAPI.core.state import AgentState
-from FastAPI.core.prompts import research_plan_prompt
-
+from pydantic import BaseModel, Field
 from tavily import TavilyClient
+
+from FastAPI.core.prompts import research_plan_prompt
+from FastAPI.core.state import AgentState
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
 
-class ResearchQueries(BaseModel):
-    queries: List[str]
-
-# importing taviliy as using it in a slightly unconventional way
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
-
-model = ChatOpenAI(
-    model="o4-mini"
-)
+model = ChatOpenAI(model="o4-mini")
 
 class TavilyJob(BaseModel):
-    # ≤400 chars, focused, single-topic
-    query: str = Field(..., max_length=400)
-    # Planner may set; we also enforce via enrich_job()
+    """Configuration for a Tavily search job."""
+    query: str = Field(..., max_length=400, description="Search query (≤400 chars)")
     topic: Literal["general", "news"] = "general"
     search_depth: Literal["basic", "advanced"] = "advanced"
     max_results: int = 1
@@ -44,10 +36,8 @@ class TavilyJob(BaseModel):
     include_answer: Literal[False, "basic", "advanced"] = False
 
 class TavilyPlan(BaseModel):
-    # Enforce ≤4 parametrized jobs
+    """A research plan containing multiple Tavily search jobs."""
     jobs: List[TavilyJob] = Field(default_factory=list, max_items=4)
-
-# --- NEW: Domain policies & guardrails ---
 
 TARIFF_NEWS_DOMAINS = [
     "reuters.com",
@@ -95,50 +85,41 @@ DEFAULT_DENYLIST = [
     "autodoc.", "made-in-china."
 ]
 
-# --- replace inside enrich_job ---
 def enrich_job(job: TavilyJob, focus_area: str) -> TavilyJob:
-    j = job.model_copy(deep=True)
+    """Enrich a Tavily job with domain-specific configuration based on focus area."""
+    enriched_job = job.model_copy(deep=True)
 
-    # Sane bounds
-    j.search_depth = j.search_depth if j.search_depth in ("basic", "advanced") else "advanced"
-    j.chunks_per_source = min(max(j.chunks_per_source or 2, 1), 3)
-    j.max_results = min(max(j.max_results or 1, 1), 2)
+    enriched_job.search_depth = enriched_job.search_depth if enriched_job.search_depth in ("basic", "advanced") else "advanced"
+    enriched_job.chunks_per_source = min(max(enriched_job.chunks_per_source or 2, 1), 3)
+    enriched_job.max_results = min(max(enriched_job.max_results or 1, 1), 2)
+    enriched_job.exclude_domains = list(set((enriched_job.exclude_domains or []) + DEFAULT_DENYLIST))
 
-    # Merge denylist
-    j.exclude_domains = list(set((j.exclude_domains or []) + DEFAULT_DENYLIST))
-
-    # Focus-specific allowlists / freshness
     if "Tariff news" in focus_area:
-        j.topic = "news"
-        j.time_range = j.time_range or "month"
-        if not j.include_domains:
-            j.include_domains = TARIFF_NEWS_DOMAINS
+        enriched_job.topic = "news"
+        enriched_job.time_range = enriched_job.time_range or "month"
+        if not enriched_job.include_domains:
+            enriched_job.include_domains = TARIFF_NEWS_DOMAINS
     elif "Supply chain" in focus_area:
-        j.topic = "general"
-        if not j.include_domains:
-            j.include_domains = AUTO_SUPPLY_DOMAINS
+        enriched_job.topic = "general"
+        if not enriched_job.include_domains:
+            enriched_job.include_domains = AUTO_SUPPLY_DOMAINS
 
-    return j
-
-# --- NEW: Structured planner (model emits TavilyPlan) ---
+    return enriched_job
 
 planner = model.with_structured_output(TavilyPlan)
 
-# --- UPDATED: research_plan_node using parametrized searches ---
-
 @traceable(name="tavily.search")
 def traced_tavily_search(params: dict):
-    # LangSmith gets a single dict[str, Any]; Tavily gets kwargs.
+    """Execute a Tavily search with LangSmith tracing."""
     return tavily.search(**params)
 
 async def research_plan_node(state: AgentState):
-    # 1) Ask the model for a parametrized plan
+    """Execute research plan by generating and executing multiple Tavily searches."""
     plan: TavilyPlan = planner.invoke([
         SystemMessage(content=research_plan_prompt),
         HumanMessage(content=state['task'])
     ])
 
-    # 2) Map jobs to your three Focus Areas (+ optional 4th misc)
     focus_labels = [
         "Supply chain of the manufacturer",
         "Tariff news – target country",
@@ -146,47 +127,43 @@ async def research_plan_node(state: AgentState):
         "Misc – supporting",
     ]
 
-    jobs: List[TavilyJob] = []
-    for i, job in enumerate(plan.jobs[:4]):
-        area = focus_labels[i] if i < len(focus_labels) else "Misc – supporting"
-        jobs.append(enrich_job(job, area))
+    jobs = [
+        enrich_job(job, focus_labels[i] if i < len(focus_labels) else "Misc – supporting")
+        for i, job in enumerate(plan.jobs[:4])
+    ]
 
-    # 3) Execute searches with parameters and append to web_content
-    content = state.get('web_content') or []
-    for j in jobs:
+    content = state.get('web_content', [])
+    for job in jobs:
         try:
             params = {
-                "query": j.query,
-                "topic": j.topic,
-                "search_depth": j.search_depth,
-                "chunks_per_source": j.chunks_per_source,
-                "include_raw_content": j.include_raw_content,
-                "include_answer": j.include_answer,
-                "max_results": j.max_results,
-                "time_range": j.time_range,
-                "include_domains": j.include_domains or [],
-                "exclude_domains": j.exclude_domains or [],
+                "query": job.query,
+                "topic": job.topic,
+                "search_depth": job.search_depth,
+                "chunks_per_source": job.chunks_per_source,
+                "include_raw_content": job.include_raw_content,
+                "include_answer": job.include_answer,
+                "max_results": job.max_results,
+                "time_range": job.time_range,
+                "include_domains": job.include_domains or [],
+                "exclude_domains": job.exclude_domains or [],
             }
 
             response = traced_tavily_search(params)
 
-            for r in response.get("results", []):
+            for result in response.get("results", []):
                 content.append(
-                    f"Source: {r.get('url')}\n"
-                    f"Title: {r.get('title', '')}\n"
-                    f"{r.get('content', '')}"
+                    f"Source: {result.get('url')}\n"
+                    f"Title: {result.get('title', '')}\n"
+                    f"{result.get('content', '')}"
                 )
 
         except Exception as e:
-            content.append(f"[Tavily error on '{j.query}': {e}]")
+            content.append(f"[Tavily error on '{job.query}': {e}]")
 
     return {"web_content": content}
 
 
-# initialise the graph with the agent state
 subgraph = StateGraph(AgentState)
-
-# add all nodes
 subgraph.add_node("research_agent", research_plan_node)
 
 subgraph.add_edge(START, "research_agent")
@@ -194,25 +171,31 @@ subgraph.add_edge("research_agent", END)
 
 research_agent = subgraph.compile()
 
-output_graph_path = os.path.join(REPORTS_DIR, "research_agent_langgraph.png")
-with open(output_graph_path, "wb") as f:
-    f.write(research_agent.get_graph().draw_mermaid_png())
-
 if __name__ == "__main__":
     import asyncio
     import traceback
 
+    # Generate graph visualization only when running directly
+    output_graph_path = os.path.join(REPORTS_DIR, "research_agent_langgraph.png")
+    if not os.path.exists(output_graph_path):
+        try:
+            with open(output_graph_path, "wb") as f:
+                f.write(research_agent.get_graph().draw_mermaid_png())
+            print(f"Graph visualization saved to {output_graph_path}")
+        except Exception as e:
+            print(f"Warning: Could not generate graph visualization: {e}")
+
     async def run_research_test():
-        # Point these to actual test files if analyze_tariff_impact() depends on them
+        """Test the research agent functionality."""
         articles_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
         parts_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
-        # Minimal viable state for simulation_agent
         initial_state: AgentState = {
-            "task": "Write me a report on the supply chain of the Toyota RAV4 braking system. Include a tariff shock simulation for Japan with rates of 20%, 50%, 80%. "
-                    "Assume the following:"
-                    "- VAT Rate: 20%"
-                    "- Manufacturing country: United Kingdom",
+            "task": (
+                "Write me a report on the supply chain of the Toyota RAV4 braking system. "
+                "Include a tariff shock simulation for Japan with rates of 20%, 50%, 80%. "
+                "Assume the following: - VAT Rate: 20% - Manufacturing country: United Kingdom"
+            ),
             "plan": "",
             "draft": "",
             "critique": "",
@@ -220,7 +203,7 @@ if __name__ == "__main__":
             "db_content": [],
             "db_summary": "",
             "trajectory": [],
-            "raw_simulation": [],  # start with no prior tool calls
+            "raw_simulation": [],
             "clean_simulation": "",
             "revision_number": 0,
             "max_revisions": 1,
@@ -248,24 +231,3 @@ if __name__ == "__main__":
             traceback.print_exc()
 
     asyncio.run(run_research_test())
-
-# script to run open_deep_researcher
-
-# # using open-deep-research
-# query = await model.ainvoke([
-#     SystemMessage(content=RESEARCH_PLAN_PROMPT),
-#     HumanMessage(content=state['task'])
-# ])
-# # original content
-# content = state['web_content'] or []
-#
-# response = await deep_researcher.ainvoke({
-#     "messages": [HumanMessage(content=query.content)],
-# })
-#
-# output = response['messages'][-1].content
-# print(output)
-#
-# content.append(output)
-
-# return the content key which is equal to the original content plus the accumulated content
