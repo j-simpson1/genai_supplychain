@@ -1,0 +1,48 @@
+name: genai_supplychain2
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - nodejs>=18
+  # Core Python dependencies
+  - pandas
+  - matplotlib
+  - numpy
+  - sqlalchemy
+  - sqlite
+  # Database
+  - postgresql
+  - psycopg2
+  # Development tools
+  - jupyter
+  - ipython
+  # Web framework
+  - uvicorn
+  # Additional packages via pip
+  - pip:
+    # FastAPI and web framework
+    - fastapi
+    - uvicorn[standard]
+    - aiofiles
+    - python-dotenv
+    # LangChain ecosystem
+    - langchain
+    - langchain-core
+    - langchain-community
+    - langchain-experimental
+    - langgraph
+    - langgraph-checkpoint-sqlite
+    - langsmith
+    - langchain-openai
+    # Document processing
+    - reportlab
+    - python-docx
+    - openpyxl
+    # Database
+    - aiosqlite
+    # External APIs
+    - tavily-python
+    # Additional tools
+    - streamlit
