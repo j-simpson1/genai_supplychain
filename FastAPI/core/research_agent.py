@@ -1,10 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import os
 import traceback
 from typing import List, Literal, Optional
-
-from dotenv import load_dotenv
-load_dotenv()
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI

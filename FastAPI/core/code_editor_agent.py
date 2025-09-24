@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import re
 import uuid
@@ -6,9 +9,6 @@ from typing import Dict, Any
 
 import matplotlib
 matplotlib.use("Agg")
-
-from dotenv import load_dotenv
-load_dotenv()
 
 from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
@@ -233,10 +233,10 @@ def create_code_editor_agent():
 # Create the agent
 code_editor_agent = create_code_editor_agent()
 
-# Generate graph visualization
-output_graph_path = os.path.join(REPORTS_DIR, "code_editor_langgraph.png")
-with open(output_graph_path, "wb") as f:
-    f.write(code_editor_agent.get_graph().draw_mermaid_png())
+# # Generate graph visualization
+# output_graph_path = os.path.join(REPORTS_DIR, "code_editor_langgraph.png")
+# with open(output_graph_path, "wb") as f:
+#     f.write(code_editor_agent.get_graph().draw_mermaid_png())
 
 # Demo
 if __name__ == "__main__":

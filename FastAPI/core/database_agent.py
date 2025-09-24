@@ -237,9 +237,9 @@ subgraph.add_conditional_edges(
 
 database_agent = subgraph.compile()
 
-output_graph_path = os.path.join(REPORTS_DIR, GRAPH_OUTPUT_FILENAME)
-with open(output_graph_path, "wb") as f:
-    f.write(database_agent.get_graph().draw_mermaid_png())
+# output_graph_path = os.path.join(REPORTS_DIR, GRAPH_OUTPUT_FILENAME)
+# with open(output_graph_path, "wb") as f:
+#     f.write(database_agent.get_graph().draw_mermaid_png())
 
 if __name__ == "__main__":
     import asyncio
