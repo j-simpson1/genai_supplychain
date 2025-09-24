@@ -17,3 +17,5 @@ python-docx
 openpyxl
 aiosqlite
 tavily-python
+msal
+python-multipart

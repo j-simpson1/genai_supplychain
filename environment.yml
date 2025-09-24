@@ -44,5 +44,7 @@ dependencies:
     - aiosqlite
     # External APIs
     - tavily-python
+    - msal
+    - python-multipart
     # Additional tools
     - streamlit
