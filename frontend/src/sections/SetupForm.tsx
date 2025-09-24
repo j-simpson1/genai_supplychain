@@ -1092,9 +1092,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               variant="contained"
               size="medium"
               onClick={loadTariffRowsFromFindCountries}
-              disabled={loadingFindCountries || !isFormValid()}
+              disabled={loadingFindCountries || loading.simulation || !isFormValid()}
             >
-              {loadingFindCountries ? "Loading..." : "Configure Tariff Rates & Generate Report"}
+              {loadingFindCountries ? "Loading..." : loading.simulation ? "Processing..." : "Configure Tariff Rates & Generate Report"}
             </StyledButton>
           </Box>
         </Box>
