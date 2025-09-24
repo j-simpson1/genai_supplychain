@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 import math
 import os
@@ -5,14 +8,11 @@ from typing import List, Union
 
 import matplotlib
 matplotlib.use("Agg")
-from dotenv import load_dotenv
 from langchain.agents import tool
 from langchain_core.messages import ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
-
-load_dotenv()
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.prompts import simulation_prompt
@@ -231,9 +231,9 @@ def create_simulation_agent():
 
 simulation_agent = create_simulation_agent()
 
-output_graph_path = os.path.join(REPORTS_DIR, "simulation_agent_langgraph.png")
-with open(output_graph_path, "wb") as f:
-    f.write(simulation_agent.get_graph().draw_mermaid_png())
+# output_graph_path = os.path.join(REPORTS_DIR, "simulation_agent_langgraph.png")
+# with open(output_graph_path, "wb") as f:
+#     f.write(simulation_agent.get_graph().draw_mermaid_png())
 
 def create_test_state() -> AgentState:
     """

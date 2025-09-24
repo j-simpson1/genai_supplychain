@@ -11,6 +11,15 @@ from typing import Dict, List, Optional, Tuple, Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import re
+
+
+def normalize_country_name_for_filename(country_name: str) -> str:
+    """Normalize country name for use in filenames by replacing spaces and special characters."""
+    # Convert to lowercase, replace spaces with underscores, and remove special characters
+    normalized = re.sub(r'[^\w\s-]', '', country_name.lower())
+    normalized = re.sub(r'[\s-]+', '_', normalized)
+    return normalized.strip('_')
 
 
 class TariffSimulation:
@@ -506,7 +515,7 @@ def create_cost_progression_chart(results: List[Dict], target_country: str, show
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"cost_progression_q1_method_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"cost_progression_q1_method_{normalize_country_name_for_filename(target_country)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
@@ -660,7 +669,7 @@ def create_q1_cost_distribution_chart(simulation: TariffSimulation, tariff_rates
     saved_path = None
     if save_plot:
         os.makedirs(output_dir, exist_ok=True)
-        filename = f"system_cost_distribution_q1_method_{target_country.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        filename = f"system_cost_distribution_q1_method_{normalize_country_name_for_filename(target_country)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(output_dir, filename)
         plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')
         saved_path = os.path.abspath(filepath)
