@@ -205,7 +205,7 @@ def create_graph() -> StateGraph:
 
     return builder
 
-async def run_agent(messages: str, parts_path: str, articles_path: str) -> Dict[str, Any]:
+async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_path: str) -> Dict[str, Any]:
     """Run the document generation agent workflow."""
     async with AsyncSqliteSaver.from_conn_string(":memory:") as checkpointer:
         builder = create_graph()
@@ -240,6 +240,7 @@ async def run_agent(messages: str, parts_path: str, articles_path: str) -> Dict[
             'current_chart_index': 0,
             'articles_path': articles_path,
             'parts_path': parts_path,
+            'tariff_path': tariff_path,
             'messages': [],
             'remaining_steps': 5
         }
@@ -355,8 +356,9 @@ if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.abspath(__file__))
     parts_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
     articles_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    tariff_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
 
     print(prompt)
-    asyncio.run(run_agent(prompt, parts_path, articles_path))
+    asyncio.run(run_agent(prompt, parts_path, articles_path, tariff_path))
 
     print("Done! Check results in LangSmith dashboard.")
