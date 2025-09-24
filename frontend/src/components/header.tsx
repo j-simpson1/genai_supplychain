@@ -11,7 +11,6 @@ interface NavItem {
 // Navigation configuration
 const NAV_LINKS: readonly NavItem[] = [
   { label: "Report Setup", path: "/" },
-  { label: "Chat", path: "/chat" },
 ] as const;
 
 // Styles
