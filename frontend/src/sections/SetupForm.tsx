@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
+import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { styled } from '@mui/material/styles';
 import { getCodes, getNames } from 'country-list';
 
@@ -187,6 +188,13 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [articlesDataFile, setArticlesDataFile] = useState<File | null>(null);
   const [showProcessingDialog, setShowProcessingDialog] = useState(false);
 
+  // Spreadsheet popup state
+  const [openTariffGrid, setOpenTariffGrid] = useState(false);
+
+  // Rows for the spreadsheet popup (seed with your countries if you like)
+  type TariffRow = { id: string; countryName: string; tariffRate: number | ''; dispatchCost: number | '' };
+  const [tariffRows, setTariffRows] = useState<TariffRow[]>([]);
+
   // Loading state
   const [loading, setLoading] = useState({
     models: false,
@@ -313,8 +321,24 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }
   }, []);
 
-  const handleSubmit = useCallback(async (event: React.FormEvent) => {
-    event.preventDefault();
+  // Function to check if the form is ready for submission
+  const isFormValid = useCallback(() => {
+    return !!(
+      formData.type &&
+      formData.manufacturingLocation &&
+      formData.tariffShockCountry &&
+      formData.categoryFilter &&
+      formData.tariffRate1 &&
+      formData.tariffRate2 &&
+      formData.tariffRate3 &&
+      formData.vatRate &&
+      partsDataFile &&
+      articlesDataFile
+    );
+  }, [formData, partsDataFile, articlesDataFile]);
+
+  const handleSubmit = useCallback(async (event?: React.FormEvent) => {
+    if (event) event.preventDefault();
 
     const selectedEngine = engineOptions.find(engine => engine.typeEngineName === formData.type);
     if (!selectedEngine) {
@@ -373,6 +397,11 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       formDataToSend.append('parts_data_file', partsDataFile);
       formDataToSend.append('articles_data_file', articlesDataFile);
 
+      // Add tariff data file if available
+      if (tariffDataFile) {
+        formDataToSend.append('tariff_data_file', tariffDataFile);
+      }
+
       // Make POST request to run_simulation endpoint
       const response = await fetch(`${API_BASE_URL}/run_simulation`, {
         method: 'POST',
@@ -394,7 +423,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           tariffRate3: formData.tariffRate3,
           vatRate: formData.vatRate, // Log VAT rate
           partsDataFile: partsDataFile?.name,
-          articlesDataFile: articlesDataFile?.name
+          articlesDataFile: articlesDataFile?.name,
+          tariffDataFile: tariffDataFile?.name
         });
 
         // You can navigate to results page or handle the response as needed
@@ -475,6 +505,130 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         ...prev,
         vatRate: value
       }));
+    }
+  };
+
+  // Columns (component scope, NOT inside JSX)
+
+  const tariffColumns: import('@mui/x-data-grid').GridColDef[] = [
+    {
+      field: 'countryName',
+      headerName: 'Country',
+      editable: false,
+      headerAlign: 'center',
+      align: 'center',
+      flex: 1,          // takes more space
+      minWidth: 150,    // never shrink below this
+    },
+    {
+      field: 'tariffRate',
+      headerName: 'Tariff Rate (%)',
+      type: 'number',
+      editable: true,
+      headerAlign: 'center',
+      align: 'center',
+      flex: 1,        // smaller proportion
+      minWidth: 150,
+    },
+    {
+      field: 'dispatchCost',
+      headerName: 'Dispatch Cost (£)',
+      type: 'number',
+      editable: true,
+      headerAlign: 'center',
+      align: 'center',
+      flex: 1,        // smaller proportion
+      minWidth: 150,
+    },
+  ];
+
+  // Row update handler (component scope)
+  const handleProcessRowUpdate = (
+    newRow: import('@mui/x-data-grid').GridRowModel,
+    _oldRow: import('@mui/x-data-grid').GridRowModel
+  ) => {
+    if (
+      newRow.tariffRate !== '' &&
+      (Number.isNaN(Number(newRow.tariffRate)) || Number(newRow.tariffRate) < 0)
+    ) {
+      throw new Error('Tariff rate must be a non-negative number or blank.');
+    }
+    if (
+      newRow.dispatchCost !== '' &&
+      (Number.isNaN(Number(newRow.dispatchCost)) || Number(newRow.dispatchCost) < 0)
+    ) {
+      throw new Error('Dispatch cost must be a non-negative number or blank.');
+    }
+    return newRow;
+  };
+
+  const handleRowUpdateError = (err: unknown) => {
+    console.error(err);
+    alert((err as Error).message);
+  };
+
+  // add a loader + temp id state
+  const [loadingFindCountries, setLoadingFindCountries] = useState(false);
+  const [countriesTempId, setCountriesTempId] = useState<string | null>(null);
+  const [tariffDataFile, setTariffDataFile] = useState<File | null>(null);
+
+  // Function to convert tariff data to CSV file
+  const createTariffCsvFile = (tariffData: TariffRow[]): File => {
+    // Create CSV content
+    const headers = ['countryName', 'tariffRate', 'dispatchCost'];
+    const csvRows = [
+      headers.join(','), // Header row
+      ...tariffData.map(row => [
+        `"${row.countryName}"`, // Wrap in quotes to handle country names with commas
+        row.tariffRate === '' ? '' : row.tariffRate.toString(),
+        row.dispatchCost === '' ? '' : row.dispatchCost.toString()
+      ].join(','))
+    ];
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    return new File([blob], 'tariff_data.csv', { type: 'text/csv' });
+  };
+
+  // call backend and populate rows
+  const loadTariffRowsFromFindCountries = async () => {
+    if (!partsDataFile || !articlesDataFile) {
+      alert("Please upload both Parts and Articles CSVs first.");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("parts_data_file", partsDataFile);
+    fd.append("articles_data_file", articlesDataFile);
+
+    try {
+      setLoadingFindCountries(true);
+      const res = await fetch(`${API_BASE_URL}/find_countries`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "find_countries failed");
+      }
+      const data: { temp_id: string; countries: string[] } = await res.json();
+
+      // turn country names into DataGrid rows; leave tariffRate and dispatchCost empty initially
+      const rows = data.countries.map((name) => ({
+        id: name.toLowerCase().replace(/\s+/g, "_"),
+        countryName: name,
+        tariffRate: "" as number | "",
+        dispatchCost: "" as number | "",
+      }));
+
+      setCountriesTempId(data.temp_id);
+      setTariffRows(rows);
+      setOpenTariffGrid(true); // open the dialog after loading
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "Could not load countries");
+    } finally {
+      setLoadingFindCountries(false);
     }
   };
 
@@ -935,10 +1089,81 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               Reset
             </StyledButton>
             <StyledButton
-              type="submit"
               variant="contained"
               size="medium"
-              disabled={!formData.type || !formData.manufacturingLocation || !formData.tariffShockCountry || !formData.categoryFilter || !formData.tariffRate1 || !formData.tariffRate2 || !formData.tariffRate3 || !formData.vatRate || !partsDataFile || !articlesDataFile || loading.simulation}
+              onClick={loadTariffRowsFromFindCountries}
+              disabled={loadingFindCountries || !isFormValid()}
+            >
+              {loadingFindCountries ? "Loading..." : "Configure Tariff Rates & Generate Report"}
+            </StyledButton>
+          </Box>
+        </Box>
+
+        <Dialog
+          open={openTariffGrid}
+          onClose={() => setOpenTariffGrid(false)}
+          PaperProps={{
+            sx: {
+              width: '50vw',
+              height: '70vh',
+              maxWidth: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          }}
+        >
+          <DialogTitle sx={{ textAlign: 'center', px: 3 }}>Add Tariff Rates and Dispatch Costs</DialogTitle>
+          <DialogContent dividers sx={{ height: 520 }}>
+          <DataGrid
+            rows={tariffRows}
+            columns={tariffColumns}
+            // Demo-style UX niceties
+            disableRowSelectionOnClick
+
+            // Pagination like the demo
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10 } },
+            }}
+            pageSizeOptions={[5, 10, 25, 50]}
+
+            // Keep your existing toolbar + edit handlers
+            slots={{ toolbar: GridToolbar }}
+            processRowUpdate={handleProcessRowUpdate}
+            onProcessRowUpdateError={handleRowUpdateError}
+
+            // Nice compact look + subtle header background
+            density="compact"
+            sx={{
+              border: 0,
+              '& .MuiDataGrid-columnHeaders': {
+                backgroundColor: 'rgba(0,0,0,0.04)',
+                fontWeight: 600,
+              },
+              '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+                outline: 'none',
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: 'rgba(0,0,0,0.02)',
+              },
+            }}
+          />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setOpenTariffGrid(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              disabled={!isFormValid() || loading.simulation}
+              onClick={async () => {
+                // Convert tariff data to CSV file
+                if (tariffRows.length > 0) {
+                  const csvFile = createTariffCsvFile(tariffRows);
+                  setTariffDataFile(csvFile);
+                }
+                setOpenTariffGrid(false);
+
+                // Trigger the full simulation
+                await handleSubmit();
+              }}
             >
               {loading.simulation ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -948,9 +1173,9 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               ) : (
                 'Generate Report'
               )}
-            </StyledButton>
-          </Box>
-        </Box>
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Processing Dialog */}
         <Dialog

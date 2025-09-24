@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest, TokenRequest, Message, ChatRequest
+from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 import pandas as pd
 import datetime
@@ -25,7 +25,6 @@ import os
 from typing import Optional, Dict, Any
 from pathlib import Path
 from FastAPI.powerbi_integration.auth import get_access_token
-from FastAPI.services.stream_chat_services import chat_client
 import openai
 from dotenv import load_dotenv
 import json
@@ -217,7 +216,8 @@ async def run_simulation(
         tariff_rate_3: str = Form(..., description="Third tariff rate percentage"),
         vat_rate: str = Form(..., description="VAT rate percentage"),  # New VAT rate parameter
         parts_data_file: UploadFile = File(..., description="CSV file with parts data"),
-        articles_data_file: UploadFile = File(..., description="CSV file with articles data")
+        articles_data_file: UploadFile = File(..., description="CSV file with articles data"),
+        tariff_data_file: UploadFile = File(None, description="Optional CSV file with tariff rates and dispatch costs data")
 ):
     """
     Run vehicle simulation with uploaded data and form parameters.
@@ -275,6 +275,39 @@ async def run_simulation(
 
             logger.info(f"Parsed tariff rates: {tariff_rates}")
             logger.info(f"Parsed VAT rate: {vat_rate_float}")
+
+            # Process tariff data file if provided
+            parsed_tariff_data = []
+            tariff_content = None
+            if tariff_data_file and tariff_data_file.filename:
+                try:
+                    if not tariff_data_file.filename.endswith('.csv'):
+                        logger.warning("Tariff data file is not a CSV, skipping it")
+                    else:
+                        tariff_content = await tariff_data_file.read()
+                        tariff_content_str = tariff_content.decode('utf-8')
+
+                        # Parse CSV content (simple parsing)
+                        lines = tariff_content_str.strip().split('\n')
+                        if len(lines) > 1:  # Has header + data
+                            header = lines[0].split(',')
+                            for line in lines[1:]:
+                                if line.strip():  # Skip empty lines
+                                    values = line.split(',')
+                                    if len(values) >= 3:
+                                        country_name = values[0].strip('"')
+                                        tariff_rate = values[1] if values[1] else None
+                                        dispatch_cost = values[2] if values[2] else None
+                                        parsed_tariff_data.append({
+                                            'countryName': country_name,
+                                            'tariffRate': tariff_rate,
+                                            'dispatchCost': dispatch_cost
+                                        })
+
+                        logger.info(f"Parsed tariff data: {len(parsed_tariff_data)} countries with rates and dispatch costs")
+                except Exception as e:
+                    logger.warning(f"Error processing tariff_data_file: {str(e)}")
+
         except HTTPException:
             raise
         except Exception as e:
@@ -365,7 +398,8 @@ async def run_simulation(
                     "name": tariff_shock_country_name
                 },
                 "tariff_rates": tariff_rates,
-                "vat_rate": vat_rate_float  # Include VAT rate in summary
+                "vat_rate": vat_rate_float,  # Include VAT rate in summary
+                "custom_tariff_data": len(parsed_tariff_data) if parsed_tariff_data else 0
             },
             "uploaded_files": {
                 "parts_data": {
@@ -379,7 +413,12 @@ async def run_simulation(
                     "size_kb": len(articles_content) / 1024,
                     "rows": len(articles_df),
                     "columns": len(articles_df.columns)
-                }
+                },
+                "tariff_data": {
+                    "filename": tariff_data_file.filename if tariff_data_file else None,
+                    "size_kb": len(tariff_content) / 1024 if tariff_data_file else 0,
+                    "rows": len(parsed_tariff_data)
+                } if tariff_data_file else None
             }
         }
 
@@ -411,6 +450,14 @@ async def run_simulation(
         parts_df.to_csv(parts_path, index=False)
         articles_df.to_csv(articles_path, index=False)
 
+        # Save tariff data as temporary file if provided
+        tariff_path = None
+        if parsed_tariff_data:
+            tariff_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
+            tariff_df = pd.DataFrame(parsed_tariff_data)
+            tariff_df.to_csv(tariff_path, index=False)
+            logger.info(f"Saved tariff data to temporary file: {tariff_path}")
+
         # Call agent using file paths
         result = await run_agent(prompt, parts_path, articles_path)
 
@@ -419,6 +466,8 @@ async def run_simulation(
             import os
             os.unlink(parts_path)
             os.unlink(articles_path)
+            if tariff_path:
+                os.unlink(tariff_path)
         except Exception as cleanup_error:
             logger.warning(f"Could not clean up temporary files: {cleanup_error}")
 
@@ -485,83 +534,3 @@ if not openai_key:
 openai.api_key = openai_key
 
 
-@router.post("/chat")
-async def chat_with_openai(request: ChatRequest):
-    try:
-
-        SYSTEM_PROMPT = {
-            "role": "system",
-            "content": (
-                "You are an AI assistant integrated into a system that can call backend APIs. "
-                "If the user's request requires a backend action (e.g., retrieving manufacturers), "
-                "respond with a JSON object like:\n\n"
-                "{\n"
-                '  "response": "I’m fetching that for you...",\n'
-                '  "action": {\n'
-                '    "type": "retrieve_manufacturers",\n'
-                '    "params": {}\n'
-                "  }\n"
-                "}\n\n"
-                "If no action is required, respond as plain text."
-            )
-        }
-        # Step 1: Call OpenAI
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[SYSTEM_PROMPT] + [{"role": m.role, "content": m.content} for m in request.messages]
-        )
-
-        ai_raw = response.choices[0].message.content.strip()
-
-        # Step 2: Parse response
-        try:
-            parsed = json.loads(ai_raw)
-            base_message = parsed.get("response", "")
-            action = parsed.get("action")
-        except json.JSONDecodeError:
-            base_message = ai_raw
-            action = None
-
-        # Step 3: Run action (and get any result)
-        action_result = None
-        if action:
-            action_result = handle_actions(action)
-
-        # Step 4: Compose final message
-        if action_result:
-            full_message = f"{base_message}\n\n{action_result}"
-        else:
-            full_message = base_message
-
-        # Step 5: Send to Stream Chat
-        try:
-            channel = chat_client.channel("messaging", request.channel_id)
-            channel.send_message({"text": full_message}, user_id="ai-assistant")
-        except Exception as stream_error:
-            print(f"Stream Chat error: {stream_error}")
-
-        return {"message": full_message}
-
-
-    except Exception as e:
-        print("AI request failed:")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"AI request failed: {e}")
-
-
-@router.post("/token")
-def get_token(request: TokenRequest):
-    # Generate token for the requested user
-    token = chat_client.create_token(request.userId)
-
-    # Only update user data for the main user, not the AI assistant
-    if request.userId == "js-user":
-        try:
-            chat_client.update_user({
-                "id": "js-user",
-                "name": "User",
-            })
-        except Exception as e:
-            print(f"Warning: Could not update user data: {e}")
-
-    return {"token": token}

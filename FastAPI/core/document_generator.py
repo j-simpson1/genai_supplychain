@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import json
 import os
@@ -7,7 +10,6 @@ from typing import Dict, Any, List
 
 import matplotlib
 import pandas as pd
-from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import StateGraph, END
@@ -30,7 +32,7 @@ from FastAPI.core.utils import serialize_state
 from FastAPI.document_builders.pdf_creator import save_to_pdf
 from FastAPI.document_builders.word_creator import save_to_word
 
-load_dotenv()
+
 matplotlib.use("Agg")
 
 # Configuration constants
@@ -145,12 +147,12 @@ def should_continue(state: AgentState) -> str:
         # Save final reports
         print(save_to_pdf(
             content=state["draft"],
-            filename="../reports_and_graphs/report.pdf",
+            filename=os.path.join(REPORTS_DIR, "report.pdf"),
             chart_metadata=state.get("chart_metadata", [])
         ))
         print(save_to_word(
             content=state["draft"],
-            filename="../reports_and_graphs/report.docx",
+            filename=os.path.join(REPORTS_DIR, "report.docx"),
             chart_metadata=state.get("chart_metadata", [])
         ))
         return END
@@ -209,10 +211,10 @@ async def run_agent(messages: str, parts_path: str, articles_path: str) -> Dict[
         builder = create_graph()
         graph = builder.compile(checkpointer=checkpointer)
 
-        # Save graph visualization
-        output_graph_path = os.path.join(REPORTS_DIR, "langgraph.png")
-        with open(output_graph_path, "wb") as f:
-            f.write(graph.get_graph().draw_mermaid_png())
+        # Save graph visualization (commented out due to Mermaid API issues)
+        # output_graph_path = os.path.join(REPORTS_DIR, "langgraph.png")
+        # with open(output_graph_path, "wb") as f:
+        #     f.write(graph.get_graph().draw_mermaid_png())
 
         final_state = {}
 
