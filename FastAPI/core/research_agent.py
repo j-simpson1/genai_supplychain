@@ -24,11 +24,11 @@ model = ChatOpenAI(model="o4-mini")
 
 class TavilyJob(BaseModel):
     """Configuration for a Tavily search job."""
-    query: str = Field(..., max_length=400, description="Search query (≤400 chars)")
-    topic: Literal["general", "news"] = "general"
+    query: str = Field(max_length=400, description="Search query (≤400 chars)")
+    topic: Literal["general", "news"] = "news"
     search_depth: Literal["basic", "advanced"] = "advanced"
     max_results: int = 1
-    time_range: Optional[Literal["day", "week", "month", "year"]] = None
+    time_range: Optional[Literal["day", "week", "month", "year"]] = "month"
     include_domains: Optional[List[str]] = None
     exclude_domains: Optional[List[str]] = None
     chunks_per_source: int = 2
@@ -37,7 +37,7 @@ class TavilyJob(BaseModel):
 
 class TavilyPlan(BaseModel):
     """A research plan containing multiple Tavily search jobs."""
-    jobs: List[TavilyJob] = Field(default_factory=list, max_items=4)
+    jobs: List[TavilyJob] = Field(default_factory=list, max_items=6)
 
 TARIFF_NEWS_DOMAINS = [
     "reuters.com",
@@ -57,36 +57,13 @@ TARIFF_NEWS_DOMAINS = [
     "politico.com",
 ]
 
-AUTO_SUPPLY_DOMAINS = [
-    "oica.net",
-    "acea.auto",
-    "jama.or.jp",
-    "siam.in",
-    "vda.de",
-    "statista.com",
-    "ihsmarkit.com",
-    "autonews.com",
-    "just-auto.com",
-    "wardsauto.com",
-    "motortrend.com",
-    "carscoops.com",
-    "globalsupplychainnews.com",
-    "supplychaindigital.com",
-    "supplychainquarterly.com",
-    "smmt.co.uk",
-    "nist.gov",
-    "epa.gov",
-    "ec.europa.eu",
-    "nhtsa.gov",
-]
 
 DEFAULT_DENYLIST = [
-    "wikipedia.org", "reddit.com", "quora.com", "pinterest.",
-    "autodoc.", "made-in-china."
+    "wikipedia.org", "reddit.com", "quora.com", "pinterest."
 ]
 
-def enrich_job(job: TavilyJob, focus_area: str) -> TavilyJob:
-    """Enrich a Tavily job with domain-specific configuration based on focus area."""
+def enrich_job(job: TavilyJob) -> TavilyJob:
+    """Enrich a Tavily job with tariff news configuration."""
     enriched_job = job.model_copy(deep=True)
 
     enriched_job.search_depth = enriched_job.search_depth if enriched_job.search_depth in ("basic", "advanced") else "advanced"
@@ -94,15 +71,12 @@ def enrich_job(job: TavilyJob, focus_area: str) -> TavilyJob:
     enriched_job.max_results = min(max(enriched_job.max_results or 1, 1), 2)
     enriched_job.exclude_domains = list(set((enriched_job.exclude_domains or []) + DEFAULT_DENYLIST))
 
-    if "Tariff news" in focus_area:
-        enriched_job.topic = "news"
-        enriched_job.time_range = enriched_job.time_range or "month"
-        if not enriched_job.include_domains:
-            enriched_job.include_domains = TARIFF_NEWS_DOMAINS
-    elif "Supply chain" in focus_area:
-        enriched_job.topic = "general"
-        if not enriched_job.include_domains:
-            enriched_job.include_domains = AUTO_SUPPLY_DOMAINS
+    # Configure for tariff news
+    enriched_job.topic = "news"
+    enriched_job.time_range = enriched_job.time_range or "month"
+    # Append tariff news domains, removing duplicates
+    existing_domains = enriched_job.include_domains or []
+    enriched_job.include_domains = list(set(existing_domains + TARIFF_NEWS_DOMAINS))
 
     return enriched_job
 
@@ -120,17 +94,7 @@ async def research_plan_node(state: AgentState):
         HumanMessage(content=state['task'])
     ])
 
-    focus_labels = [
-        "Supply chain of the manufacturer",
-        "Tariff news – target country",
-        "Tariff news – automotive sector",
-        "Misc – supporting",
-    ]
-
-    jobs = [
-        enrich_job(job, focus_labels[i] if i < len(focus_labels) else "Misc – supporting")
-        for i, job in enumerate(plan.jobs[:4])
-    ]
+    jobs = [enrich_job(job) for job in plan.jobs[:6]]
 
     content = state.get('web_content', [])
     for job in jobs:
