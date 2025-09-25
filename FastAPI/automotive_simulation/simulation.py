@@ -251,8 +251,90 @@ class TariffSimulation:
                     continue
         return total
 
+    def get_distribution_mean_cost(self, tariffs: Optional[Dict[str, float]] = None,
+                                 max_combinations: int = 1000) -> float:
+        """Calculate mean cost from distribution of all Q1 supplier combinations.
+
+        This method calculates costs the same way as the distribution chart,
+        providing consistency between progression and distribution visualizations.
+
+        Args:
+            tariffs: Optional custom tariff rates
+            max_combinations: Maximum combinations to calculate
+
+        Returns:
+            Mean total cost across all Q1 supplier combinations.
+        """
+        if tariffs is None:
+            tariffs = self.current_tariff_rates
+
+        # Get supplier options for each product (same logic as distribution chart)
+        product_suppliers = {}
+        for product_id in self.part_requirements:
+            if product_id in self.suppliers_by_product:
+                suppliers = self.suppliers_by_product[product_id]
+                quantity = self.part_requirements[product_id]
+
+                # Calculate final prices with given tariffs
+                supplier_prices = []
+                for supplier in suppliers:
+                    cost_info = self._calculate_full_cost(
+                        supplier['price'],
+                        supplier['countryOfOrigin'],
+                        product_id,
+                        tariffs
+                    )
+                    supplier_prices.append({
+                        'supplier': supplier,
+                        'final_price': cost_info['final_price'],
+                        'component_cost': cost_info['final_price'] * quantity
+                    })
+
+                # Sort and get Q1 threshold
+                supplier_prices.sort(key=lambda x: x['final_price'])
+                prices_array = np.array([sp['final_price'] for sp in supplier_prices])
+
+                if len(prices_array) == 1:
+                    q1_threshold = prices_array[0]
+                else:
+                    q1_threshold = np.percentile(prices_array, 25)
+
+                # Get suppliers below Q1
+                below_q1 = [sp for sp in supplier_prices if sp['final_price'] <= q1_threshold]
+                product_suppliers[product_id] = below_q1
+
+        # Generate system cost scenarios by sampling combinations
+        supplier_options = []
+        for product_id in sorted(product_suppliers.keys()):
+            if product_suppliers[product_id]:
+                supplier_options.append(product_suppliers[product_id])
+
+        system_costs = []
+        if supplier_options:
+            total_combinations = np.prod([len(options) for options in supplier_options])
+
+            if total_combinations <= max_combinations:
+                # Generate all combinations if small enough
+                for combination in itertools.product(*supplier_options):
+                    total_system_cost = sum(item['component_cost'] for item in combination)
+                    system_costs.append(total_system_cost)
+            else:
+                # Sample random combinations if too many
+                random.seed(42)  # For reproducibility
+                for _ in range(max_combinations):
+                    combination = [random.choice(options) for options in supplier_options]
+                    total_system_cost = sum(item['component_cost'] for item in combination)
+                    system_costs.append(total_system_cost)
+
+        # Return mean cost, or fallback to Q1 average method if no combinations
+        if system_costs:
+            return np.mean(system_costs)
+        else:
+            return self.get_total_cost(tariffs)
+
     def run_simulation(self, steps: int = 25, shock_step: int = 10,
-                      target_country: str = 'Germany', tariff_rate: float = 0.30) -> Dict[str, float]:
+                      target_country: str = 'Germany', tariff_rate: float = 0.30,
+                      use_distribution_mean: bool = True) -> Dict[str, float]:
         """Run tariff shock simulation with Q1 threshold methodology.
 
         Args:
@@ -260,6 +342,8 @@ class TariffSimulation:
             shock_step: Step at which to apply tariff shock
             target_country: Country to apply tariff shock to
             tariff_rate: New tariff rate to apply
+            use_distribution_mean: If True, use distribution mean calculation for consistency
+                                 with distribution chart. If False, use Q1 average method.
 
         Returns:
             Dictionary containing simulation results.
@@ -268,18 +352,17 @@ class TariffSimulation:
         # Start with current tariff rates
         current_tariffs = self.current_tariff_rates.copy()
 
-        # Keep the original Q1 suppliers selection (don't recalculate after shock)
-        # This maintains consistency - we're testing the same supplier set under different tariff conditions
-        original_suppliers = self.current_suppliers.copy()
-
         for step in range(steps):
             if step == shock_step:
                 # Apply tariff shock to target country
                 current_tariffs[target_country] = tariff_rate
-                # NOTE: We do NOT recalculate suppliers here - we keep the same suppliers
-                # to see how the tariff shock affects the existing supply chain
 
-            cost = self.get_total_cost(current_tariffs)
+            # Use distribution mean for consistency with box plot chart
+            if use_distribution_mean:
+                cost = self.get_distribution_mean_cost(current_tariffs)
+            else:
+                cost = self.get_total_cost(current_tariffs)
+
             self.cost_history.append(cost)
 
         return {
@@ -822,7 +905,7 @@ def analyze_tariff_impact(
     results = []
 
     for rate in tariff_rates:
-        result = sim.run_simulation(target_country=target_country, tariff_rate=rate)
+        result = sim.run_simulation(target_country=target_country, tariff_rate=rate, use_distribution_mean=True)
 
         # Calculate affected suppliers for this scenario
         affected_suppliers = []
@@ -958,15 +1041,17 @@ def run_example_analysis() -> Dict[str, Any]:
 
     suppliers_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
     parts_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
+    tariff_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv"
 
     result = analyze_tariff_impact(
         suppliers_csv_path=suppliers_csv,
         parts_csv_path=parts_csv,
-        target_country='Japan',
+        target_country='United Kingdom',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
         show_plots=True,
-        save_plots=True
+        save_plots=True,
+        tariff_csv_path=tariff_csv
     )
 
     print(json.dumps(result, indent=2, default=str))
