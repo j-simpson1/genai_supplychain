@@ -1,6 +1,39 @@
 # genai_supplychain
 MSc Computer Science Project, James Simpson
 
+## Setup Environment
+
+### Option 1: Conda Environment (Recommended)
+```bash
+# Create conda environment from environment.yml
+conda env create -f environment.yml
+
+# If you get "prefix already exists" error, remove the existing environment first:
+# conda env remove -n genai_supplychain2
+# conda env create -f environment.yml
+
+# Activate the environment
+conda activate genai_supplychain2
+
+# Install frontend dependencies
+cd frontend
+npm install
+cd ..
+```
+
+### Option 2: Manual Setup
+If you prefer not to use conda, install dependencies manually:
+```bash
+pip install -r requirements.txt
+```
+
+## Environment Variables
+Copy the example environment file and add your API keys:
+```bash
+cp .env.example .env
+# Edit .env with your actual API keys
+```
+
 ## Docker Services
 
 | Service   | Port | Purpose                   | Credentials                            |
@@ -12,10 +45,8 @@ MSc Computer Science Project, James Simpson
 1) Start FastAPI Backend
 ------------------------
 
-- Install Uvicorn if not already installed:
-    pip install uvicorn
 - Run the FastAPI server with:
-    uvicorn FastAPI.main:app --reload
+    python -m uvicorn FastAPI.main:app --reload
   The API will be available at: http://127.0.0.1:8000  
   Swagger UI: http://127.0.0.1:8000/docs
 
@@ -33,11 +64,19 @@ MSc Computer Science Project, James Simpson
 
 3) Start Docker
 ------------------------
-- Start Docker containers
+- Start Docker containers:
     docker compose up -d
 
-  pgAdmin http://localhost:5050
-  Login: admin@example.com / adminpass
+- View logs:
+    docker compose logs -f
+
+- Stop containers:
+    docker compose down
+
+- Rebuild and start:
+    docker compose up -d --build
+
+  The FastAPI service will be available at: http://localhost:8001
 
 
 4) Launch Streamlit Dashboard
@@ -47,7 +86,7 @@ MSc Computer Science Project, James Simpson
     pip install streamlit pandas
 
 - Run the Streamlit app:
-    streamlit run FastAPI/core/dashboard.py
+    streamlit run FastAPI/dashboard/dashboard.py
 
 - View in Browser:  
    After launching, Streamlit will print a local URL in the terminal.  

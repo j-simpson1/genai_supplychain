@@ -30,15 +30,17 @@ class TariffSimulation:
     """
 
     def __init__(self, suppliers_data: List[Dict], part_requirements: Dict[str, int],
-                 taxable_info: Dict[str, bool], vat_rate: float = 0.20):
+                 taxable_info: Dict[str, bool], vat_rate: float = 0.20,
+                 custom_tariff_rates: Optional[Dict[str, float]] = None):
         self.suppliers_data = suppliers_data
         self.part_requirements = part_requirements
         self.taxable_info = taxable_info
         self.vat_rate = vat_rate  # Default UK VAT rate of 20%
         self.cost_history = []
+        self.custom_tariff_rates = custom_tariff_rates
 
         # Current tariff rates by country (updated with provided rates)
-        self.current_tariff_rates = {
+        self.default_tariff_rates = {
             'Canada': 0.03394,
             'China': 0.06,
             'Croatia': 0.03824,
@@ -68,6 +70,15 @@ class TariffSimulation:
             'United Kingdom': 0.02208,
             'United States of America': 0.01307
         }
+
+        # Use custom tariff rates if provided, otherwise use defaults
+        if custom_tariff_rates:
+            # Start with defaults and update with custom rates
+            self.current_tariff_rates = self.default_tariff_rates.copy()
+            self.current_tariff_rates.update(custom_tariff_rates)
+            print(f"Using custom tariff rates for {len(custom_tariff_rates)} countries")
+        else:
+            self.current_tariff_rates = self.default_tariff_rates.copy()
 
         # Now initialize suppliers after tariff rates are set
         self.suppliers_by_product = self._group_suppliers()
@@ -285,6 +296,34 @@ class TariffSimulation:
         """
         return self.current_tariff_rates.copy()
 
+    def get_tariff_source_info(self) -> Dict[str, Any]:
+        """Return information about the source of tariff rates.
+
+        Returns:
+            Dictionary with information about default vs custom tariff rates.
+        """
+        if self.custom_tariff_rates:
+            custom_countries = set(self.custom_tariff_rates.keys())
+            default_countries = set(self.default_tariff_rates.keys()) - custom_countries
+
+            return {
+                'has_custom_rates': True,
+                'custom_countries': sorted(list(custom_countries)),
+                'custom_count': len(custom_countries),
+                'default_countries': sorted(list(default_countries)),
+                'default_count': len(default_countries),
+                'total_countries': len(self.current_tariff_rates)
+            }
+        else:
+            return {
+                'has_custom_rates': False,
+                'custom_countries': [],
+                'custom_count': 0,
+                'default_countries': sorted(list(self.current_tariff_rates.keys())),
+                'default_count': len(self.current_tariff_rates),
+                'total_countries': len(self.current_tariff_rates)
+            }
+
     def analyze_current_costs(self) -> Tuple[Dict[str, Dict], float]:
         """Analyze costs with current tariff rates including VAT breakdown.
 
@@ -451,6 +490,49 @@ class TariffSimulation:
         q1 = s.quantile(0.25)
         val = float(s[s <= q1].mean())
         return round(val, 2)
+
+
+def load_tariff_data_from_csv(tariff_csv_path: Optional[str]) -> Optional[Dict[str, float]]:
+    """
+    Load custom tariff data from CSV file.
+
+    CSV format: countryName,tariffRate
+
+    Args:
+        tariff_csv_path: Path to CSV file with tariff data
+
+    Returns:
+        Dictionary mapping country names to tariff rates, or None if no file provided
+    """
+    if not tariff_csv_path or not os.path.exists(tariff_csv_path):
+        return None
+
+    try:
+        tariff_df = pd.read_csv(tariff_csv_path)
+
+        # Check if required columns exist
+        if 'countryName' not in tariff_df.columns or 'tariffRate' not in tariff_df.columns:
+            print(f"Warning: Tariff CSV missing required columns. Expected 'countryName' and 'tariffRate'")
+            return None
+
+        # Convert tariff rates to decimal format if they appear to be percentages
+        tariff_rates = {}
+        for _, row in tariff_df.iterrows():
+            country = str(row['countryName']).strip()
+            rate = float(row['tariffRate'])
+
+            # Convert percentage to decimal if rate is greater than 1
+            if rate > 1:
+                rate = rate / 100.0
+
+            tariff_rates[country] = rate
+
+        print(f"Loaded custom tariff data for {len(tariff_rates)} countries")
+        return tariff_rates
+
+    except Exception as e:
+        print(f"Error loading tariff data from {tariff_csv_path}: {e}")
+        return None
 
 
 def load_data_from_csv(suppliers_csv_path, parts_csv_path):
@@ -691,7 +773,8 @@ def analyze_tariff_impact(
         vat_rate: float = 0.20,
         show_plots: bool = False,
         save_plots: bool = True,
-        output_dir: str = './charts'
+        output_dir: str = './charts',
+        tariff_csv_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """Analyze tariff impact using Q1 threshold methodology with VAT.
 
@@ -704,6 +787,7 @@ def analyze_tariff_impact(
         show_plots: Whether to display charts
         save_plots: Whether to save charts
         output_dir: Directory to save output files
+        tariff_csv_path: Optional path to CSV file with custom tariff rates by country
 
     Returns:
         Dictionary containing comprehensive analysis results.
@@ -719,7 +803,14 @@ def analyze_tariff_impact(
     except (FileNotFoundError, ValueError) as e:
         return {'error': f"Failed to load data: {e}"}
 
-    sim = TariffSimulation(suppliers_data, part_requirements, taxable_info, vat_rate)
+    # Load custom tariff data if provided
+    custom_tariff_rates = None
+    if tariff_csv_path:
+        custom_tariff_rates = load_tariff_data_from_csv(tariff_csv_path)
+        if custom_tariff_rates:
+            print(f"Loaded custom tariff rates: {list(custom_tariff_rates.keys())}")
+
+    sim = TariffSimulation(suppliers_data, part_requirements, taxable_info, vat_rate, custom_tariff_rates)
 
     # Get current tariff information
     current_tariffs = sim.get_current_tariff_info()
@@ -813,10 +904,15 @@ def analyze_tariff_impact(
         if distribution_chart_path:
             chart_paths['cost_distribution'] = distribution_chart_path
 
+    # Get current tariff rates in percentage format
+    current_tariff_rates = sim.get_current_tariff_info()
+    tariff_rates_percentage = {country: f"{rate * 100:.2f}%" for country, rate in current_tariff_rates.items()}
+
     # Return simplified response
     response = {
         'analysis_type': 'tariff_impact_analysis_with_vat',
         'target_country': target_country,
+        'current_tariff_rates': tariff_rates_percentage,
         'vat_summary': vat_summary,
         'current_cost_analysis': {
             'total_cost': current_total_cost,
@@ -860,8 +956,8 @@ def run_example_analysis() -> Dict[str, Any]:
         Analysis results dictionary.
     """
 
-    suppliers_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
-    parts_csv = "../core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
+    suppliers_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
+    parts_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
 
     result = analyze_tariff_impact(
         suppliers_csv_path=suppliers_csv,

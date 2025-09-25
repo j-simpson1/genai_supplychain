@@ -1,56 +1,23 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:16
-    container_name: postgres
-    restart: always
-    environment:
-      POSTGRES_USER: devuser
-      POSTGRES_PASSWORD: devpass
-      POSTGRES_DB: devdb
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: adminpass
-    ports:
-      - "5050:80"
-
-  magentic-one:
+  document-generator:
     build:
-      context: ./FastAPI/magentic-one
-    container_name: magentic-one
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: document-generator
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
-      - ./FastAPI/magentic-one/sandbox:/app/sandbox  # isolated sandbox
+      - ./FastAPI:/app/FastAPI
+      - ./tmp_uploads:/app/tmp_uploads
+      - ./charts:/app/charts
+      - ./exports:/app/exports
     working_dir: /app
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PHOENIX_API_KEY=${PHOENIX_API_KEY}
+      - PYTHONPATH=/app
     stdin_open: true
     tty: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    networks:
-      - default
     ports:
-      - "9000:9000"  # If needed for debugging or web access
-    depends_on:
-      - postgres
-
-volumes:
-  pg_data:
-
-networks:
-  default:
-    driver: bridge
+      - "8001:8000"

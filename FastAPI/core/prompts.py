@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from langsmith import Client
 
 from FastAPI.core.CoT_prompting import chain_of_thought_examples

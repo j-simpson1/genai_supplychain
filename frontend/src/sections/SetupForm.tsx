@@ -192,7 +192,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const [openTariffGrid, setOpenTariffGrid] = useState(false);
 
   // Rows for the spreadsheet popup (seed with your countries if you like)
-  type TariffRow = { id: string; countryName: string; tariffRate: number | ''; dispatchCost: number | '' };
+  type TariffRow = { id: string; countryName: string; tariffRate: number | '' };
   const [tariffRows, setTariffRows] = useState<TariffRow[]>([]);
 
   // Loading state
@@ -530,16 +530,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       flex: 1,        // smaller proportion
       minWidth: 150,
     },
-    {
-      field: 'dispatchCost',
-      headerName: 'Dispatch Cost (£)',
-      type: 'number',
-      editable: true,
-      headerAlign: 'center',
-      align: 'center',
-      flex: 1,        // smaller proportion
-      minWidth: 150,
-    },
   ];
 
   // Row update handler (component scope)
@@ -552,12 +542,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       (Number.isNaN(Number(newRow.tariffRate)) || Number(newRow.tariffRate) < 0)
     ) {
       throw new Error('Tariff rate must be a non-negative number or blank.');
-    }
-    if (
-      newRow.dispatchCost !== '' &&
-      (Number.isNaN(Number(newRow.dispatchCost)) || Number(newRow.dispatchCost) < 0)
-    ) {
-      throw new Error('Dispatch cost must be a non-negative number or blank.');
     }
     return newRow;
   };
@@ -575,13 +559,12 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   // Function to convert tariff data to CSV file
   const createTariffCsvFile = (tariffData: TariffRow[]): File => {
     // Create CSV content
-    const headers = ['countryName', 'tariffRate', 'dispatchCost'];
+    const headers = ['countryName', 'tariffRate'];
     const csvRows = [
       headers.join(','), // Header row
       ...tariffData.map(row => [
         `"${row.countryName}"`, // Wrap in quotes to handle country names with commas
-        row.tariffRate === '' ? '' : row.tariffRate.toString(),
-        row.dispatchCost === '' ? '' : row.dispatchCost.toString()
+        row.tariffRate === '' ? '' : row.tariffRate.toString()
       ].join(','))
     ];
 
@@ -613,12 +596,11 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       }
       const data: { temp_id: string; countries: string[] } = await res.json();
 
-      // turn country names into DataGrid rows; leave tariffRate and dispatchCost empty initially
+      // turn country names into DataGrid rows; leave tariffRate empty initially
       const rows = data.countries.map((name) => ({
         id: name.toLowerCase().replace(/\s+/g, "_"),
         countryName: name,
         tariffRate: "" as number | "",
-        dispatchCost: "" as number | "",
       }));
 
       setCountriesTempId(data.temp_id);
@@ -1112,7 +1094,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             },
           }}
         >
-          <DialogTitle sx={{ textAlign: 'center', px: 3 }}>Add Tariff Rates and Dispatch Costs</DialogTitle>
+          <DialogTitle sx={{ textAlign: 'center', px: 3 }}>Add Tariff Rates</DialogTitle>
           <DialogContent dividers sx={{ height: 520 }}>
           <DataGrid
             rows={tariffRows}

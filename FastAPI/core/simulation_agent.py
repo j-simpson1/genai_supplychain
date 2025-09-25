@@ -62,6 +62,8 @@ def _assert_finite_numbers(obj, path="root"):
 def automotive_tariff_simulation(target_country: str, tariff_rates: List[Union[int, float]]) -> dict:
     """
     Run an automotive tariff shock simulation for the given country at the specified rates.
+    Note: This function is a wrapper that gets called by the tool system.
+    The actual tariff_path will be passed through the simulation_tool_node.
 
     Args:
         target_country: The country to simulate tariff shock for
@@ -81,19 +83,13 @@ def automotive_tariff_simulation(target_country: str, tariff_rates: List[Union[i
     if not rates:
         raise ValueError("No valid tariff rates after normalization.")
 
-    result = analyze_tariff_impact(target_country=target_country.strip(), tariff_rates=rates)
-
-    if not isinstance(result, dict) or not result:
-        raise ValueError("Simulation returned empty or non-dict result.")
-
-    _assert_finite_numbers(result)
-
-    try:
-        json.dumps(result, default=convert_numpy)
-    except Exception as e:
-        raise TypeError(f"Output not JSON-serialisable: {e}")
-
-    return result
+    # This will be handled by simulation_tool_node with proper file paths
+    # This function is mainly for schema validation
+    return {
+        "target_country": target_country.strip(),
+        "tariff_rates": rates,
+        "note": "This will be processed by simulation_tool_node with file paths"
+    }
 
 simulation_tools = [automotive_tariff_simulation]
 
@@ -104,7 +100,7 @@ model = ChatOpenAI(model="o4-mini")
 def simulation_tool_node(state: AgentState):
     """
     Tool node that handles automotive_tariff_simulation calls.
-    Uses articles_path and parts_path from AgentState.
+    Uses articles_path, parts_path, and tariff_path from AgentState.
     """
     outputs = []
     messages = state.get("raw_simulation", [])
@@ -127,12 +123,14 @@ def simulation_tool_node(state: AgentState):
             try:
                 articles_path = state.get("articles_path")
                 parts_path = state.get("parts_path")
+                tariff_path = state.get("tariff_path")
 
                 result = analyze_tariff_impact(
                     suppliers_csv_path=articles_path,
                     parts_csv_path=parts_path,
                     target_country=args["target_country"].strip(),
-                    tariff_rates=_normalize_rates(args["tariff_rates"])
+                    tariff_rates=_normalize_rates(args["tariff_rates"]),
+                    tariff_csv_path=tariff_path
                 )
 
                 if "output_files" in result and "chart_paths" in result["output_files"]:
@@ -239,8 +237,9 @@ def create_test_state() -> AgentState:
     """
     Create a test state for the simulation agent.
     """
-    articles_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-    parts_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    tariff_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
 
     return {
         "task": "Run a tariff shock simulation for Japan with 20%, 40%, and 70% rates.",
@@ -265,6 +264,7 @@ def create_test_state() -> AgentState:
         "max_chart_retries": 1,
         "articles_path": articles_path,
         "parts_path": parts_path,
+        "tariff_path": tariff_path,
         "messages": [],
         "remaining_steps": 10,
     }

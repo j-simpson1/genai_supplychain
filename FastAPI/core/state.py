@@ -55,6 +55,7 @@ class AgentState(TypedDict):
 
     articles_path: str
     parts_path: str
+    tariff_path: str
     # required by the supervisor
     messages: Annotated[List[AnyMessage], add_messages]
     remaining_steps: int
