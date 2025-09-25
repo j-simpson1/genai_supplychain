@@ -32,9 +32,15 @@ model = ChatOpenAI(model="gpt-4o-mini")
 DEEP_RESEARCH_PROMPT = """
 You are a deep research query generator for supply chain analysis.
 Transform the user's task into a focused research question that will uncover:
-- Alternative suppliers and pricing (if possible) for the parts shown in the data below
+- Alternative suppliers with pricing (if possible) for the parts shown in the database content below.
+- Alternative suppliers should not be based in the country subject to the tariff shock
 
-Provide a clear, specific research question that will yield actionable supply chain insights.
+Database Content Available:
+{db_content}
+
+Task: {task}
+
+Based on the database content and task above, provide a clear, specific research question that will yield actionable supply chain insights for these exact parts and components.
 """
 
 CLARIFICATION_PROMPT = """
@@ -52,11 +58,18 @@ Provide a concise, helpful answer based on typical supply chain analysis require
 """
 
 @traceable(name="deep_research.query_generation")
-async def generate_deep_research_query(task: str) -> str:
-    """Generate an optimized research query for deep research."""
+async def generate_deep_research_query(task: str, db_content: list) -> str:
+    """Generate an optimized research query for deep research using database content."""
+    # Format db_content for the prompt
+    db_text = "\n".join(db_content) if db_content else "No database content available"
+
+    prompt_content = DEEP_RESEARCH_PROMPT.format(
+        db_content=db_text,
+        task=task
+    )
+
     response = await model.ainvoke([
-        SystemMessage(content=DEEP_RESEARCH_PROMPT),
-        HumanMessage(content=task)
+        SystemMessage(content=prompt_content)
     ])
     return response.content
 
@@ -109,7 +122,8 @@ async def execute_deep_research(query: str, task: str) -> str:
 async def deep_research_node(state: AgentState):
     """Execute deep research analysis for supply chain insights."""
     try:
-        query = await generate_deep_research_query(state['task'])
+        db_content = state.get('db_content', [])
+        query = await generate_deep_research_query(state['task'], db_content)
 
         research_content = await execute_deep_research(query, state['task'])
 
