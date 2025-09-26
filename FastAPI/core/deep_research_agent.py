@@ -31,16 +31,17 @@ model = ChatOpenAI(model="gpt-4o-mini")
 
 DEEP_RESEARCH_PROMPT = """
 You are a deep research query generator for supply chain analysis.
-Transform the user's task into a focused research question that will uncover:
-- Alternative suppliers with pricing (if possible) for the parts shown in the database content below.
-- Alternative suppliers should not be based in the country subject to the tariff shock
-
+Formulate a focused research question that uncovers alternative suppliers for the automotive parts listed in the database content below.
+- Suppliers must be outside the tariff-affected country.
+- Where possible, identify pricing information.
+	
 Database Content Available:
 {db_content}
 
 Task: {task}
 
-Based on the database content and task above, provide a clear, specific research question that will yield actionable supply chain insights for these exact parts and components.
+Return exactly one concise research question focused on sourcing alternatives for these parts.
+Output only the research question.
 """
 
 CLARIFICATION_PROMPT = """
@@ -57,11 +58,36 @@ Provide a concise, helpful answer based on typical supply chain analysis require
 - Industry focus: Stay within automotive/manufacturing context from the original task
 """
 
+SUMMARY_PROMPT = """
+You are an expert research summarizer specializing in supply chain analysis.
+Summarize the deep research findings below into exactly 250 words or fewer while preserving all key insights and maintaining all citations/references.
+
+Focus on:
+- Alternative suppliers and their locations
+- Pricing information and cost comparisons
+- Specific companies, organizations, or sources mentioned
+- Quantitative data (prices, capacities, timelines)
+
+CRITICAL: Preserve all citations, references, company names, and specific data points.
+
+Deep Research Content:
+{research_content}
+
+Provide a concise 250-word summary that maintains the analytical value and includes references from the original research.
+Important: include bibliography as well as citations.
+"""
+
 @traceable(name="deep_research.query_generation")
 async def generate_deep_research_query(task: str, db_content: list) -> str:
     """Generate an optimized research query for deep research using database content."""
-    # Format db_content for the prompt
-    db_text = "\n".join(db_content) if db_content else "No database content available"
+    # Format db_content for the prompt - extract content from message objects
+    if db_content:
+        db_text = "\n".join([
+            msg.content if hasattr(msg, 'content') else str(msg)
+            for msg in db_content
+        ])
+    else:
+        db_text = "No database content available"
 
     prompt_content = DEEP_RESEARCH_PROMPT.format(
         db_content=db_text,
@@ -78,6 +104,14 @@ async def generate_clarification(question: str, task: str) -> str:
     """Generate a clarification response based on the original task context."""
     response = await model.ainvoke([
         SystemMessage(content=CLARIFICATION_PROMPT.format(task=task, question=question))
+    ])
+    return response.content
+
+@traceable(name="deep_research.summary")
+async def generate_research_summary(research_content: str) -> str:
+    """Generate a 300-word summary of deep research findings with preserved citations."""
+    response = await model.ainvoke([
+        SystemMessage(content=SUMMARY_PROMPT.format(research_content=research_content))
     ])
     return response.content
 
@@ -119,6 +153,25 @@ async def execute_deep_research(query: str, task: str) -> str:
     except Exception as e:
         return f"[Deep research error: {str(e)}]"
 
+async def deep_research_summary_node(state: AgentState):
+    """Generate a 300-word summary of all deep research findings."""
+    try:
+        deep_research_content = state.get('deep_research_content', [])
+
+        if not deep_research_content:
+            return {"deep_research_summary": "No deep research content available to summarize."}
+
+        # Combine all deep research content
+        combined_content = "\n\n".join(deep_research_content)
+
+        # Generate summary
+        summary = await generate_research_summary(combined_content)
+
+        return {"deep_research_summary": summary}
+
+    except Exception as e:
+        return {"deep_research_summary": f"[Deep research summary error: {str(e)}]"}
+
 async def deep_research_node(state: AgentState):
     """Execute deep research analysis for supply chain insights."""
     try:
@@ -127,25 +180,27 @@ async def deep_research_node(state: AgentState):
 
         research_content = await execute_deep_research(query, state['task'])
 
-        content = state.get('web_content', [])
+        content = state.get('deep_research_content', [])
         content.append(
             f"=== DEEP RESEARCH ANALYSIS ===\n"
             f"Query: {query}\n"
             f"Results:\n{research_content}"
         )
 
-        return {"web_content": content}
+        return {"deep_research_content": content}
 
     except Exception as e:
-        content = state.get('web_content', [])
+        content = state.get('deep_research_content', [])
         content.append(f"[Deep research agent error: {str(e)}]")
-        return {"web_content": content}
+        return {"deep_research_content": content}
 
 subgraph = StateGraph(AgentState)
 subgraph.add_node("deep_research_agent", deep_research_node)
+subgraph.add_node("deep_research_summary", deep_research_summary_node)
 
 subgraph.add_edge(START, "deep_research_agent")
-subgraph.add_edge("deep_research_agent", END)
+subgraph.add_edge("deep_research_agent", "deep_research_summary")
+subgraph.add_edge("deep_research_summary", END)
 
 deep_research_agent = subgraph.compile()
 
@@ -174,6 +229,8 @@ if __name__ == "__main__":
             "draft": "",
             "critique": "",
             "web_content": [],
+            "deep_research_content": [],
+            "deep_research_summary": "",
             "db_content": [],
             "db_summary": "",
             "trajectory": [],
@@ -191,8 +248,15 @@ if __name__ == "__main__":
             "max_chart_retries": 1,
             "articles_path": articles_path,
             "parts_path": parts_path,
+            "tariff_path": "",
             "messages": [],
             "remaining_steps": 10,
+            "coordination_decision": "",
+            "current_db_step": 0,
+            "total_db_steps": 0,
+            "db_plan_complete": False,
+            "task_ledger": {"facts": [], "hypotheses": [], "current_plan": {}},
+            "progress_ledger": [],
         }
 
         print("\n--- Running Deep Research Agent Test ---\n")
