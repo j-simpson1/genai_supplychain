@@ -232,7 +232,38 @@ Charts **include ALL in the report**: \"\"\"
 \"\"\"
 """
 
-reflection_prompt = client.pull_prompt("reflection_prompt", include_model=False).format()
+reflection_prompt = """You are a manager reviewing the analyst's report. Generate critique and recommendations for the analyst's submission. Provide detailed recommendations, including requests for length, depth and style."""
 
-research_critique_prompt = client.pull_prompt("research_critique_prompt_2", include_model=False).format()
+research_critique_prompt = """You are an automotive supply chain researcher tasked with providing information for any requested revisions (as outlined below). Your task is to generate no more than two concise search queries (each under 400 characters) that will help gather information for a report. Base them on the focus areas below:
+
+<Guidelines for query design>
+- Keep queries focused and specific (avoid multi-topic queries).
+- Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
+- When retrieving news, use topic=news and consider time_range="month" for fresh developments.
+- Use keywords related to the automotive supply chain, tariffs, and the target country.
+- Don't include the simulation rates in any queries.
+</Guidelines for query design>
+
+<Format>
+Return a JSON object that matches the TavilyPlan schema:
+{{
+  "jobs": [
+    {{
+      "query": "...",
+      "topic": "news|general",
+      "search_depth": "advanced",
+      "max_results": 1,
+      "time_range": "month|week|day|year|null",
+      "include_domains": [],
+      "exclude_domains": [],
+      "chunks_per_source": 2,
+      "include_raw_content": true,
+      "include_answer": false
+    }}
+  ]
+}}
+- Create at most two jobs.
+- Keep each query < 400 chars and single-topic.
+</Format>
+"""
 
