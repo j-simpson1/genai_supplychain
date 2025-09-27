@@ -2,27 +2,17 @@ from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fe
 from FastAPI.data.auto_parts.ai_analysis import rank_suppliers, generate_price_estimation_and_country
 from FastAPI.services.article_selector import select_preferred_article
 from FastAPI.automotive_simulation.powerBi_upload import upload_to_powerbi
-from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers
-from FastAPI.actions.handle_action import handle_actions
 from FastAPI.utils.data_validation import validate_uploaded_csvs
 
 from FastAPI.core.document_generator import auto_supplychain_prompt_template, run_agent
 
-from fastapi import UploadFile, File, Form
+from fastapi import UploadFile, File, Form, APIRouter, HTTPException
 from io import StringIO
 import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-from FastAPI.schemas.models import Item, VehicleDetails, PartItem, CategoryItem, BillOfMaterialsRequest, AlternativeSupplier, SimulationRequest
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 import pandas as pd
 import datetime
 import os
-from typing import Optional, Dict, Any
+from typing import Optional
 from pathlib import Path
 from FastAPI.powerbi_integration.auth import get_access_token
 import openai
@@ -31,7 +21,12 @@ import json
 import traceback
 import re
 import uuid
-from io import StringIO
+
+from FastAPI.schemas.models import BillOfMaterialsRequest
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
