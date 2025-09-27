@@ -294,17 +294,15 @@ async def run_simulation(
                             for line in lines[1:]:
                                 if line.strip():  # Skip empty lines
                                     values = line.split(',')
-                                    if len(values) >= 3:
+                                    if len(values) >= 2:
                                         country_name = values[0].strip('"')
                                         tariff_rate = values[1] if values[1] else None
-                                        dispatch_cost = values[2] if values[2] else None
                                         parsed_tariff_data.append({
                                             'countryName': country_name,
-                                            'tariffRate': tariff_rate,
-                                            'dispatchCost': dispatch_cost
+                                            'tariffRate': tariff_rate
                                         })
 
-                        logger.info(f"Parsed tariff data: {len(parsed_tariff_data)} countries with rates and dispatch costs")
+                        logger.info(f"Parsed tariff data: {len(parsed_tariff_data)} countries with rates")
                 except Exception as e:
                     logger.warning(f"Error processing tariff_data_file: {str(e)}")
 
@@ -459,7 +457,7 @@ async def run_simulation(
             logger.info(f"Saved tariff data to temporary file: {tariff_path}")
 
         # Call agent using file paths
-        result = await run_agent(prompt, parts_path, articles_path)
+        result = await run_agent(prompt, parts_path, articles_path, tariff_path)
 
         # Clean up temporary files
         try:
