@@ -19,3 +19,5 @@ aiosqlite
 tavily-python
 msal
 python-multipart
+mcp
+langchain-mcp-adapters
