@@ -112,11 +112,49 @@ db_call_model_prompt = """You are an expert database assistant for an automotive
 - In the final turn, output exactly: DB_DATA_EXTRACTED
 """
 
-db_summary_prompt = client.pull_prompt("db_summary_prompt", include_model=False)
+db_summary_prompt = """You are an expert data analyst.
+
+Analyse the data from the database agent and produce a concise executive summary.
+
+<Guidelines>
+- Currency: GBP (£).
+- **Important**: don't repeat analysis already shown in the data
+- Only use the provided data.
+- Structure: have two numbered sections:
+  1) Assessing if the input data and prices are valid.
+      - Invalid input data refers to records that do not represent valid automotive parts
+      - Invalid prices are values that do not conform to expected numeric, positive, and reasonable ranges for automotive parts. Only flag if negative or significantly out (e.g.
+order-of-magnitude outliers).
+      - Only do this when the data is clearly wrong. Don't speculate if you're unsure.
+      - If satisfied, print 'SATISFIED WITH INPUT DATA'
+  2) Further analysis
+       - Further analysis only has to include ONE point, e.g. the top 3 parts account for x% of the cost, or the top 3 countries account for x% of the articles, or the top 3 suppliers account for x% of the articles
+       - Use calculator for exact totals/ratios (e.g., sum([...]), round(a/b*100,2)).
+       - Spend rule: use quantity × bottomQuartileAvgPrice. Do NOT use numArticles in spend.
+       - Treat numArticles as catalogue diversity only; never multiply it into cost.
+</Guidelines>
+"""
 
 chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_model=False)
 
-generate_chart_prompt = client.pull_prompt("generate_chart_prompt", include_model=False)
+generate_chart_prompt = """You are a data visualisation expert. Generate a Python script using matplotlib to produce the chart described. Always save with: `plt.savefig(chart_path)` and never assign `chart_path` inside the script. Assume it is already defined.
+
+<Guidelines>
+- Use Matplotlib only. Do NOT import seaborn.
+- Always save the chart with the same name as the chart_id.
+- When designing the chart, use professional styling, ideally using Hex colours #4E82B2, #0B2447 or similar.
+</Guidelines>
+
+Chart requirement: \"\"\"
+{chart_description}
+\"\"\"
+
+Data: \"\"\"
+{tool_data}
+\"\"\"
+
+import
+"""
 
 research_plan_prompt = """You are an automotive supply chain researcher. Your task is to generate three concise search queries (each under 400 characters) that will help gather information for a report. Base them on the focus areas below:
 
@@ -181,7 +219,10 @@ Tool names: {tool_names}
 - Once you have received the data from the tool, stop.
 """
 
-simulation_clean_prompt = client.pull_prompt("simulation_clean_prompt", include_model=False)
+simulation_clean_prompt = """All the above messages are from a supply chain simulation tool. Please clean up these findings.
+DO NOT summarise the information. Return the raw information, just in a cleaner format.
+Make sure all relevant information is preserved - you can rewrite findings verbatim.
+"""
 
 writers_prompt = """You are an expert research analyst working in the automotive supply chain sector tasked with writing a professional-level report. The report MUST be between 600 and 800 words. Generate the best report possible using the data and guidelines below. Prioritise following the instructions in the plan.
 
