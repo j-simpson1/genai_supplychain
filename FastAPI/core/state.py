@@ -30,6 +30,10 @@ class AgentState(TypedDict):
     critique: str
     # documents tavily has come back with
     web_content: List[str]
+    # deep research content
+    deep_research_content: List[str]
+    # summarized deep research findings
+    deep_research_summary: str
     # information from the database
     db_content: Annotated[List[AnyMessage], add_messages]
     db_summary: str

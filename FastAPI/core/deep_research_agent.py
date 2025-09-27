@@ -59,22 +59,23 @@ Provide a concise, helpful answer based on typical supply chain analysis require
 """
 
 SUMMARY_PROMPT = """
-You are an expert research summarizer specializing in supply chain analysis.
-Summarize the deep research findings below into exactly 250 words or fewer while preserving all key insights and maintaining all citations/references.
+You are an expert research summarizer specializing in supply chain analysis.  
+Summarize the key deep research findings below into **no more than 200 words**.  
 
-Focus on:
-- Alternative suppliers and their locations
-- Pricing information and cost comparisons
-- Specific companies, organizations, or sources mentioned
-- Quantitative data (prices, capacities, timelines)
-
-CRITICAL: Preserve all citations, references, company names, and specific data points.
+Prioritize:  
+1. Alternative suppliers and their locations  
+2. Pricing information and cost comparisons  
 
 Deep Research Content:
 {research_content}
 
-Provide a concise 250-word summary that maintains the analytical value and includes references from the original research.
-Important: include bibliography as well as citations.
+<Citation Rules>
+- Assign each unique URL a single citation number in your text
+- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list, regardless of which sources you choose
+- Example format:
+  [1] Source Title: URL
+  [2] Source Title: URL
+</Citation Rules>
 """
 
 @traceable(name="deep_research.query_generation")
