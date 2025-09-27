@@ -97,13 +97,140 @@ chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_mode
 
 generate_chart_prompt = client.pull_prompt("generate_chart_prompt", include_model=False)
 
-research_plan_prompt = client.pull_prompt("research_plan_prompt_2", include_model=False).format()
+research_plan_prompt = """You are an automotive supply chain researcher. Your task is to generate three concise search queries (each under 400 characters) that will help gather information for a report. Base them on the focus areas below:
+
+<Focus Areas>
+1. Tariff news concerning the manufacturing country (2 queries).
+2.    Tariff news concerning the automotive sector (2 queries).
+</Focus Areas>
+
+<Guidelines for query design>
+- Keep queries focused and specific (avoid multi-topic queries).
+- Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
+- When retrieving news, use topic=news and consider time_range="month" for fresh developments.
+- Use keywords related to the automotive supply chain, tariffs, and the target country.
+- Don't include the simulation rates in any queries.
+</Guidelines for query design>
+
+<Format>
+Return a JSON object that matches the TavilyPlan schema:
+{{
+  "jobs": [
+    {{
+      "query": "...",
+      "topic": "news",
+      "search_depth": "advanced",
+      "max_results": 1,
+      "time_range": "month|week|day|year|null",
+      "include_domains": [],
+      "exclude_domains": [],
+      "chunks_per_source": 2,
+      "include_raw_content": true,
+      "include_answer": false
+    }}
+  ]
+}}
+- Create three jobs.
+- Keep each query < 400 chars and single-topic.
+</Format>
+"""
 
 simulation_prompt = client.pull_prompt("simulation_prompt", include_model=False)
 
 simulation_clean_prompt = client.pull_prompt("simulation_clean_prompt", include_model=False)
 
-writers_prompt = client.pull_prompt("writer_prompt", include_model=False)
+writers_prompt = """You are an expert research analyst working in the automotive supply chain sector tasked with writing a professional-level report. The report MUST be between 600 and 800 words. Generate the best report possible using the data and guidelines below. Prioritise following the instructions in the plan.
+
+Here are reasoning examples you should follow: \"\"\"
+{CoT_examples}
+\"\"\"
+
+Before writing, think step-by-step:
+1. Summarise insights from each source (database, web, simulation).
+2. Plan the structure and flow of arguments.
+3. Write the full report based on your reasoning.
+
+<Guidelines>
+- Don't include bullet points in the 'Executive Summary', 'Introduction', 'Conclusion and Recommendations' sections.
+- Use the plan to guide you on the structure of the report.
+- Prioritise quantitative analysis where possible.
+- Include ALL the charts in the report. However, use the charts as supplementary items to the points requested in the research plan to be included in the text.
+- All prices should be quoted in GBP (£).
+- In your report, you should return inline citations for each source cited.
+- All elements from Web Research should be cited
+- Only include references which are cited and include them in the References section.
+- Don't repeat figures in the main paragraphs and bullet points.
+- Don't speculate on figures; only use the information you are provided with.
+</Guidelines>
+
+<Important Guidelines>
+**Please include ALL charts in the report
+</Important Guidelines>
+
+<Output Rules>
+- Important** Provide the output in a JSON format adhering to the structure below:
+{{{{
+  "title": "<Report Title>",
+  "sections": [
+    {{{{
+      "heading": "<Section Heading>",
+      "content": "<Plain text or markdown content (optional). Additionally include figures where applicable [[FIGURE:chart1]]>",
+      "bullet_points": [
+        "<First bullet point>",
+        "<Second bullet point>"
+      ]
+    }}}}
+  ]
+}}}}
+- **Charts must be included in the `content` field using placeholders like [[FIGURE:chart_id]]. Never put charts in bullet points or any other fields. These placeholders will be replaced with the actual figures in the final report. Don't include any charts in bullet points.
+- List of All Relevant Sources (with citations in the report)
+- **Bold text**: Wrap important text in double asterisks **like this** (use sparingly)
+- Don't include any subsections in the report.
+</Output Rules>
+
+<Citation Rules>
+- Assign each unique URL a single citation number in your text
+- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list, regardless of which sources you choose
+- Example format:
+  [1] Source Title: URL
+  [2] Source Title: URL
+- Only cite sources from Web Research and Deep Research
+</Citation Rules>
+
+Utilise all the information below as needed:
+
+
+------
+
+Task: \"\"\"
+{{task}}
+\"\"\"
+
+Plan: **important - please follow** \"\"\"
+{{plan}}
+\"\"\"
+
+Database Insights: \"\"\"
+{{db}}
+\"\"\"
+
+Web Research: \"\"\"
+{{web}}
+
+\"\"\"
+
+Deep Research: \"\"\"
+{{deep_research}}
+\"\"\"
+
+Simulation Results: \"\"\"
+{{simulation}}
+\"\"\"
+
+Charts **include ALL in the report**: \"\"\"
+{{charts}}
+\"\"\"
+"""
 
 reflection_prompt = client.pull_prompt("reflection_prompt", include_model=False).format()
 
