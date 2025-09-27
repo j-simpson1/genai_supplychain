@@ -129,7 +129,7 @@ def generation_node(state: AgentState) -> Dict[str, Any]:
         simulation=simulation_messages
     )
 
-    initial_response = model.invoke(formatted_writers_prompt)
+    initial_response = model.invoke([HumanMessage(content=formatted_writers_prompt)])
 
     return {
         "draft": initial_response.content,
