@@ -9,7 +9,7 @@ from typing import List, Union
 import matplotlib
 matplotlib.use("Agg")
 from langchain.agents import tool
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
@@ -183,8 +183,10 @@ def simulation_clean(state: AgentState):
     Clean and format the simulation output.
     """
     simulation_output = "\n\n".join(str(m.content) for m in state["raw_simulation"])
-    messages = simulation_clean_prompt.format_messages(simulation_output=simulation_output)
-    response = model.invoke(messages)
+    response = model.invoke([
+        SystemMessage(content=simulation_clean_prompt),
+        HumanMessage(content=simulation_output)
+    ])
 
     return {"clean_simulation": response}
 
