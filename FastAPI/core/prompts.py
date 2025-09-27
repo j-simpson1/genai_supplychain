@@ -135,7 +135,54 @@ order-of-magnitude outliers).
 </Guidelines>
 """
 
-chart_planning_prompt = client.pull_prompt("chart_planning_prompt", include_model=False)
+chart_planning_prompt = """You are a supply chain data visualisation expert. Based on the following chart criteria, create a chart plan JSON array.
+
+<Chart1>
+Create a combination chart with bars and a line.
+- X-axis: Part names
+- Left Y-axis (bars): Number of articles per part
+- Right Y-axis (line): Average price for each part
+- Bars should represent the count of articles for each part.
+- A line should be overlaid showing the bottom quartile average price for the same parts.
+</Chart1>
+
+<Chart2>
+Create a bar chart showing the distribution of articles by country of origin.
+- X-axis: Countries of origin
+- Y-axis: Number of articles from each country
+- Each bar represents a country of origin.
+- Display percentage labels above each bar to indicate each country's share of total articles.
+</Chart2>
+
+<Chart3>
+Create a table summarising all parts with the following columns:
+- Product Group ID
+- Part Description
+- Bottom Quartile Avg Price
+- Most Common Country of Origin
+- Line Item Total Excl VAT
+- Percentage of Total Cost
+</Chart3>
+
+Database summary: \"\"\"
+{db_summary}
+\"\"\"
+
+Structured data: \"\"\"
+{db_content}
+\"\"\"
+
+<Output>
+- Return a JSON array of objects (dictionaries), where each object contains both chart_id and chart_description fields.
+- In the chart_id, mention CA for the charts at the start.
+[
+  {{{{
+    "chart_id": "CA_combination_chart_articles_count_and_bottom_quartile_avg_price_per_part",
+    "chart_description": "Combination chart with bars and a line. The X-axis shows part names. The bars (left Y-axis) represent the number of articles per part. The overlaid line (right Y-axis) shows the bottom quartile average price for each part, allowing comparison between article counts and relative price levels."
+  }}}}
+]
+</Output>
+"""
 
 generate_chart_prompt = """You are a data visualisation expert. Generate a Python script using matplotlib to produce the chart described. Always save with: `plt.savefig(chart_path)` and never assign `chart_path` inside the script. Assume it is already defined.
 
