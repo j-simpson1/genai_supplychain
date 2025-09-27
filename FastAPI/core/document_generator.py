@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+from datetime import datetime
 from typing import Dict, Any, List
 
 import matplotlib
@@ -27,6 +28,7 @@ from FastAPI.core.prompts import (
 from FastAPI.core.research_agent import research_agent
 from FastAPI.core.research_critique import research_critique_agent
 from FastAPI.core.simulation_agent import simulation_agent
+from FastAPI.core.deep_research_agent import deep_research_agent
 from FastAPI.core.state import AgentState
 from FastAPI.core.utils import serialize_state
 from FastAPI.document_builders.pdf_creator import save_to_pdf
@@ -109,6 +111,7 @@ def generation_node(state: AgentState) -> Dict[str, Any]:
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
+    deep_research = "\n\n".join(state.get("deep_research_content", []))
     chart_metadata = state.get("chart_metadata", [])
     simulation_messages = state.get("clean_simulation", [])
 
@@ -121,6 +124,7 @@ def generation_node(state: AgentState) -> Dict[str, Any]:
         plan=state['plan'],
         db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
         web=web,
+        deep_research=deep_research,
         charts=charts,
         simulation=simulation_messages
     )
@@ -141,18 +145,22 @@ def reflection_node(state: AgentState) -> Dict[str, str]:
     response = model.invoke(messages)
     return {"critique": response.content}
 
+
 def should_continue(state: AgentState) -> str:
     """Determine whether to continue revising or finish the report."""
     if state["revision_number"] > state["max_revisions"]:
-        # Save final reports
+        # Generate timestamp for filenames
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Save final reports with timestamps
         print(save_to_pdf(
             content=state["draft"],
-            filename=os.path.join(REPORTS_DIR, "report.pdf"),
+            filename=os.path.join(REPORTS_DIR, f"report_{timestamp}.pdf"),
             chart_metadata=state.get("chart_metadata", [])
         ))
         print(save_to_word(
             content=state["draft"],
-            filename=os.path.join(REPORTS_DIR, "report.docx"),
+            filename=os.path.join(REPORTS_DIR, f"report_{timestamp}.docx"),
             chart_metadata=state.get("chart_metadata", [])
         ))
         return END
@@ -182,6 +190,7 @@ def create_graph() -> StateGraph:
     builder.add_node("reflect", reflection_node)
     builder.add_node("research_agent", research_agent)
     builder.add_node("research_critique", research_critique_agent)
+    builder.add_node("deep_research_agent", deep_research_agent)
 
     # Set entry point
     builder.set_entry_point("planner")
@@ -190,8 +199,12 @@ def create_graph() -> StateGraph:
     builder.add_edge("planner", "db_agent")
     builder.add_edge("db_agent", "chart_planning_node")
     builder.add_edge("chart_planning_node", "generate_charts")
+
+    # Sequential research agents (avoids concurrent state updates)
     builder.add_edge("generate_charts", "research_agent")
-    builder.add_edge("research_agent", "simulation")
+    builder.add_edge("research_agent", "deep_research_agent")
+    builder.add_edge("deep_research_agent", "simulation")
+
     builder.add_edge("simulation", "generate")
     builder.add_edge("reflect", "research_critique")
     builder.add_edge("research_critique", "generate")
@@ -225,6 +238,7 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
             'revision_number': 1,
             'db_content': [],
             'web_content': [],
+            'deep_research_content': [],
             'raw_simulation': [],
             'clean_simulation': '',
             'chart_metadata': [],
@@ -284,10 +298,10 @@ prompt = auto_supplychain_prompt_template(
     manufacturer="Toyota",
     model="RAV4",
     component="braking system",
-    tariff_shock_country="Japan",
-    rates=[20, 50, 80],
-    vat_rate=20,
-    manufacturing_country="United Kingdom"
+    tariff_shock_country="United Kingdom",
+    rates=[10, 30, 60],
+    vat_rate=7,
+    manufacturing_country="United States of America"
 )
 
 async def target(inputs: Dict[str, Any]) -> Dict[str, str]:
