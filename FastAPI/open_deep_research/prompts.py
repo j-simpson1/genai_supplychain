@@ -1,3 +1,8 @@
+# This module is adapted from the open_deep_research project
+# Source: https://github.com/langchain-ai/open_deep_research
+# License: MIT
+# Prompt templates for the research agent system
+
 clarify_with_user_instructions="""
 These are the messages that have been exchanged so far from the user asking for the report:
 <Messages>

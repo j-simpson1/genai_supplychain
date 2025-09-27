@@ -1,3 +1,8 @@
+# This module is adapted from the open_deep_research project
+# Source: https://github.com/langchain-ai/open_deep_research
+# License: MIT
+# Original implementation provides a multi-agent research system using LangGraph
+
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, get_buffer_string, filter_messages
 from langchain_core.runnables import RunnableConfig

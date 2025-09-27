@@ -1,3 +1,8 @@
+# This module is adapted from the open_deep_research project
+# Source: https://github.com/langchain-ai/open_deep_research
+# License: MIT
+# Configuration classes for the research agent system
+
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
 from langchain_core.runnables import RunnableConfig

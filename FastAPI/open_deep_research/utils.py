@@ -1,3 +1,8 @@
+# This module is adapted from the open_deep_research project
+# Source: https://github.com/langchain-ai/open_deep_research
+# License: MIT
+# Utility functions for web search, MCP integration, and model management
+
 import os
 import aiohttp
 import asyncio

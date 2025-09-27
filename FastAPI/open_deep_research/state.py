@@ -1,3 +1,8 @@
+# This module is adapted from the open_deep_research project
+# Source: https://github.com/langchain-ai/open_deep_research
+# License: MIT
+# State definitions and data models for the research agent system
+
 from typing import Annotated, Optional
 from pydantic import BaseModel, Field
 import operator
