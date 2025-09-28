@@ -397,11 +397,11 @@ def calculator(expression: str) -> str:
 
 
 if __name__ == "__main__":
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     # Build full paths
-    articles_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-    parts_path = os.path.join(BASE_DIR, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(BASE_DIR, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(BASE_DIR, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
     # Call one of the tools
     result = (total_component_price.invoke({

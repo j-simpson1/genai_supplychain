@@ -1039,9 +1039,9 @@ def run_example_analysis() -> Dict[str, Any]:
         Analysis results dictionary.
     """
 
-    suppliers_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
-    parts_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
-    tariff_csv = "./FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv"
+    suppliers_csv = "./test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv"
+    parts_csv = "./test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv"
+    tariff_csv = "./test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv"
 
     result = analyze_tariff_impact(
         suppliers_csv_path=suppliers_csv,

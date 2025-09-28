@@ -192,8 +192,8 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     # Use existing test data paths
-    articles_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-    parts_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    articles_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
     # Create and test the agent
     agent = ReActDatabaseAgent()

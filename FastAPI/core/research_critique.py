@@ -154,8 +154,8 @@ if __name__ == "__main__":
 
     async def run_research_test():
         """Test the research critique agent functionality."""
-        articles_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-        parts_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+        articles_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+        parts_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
 
         initial_state: AgentState = {
             "task": (

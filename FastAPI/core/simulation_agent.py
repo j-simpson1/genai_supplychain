@@ -239,9 +239,9 @@ def create_test_state() -> AgentState:
     """
     Create a test state for the simulation agent.
     """
-    articles_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-    parts_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
-    tariff_path = os.path.join(os.getcwd(), "FastAPI/core/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
+    articles_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
+    parts_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+    tariff_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
 
     return {
         "task": "Run a tariff shock simulation for Japan with 20%, 40%, and 70% rates.",
