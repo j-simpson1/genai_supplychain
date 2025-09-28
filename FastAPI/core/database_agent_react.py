@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-from database_tools import (
+from data_tools import (
     parts_summary, top_5_parts_by_price, top_5_part_distribution_by_country,
     bottom_quartile_average_price, total_component_price, top_5_suppliers_by_articles,
     calculator

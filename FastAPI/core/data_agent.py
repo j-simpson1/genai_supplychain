@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import ToolMessage, SystemMessage
 
 from FastAPI.core.state import AgentState
-from FastAPI.core.database_tools import (
+from FastAPI.core.data_tools import (
     parts_summary,
     top_5_parts_by_price,
     top_5_part_distribution_by_country,
@@ -235,7 +235,7 @@ subgraph.add_conditional_edges(
     }
 )
 
-database_agent = subgraph.compile()
+data_agent = subgraph.compile()
 
 # output_graph_path = os.path.join(REPORTS_DIR, GRAPH_OUTPUT_FILENAME)
 # with open(output_graph_path, "wb") as f:
@@ -261,7 +261,7 @@ if __name__ == "__main__":
 
         print("\n--- Running DB Agent Test ---\n")
         try:
-            async for step in database_agent.astream(initial_state):
+            async for step in data_agent.astream(initial_state):
                 print("Step Output:", step)
             print("\n--- DB Agent Test Completed ---\n")
         except Exception:

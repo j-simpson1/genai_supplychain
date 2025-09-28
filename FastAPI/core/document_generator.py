@@ -18,7 +18,7 @@ from langsmith import Client
 
 from FastAPI.core.CoT_prompting import chain_of_thought_examples
 from FastAPI.core.code_editor_agent import code_editor_agent
-from FastAPI.core.database_agent import database_agent
+from FastAPI.core.data_agent import data_agent
 from FastAPI.core.prompts import (
     plan_prompt,
     reflection_prompt,
@@ -182,7 +182,7 @@ def create_graph() -> StateGraph:
 
     # Add all nodes
     builder.add_node("planner", plan_node)
-    builder.add_node("db_agent", database_agent)
+    builder.add_node("db_agent", data_agent)
     builder.add_node("chart_planning_node", chart_planning_node)
     builder.add_node("generate_charts", code_editor_agent)
     builder.add_node("simulation", simulation_agent)
