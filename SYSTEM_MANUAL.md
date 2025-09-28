@@ -228,22 +228,25 @@ docker compose up -d --build
 
 ### Key Endpoints
 
-#### AI Agents
-- `POST /agents/research` - Execute research agent
-- `POST /agents/simulation` - Run simulation agent
-- `POST /agents/data-analysis` - Process data with AI
-- `POST /agents/document-generation` - Generate reports
+#### Automotive Data Management
+- `GET /manufacturers` - Get automotive manufacturers from TecDoc API
+- `GET /manufacturers/models?id={id}` - Get vehicle models for a manufacturer
+- `GET /manufacturers/models/engine_type?manufacturerId={id}&modelSeriesId={id}` - Get engine types
+- `GET /manufacturers/models/engine_type/category_v3?vehicleId={id}&manufacturerId={id}` - Get parts categories
+- `GET /manufacturers/models/engine_type/category_v3/article_list?manufacturerId={id}&vehicleId={id}&productGroupId={id}` - Get article list
+- `GET /countries` - Get available countries from TecDoc API
 
-#### Data Management
-- `POST /upload/csv` - Upload CSV files
-- `GET /data/manufacturers` - Automotive manufacturers
-- `GET /data/models` - Vehicle models
-- `GET /data/parts` - Parts catalog
+#### Data Processing & Analysis
+- `POST /find_countries` - Extract unique countries from uploaded CSV data files
+- `POST /run_report_generator` - Main report generation endpoint
 
-#### File Operations
-- `GET /files/list` - List uploaded files
-- `DELETE /files/{filename}` - Delete file
-- `GET /download/{filename}` - Download file
+#### Main Simulation Workflow
+The `/run_report_generator` endpoint handles:
+- Vehicle details and simulation parameters
+- Multiple tariff rate scenarios (3 rates + VAT)
+- Manufacturing location and tariff shock country configuration
+- CSV file uploads (parts data, articles data, optional tariff data)
+- AI-powered analysis and report generation
 
 ## Configuration Management
 
