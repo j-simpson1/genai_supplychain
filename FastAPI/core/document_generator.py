@@ -1,3 +1,15 @@
+"""
+Document Generation Agent using LangGraph
+
+This module implements a multi-agent workflow for generating comprehensive supply chain reports.
+The workflow includes research, data analysis, chart generation, simulation, and document creation.
+
+References:
+- LangGraph workflow design influenced by:
+  "AI Agents in LangGraph" - DeepLearning.AI Course
+  https://learn.deeplearning.ai/courses/ai-agents-in-langgraph/lesson/qyrpc/introduction
+"""
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -224,10 +236,12 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
         builder = create_graph()
         graph = builder.compile(checkpointer=checkpointer)
 
-        # Save graph visualization (commented out due to Mermaid API issues)
-        # output_graph_path = os.path.join(REPORTS_DIR, "langgraph.png")
-        # with open(output_graph_path, "wb") as f:
-        #     f.write(graph.get_graph().draw_mermaid_png())
+        # Save graph visualization
+        graphs_dir = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs", "langgraph_graphs")
+        os.makedirs(graphs_dir, exist_ok=True)
+        output_graph_path = os.path.join(graphs_dir, "langgraph.png")
+        with open(output_graph_path, "wb") as f:
+            f.write(graph.get_graph().draw_mermaid_png())
 
         final_state = {}
 
