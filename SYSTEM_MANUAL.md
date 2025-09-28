@@ -29,8 +29,8 @@ The GenAI Supply Chain Platform is a comprehensive AI-powered solution for autom
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   User Interface│    │   Data Layer     │    │  External APIs  │
 │                 │    │                  │    │                 │
-│ - Port 5173     │    │ - SQLite/PostgreSQL  │    │ - TecDoc API    │
-│ - Dev Server    │    │ - CSV Processing │    │ - Tavily Search │
+│ - Port 5173     │    │ - CSV Processing │    │ - TecDoc API    │
+│ - Dev Server    │    │                  │    │ - Tavily Search │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
@@ -42,44 +42,25 @@ The GenAI Supply Chain Platform is a comprehensive AI-powered solution for autom
 genai_supplychain/
 ├── FastAPI/                          # Backend API server
 │   ├── core/                         # AI agents and core logic
-│   │   ├── data_agent.py            # Data processing agent
-│   │   ├── research_agent.py        # Research and analysis agent
-│   │   ├── simulation_agent.py      # Market simulation agent
-│   │   ├── document_generator.py    # Document generation agent
-│   │   ├── database_agent_react.py  # Database interaction agent
-│   │   ├── deep_research_agent.py   # Advanced research capabilities
-│   │   ├── code_editor_agent.py     # Code analysis and editing
-│   │   ├── data_tools.py           # Data processing utilities
-│   │   ├── prompts.py              # AI prompts and templates
-│   │   ├── state.py                # LangGraph state management
-│   │   └── utils.py                # Helper utilities
-│   ├── routes/                      # API route definitions
-│   │   └── api.py                  # Main API routes
-│   ├── automotive_simulation/       # Market simulation models
-│   ├── data/                       # Data handling and validation
-│   ├── document_builders/          # Document creation utilities
-│   ├── reports_and_graphs/         # Generated reports and visualizations
-│   ├── services/                   # Business logic services
-│   ├── utils/                      # Backend utilities
-│   └── main.py                     # FastAPI application entry point
-├── frontend/                        # React TypeScript frontend
-│   ├── src/
-│   │   ├── components/             # Reusable UI components
-│   │   ├── pages/                  # Page components
-│   │   ├── sections/               # Section components
-│   │   ├── layouts/                # Layout components
-│   │   ├── config/                 # Frontend configuration
-│   │   └── main.tsx               # Frontend entry point
-│   ├── package.json               # Node.js dependencies
-│   └── vite.config.ts             # Vite build configuration
-├── output/                         # Generated outputs and exports
-├── test-data/                      # Test datasets
-├── requirements.txt                # Python dependencies (pip)
-├── environment.yml                 # Conda environment specification
-├── Dockerfile                      # Docker container definition
-├── docker-compose.yml              # Multi-container orchestration
-├── .env.example                    # Environment variables template
-└── README.md                       # Quick start guide
+│   ├── routes/                       # API route definitions
+│   ├── automotive_simulation/        # Simulation
+│   ├── data/                         # Data handling and validation
+│   ├── document_builders/            # Document creation utilities
+│   ├── reports_and_graphs/           # Generated reports and visualizations
+│   ├── utils/                        # Backend utilities
+│   └── main.py                       # FastAPI application entry point
+├── frontend/                         # React TypeScript frontend
+│   ├── src/                          # Source code (components, pages, sections, layouts)
+│   ├── package.json                  # Node.js dependencies
+│   └── vite.config.ts                # Vite build configuration
+├── output/                           # Generated outputs and exports
+├── test-data/                        # Test datasets
+├── requirements.txt                  # Python dependencies (pip)
+├── environment.yml                   # Conda environment specification
+├── Dockerfile                        # Container image definition
+├── docker-compose.yml                # Docker service configuration
+├── .env.example                      # Environment variables template
+└── README.md                         # Quick start guide
 ```
 
 ### Core Components
