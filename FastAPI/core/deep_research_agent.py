@@ -25,7 +25,7 @@ except ImportError as e:
     print(f"Warning: open_deep_research import failed: {e}")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 
 model = ChatOpenAI(model="gpt-4o-mini")
 

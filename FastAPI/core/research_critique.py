@@ -18,7 +18,7 @@ from FastAPI.core.state import AgentState
 
 # Configuration
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 
 # Initialize clients and model
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])

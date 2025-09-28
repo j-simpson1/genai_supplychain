@@ -39,8 +39,8 @@ matplotlib.use("Agg")
 
 # Configuration constants
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
-REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
+CHARTS_DIR = os.path.join(PROJECT_ROOT, "output", "charts")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 MAX_REVISIONS = 2
 MAX_CHART_RETRIES = 2
 RECURSION_LIMIT = 500

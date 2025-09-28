@@ -26,7 +26,7 @@ from FastAPI.core.utils import _json_dump_safe
 from FastAPI.core.prompts import data_call_model_prompt, data_summary_prompt
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 MODEL_NAME = "o4-mini"
 GRAPH_OUTPUT_FILENAME = "database_agent_langgraph.png"
 

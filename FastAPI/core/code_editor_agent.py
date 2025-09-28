@@ -21,8 +21,8 @@ from FastAPI.core.utils import verify_generated_chart
 
 # Constants
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-REPORTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs")
-CHARTS_DIR = os.path.join(PROJECT_ROOT, "FastAPI", "core", "charts")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
+CHARTS_DIR = os.path.join(PROJECT_ROOT, "output", "charts")
 MAX_CHART_RETRIES = 2
 
 # Ensure charts directory exists

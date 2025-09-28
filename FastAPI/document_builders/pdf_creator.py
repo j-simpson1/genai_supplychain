@@ -26,7 +26,7 @@ class PDFReportGenerator:
     IMAGE_HEIGHT = 2.75 * inch
     NAVY_BLUE = Color(19 / 255, 52 / 255, 92 / 255)
 
-    def __init__(self, filename: str = "../reports_and_graphs/report.pdf"):
+    def __init__(self, filename: str = "../../output/reports/report.pdf"):
         """Initialize the PDF generator with a filename."""
         self.filename = self._ensure_pdf_extension(filename)
         self.styles = self._setup_styles()
@@ -397,7 +397,7 @@ class PDFReportGenerator:
             return f"Error saving document: {str(e)}"
 
 
-def save_to_pdf(content: str, filename: str = "../reports_and_graphs/report.pdf",
+def save_to_pdf(content: str, filename: str = "../../output/reports/report.pdf",
                 chart_metadata: List[Dict[str, str]] = None) -> str:
     """Convenience function to maintain backward compatibility.
 

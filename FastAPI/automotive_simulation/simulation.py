@@ -642,7 +642,7 @@ def load_data_from_csv(suppliers_csv_path, parts_csv_path):
 
 
 def create_cost_progression_chart(results: List[Dict], target_country: str, show_plot: bool = False,
-                                 save_plot: bool = True, output_dir: str = './charts') -> Optional[str]:
+                                 save_plot: bool = True, output_dir: str = './output/charts') -> Optional[str]:
     """Create cost progression chart showing tariff impact over time.
 
     Args:
@@ -696,7 +696,7 @@ def create_cost_progression_chart(results: List[Dict], target_country: str, show
 
 def create_q1_cost_distribution_chart(simulation: TariffSimulation, tariff_rates: List[float],
                                      target_country: str, show_plot: bool = False,
-                                     save_plot: bool = True, output_dir: str = './charts') -> Optional[str]:
+                                     save_plot: bool = True, output_dir: str = './output/charts') -> Optional[str]:
     """Create Q1-based cost distribution boxplot chart.
 
     Shows total system costs after tariff shocks with VAT.
@@ -856,7 +856,7 @@ def analyze_tariff_impact(
         vat_rate: float = 0.20,
         show_plots: bool = False,
         save_plots: bool = True,
-        output_dir: str = './charts',
+        output_dir: str = './output/charts',
         tariff_csv_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """Analyze tariff impact using Q1 threshold methodology with VAT.
