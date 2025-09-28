@@ -23,7 +23,7 @@ from FastAPI.core.data_tools import (
     calculator
 )
 from FastAPI.core.utils import _json_dump_safe
-from FastAPI.core.prompts import db_call_model_prompt, db_summary_prompt
+from FastAPI.core.prompts import data_call_model_prompt, data_summary_prompt
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports_and_graphs")
@@ -41,7 +41,7 @@ tools = [
     top_5_suppliers_by_articles
 ]
 
-db_model = ChatOpenAI(model=MODEL_NAME).bind_tools(tools)
+data_model = ChatOpenAI(model=MODEL_NAME).bind_tools(tools)
 
 tools_by_name = {tool.name: tool for tool in tools}
 
@@ -138,19 +138,19 @@ def call_model(state: AgentState, config: Optional[RunnableConfig] = None) -> Di
         Dictionary with db_content key containing the model response
     """
 
-    prompt = db_call_model_prompt.format(
+    prompt = data_call_model_prompt.format(
         plan=state.get('plan', 'No plan provided'),
         tools="\n".join(f"- {t.name}: {t.description}" for t in tools),
         # tool_names=", ".join(t.name for t in tools),
     )
 
-    response = db_model.invoke([SystemMessage(content=prompt)] + state["db_content"], config)
+    response = data_model.invoke([SystemMessage(content=prompt)] + state["db_content"], config)
     return {"db_content": [response]}
 
-db_analyst_tools = [calculator]
-db_analyst_model = ChatOpenAI(model=MODEL_NAME).bind_tools(db_analyst_tools)
+data_analyst_tools = [calculator]
+data_analyst_model = ChatOpenAI(model=MODEL_NAME).bind_tools(data_analyst_tools)
 
-def db_analyst_node(state: AgentState) -> Dict[str, str]:
+def data_analyst_node(state: AgentState) -> Dict[str, str]:
     """Analyze database tool results and generate an executive summary.
 
     Processes the db_content messages, optionally uses calculator for arithmetic,
@@ -171,10 +171,10 @@ def db_analyst_node(state: AgentState) -> Dict[str, str]:
         "Return a concise executive summary at the end."
     )
 
-    prompt = db_summary_prompt.format(db_content=db_content_text) + "\n\n" + tool_hint
+    prompt = data_summary_prompt.format(db_content=db_content_text) + "\n\n" + tool_hint
 
     messages = [SystemMessage(content=prompt)]
-    response = db_analyst_model.invoke(messages)
+    response = data_analyst_model.invoke(messages)
 
     tool_messages = []
     while getattr(response, "tool_calls", None):
@@ -199,12 +199,12 @@ def db_analyst_node(state: AgentState) -> Dict[str, str]:
                 ))
 
         messages.extend([response] + tool_messages)
-        response = db_analyst_model.invoke(messages)
+        response = data_analyst_model.invoke(messages)
         tool_messages = []
 
     return {"db_summary": response.content}
 
-def db_should_continue(state: AgentState) -> str:
+def data_should_continue(state: AgentState) -> str:
     """Determine whether to continue with tool execution or move to analysis.
 
     Args:
@@ -218,20 +218,20 @@ def db_should_continue(state: AgentState) -> str:
 
 subgraph = StateGraph(AgentState)
 
-subgraph.add_node("db_agent", call_model)
-subgraph.add_node("db_tools", tool_node)
-subgraph.add_node("db_analyst", db_analyst_node)
+subgraph.add_node("data_agent", call_model)
+subgraph.add_node("data_tools", tool_node)
+subgraph.add_node("data_analyst", data_analyst_node)
 
-subgraph.add_edge(START, "db_agent")
-subgraph.add_edge("db_tools", "db_agent")
-subgraph.add_edge("db_analyst", END)
+subgraph.add_edge(START, "data_agent")
+subgraph.add_edge("data_tools", "data_agent")
+subgraph.add_edge("data_analyst", END)
 
 subgraph.add_conditional_edges(
-    "db_agent",
-    db_should_continue,
+    "data_agent",
+    data_should_continue,
     {
-        "continue": "db_tools",
-        "end": "db_analyst"
+        "continue": "data_tools",
+        "end": "data_analyst"
     }
 )
 
