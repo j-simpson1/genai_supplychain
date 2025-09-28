@@ -47,7 +47,6 @@ dependencies:
     - msal
     - python-multipart
     # Additional tools
-    - streamlit
     # MCP (Model Context Protocol)
     - mcp
     - langchain-mcp-adapters

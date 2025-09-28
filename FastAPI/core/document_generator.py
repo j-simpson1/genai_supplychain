@@ -268,13 +268,6 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
             print(s)
             final_state = s
 
-        # Save final state
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        save_path = os.path.join(current_dir, "streamlit_data/ai_supplychain_state.json")
-
-        with open(save_path, "w") as f:
-            json.dump(serialize_state(final_state), f, indent=2)
-
         return serialize_state(final_state)
 
 

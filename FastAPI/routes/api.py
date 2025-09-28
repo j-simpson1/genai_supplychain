@@ -270,17 +270,6 @@ async def run_report_generator(
             parts_df = pd.read_csv(StringIO(parts_content_str))
             articles_df = pd.read_csv(StringIO(articles_content_str))
 
-            import os
-
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            streamlit_dir = os.path.join(BASE_DIR, "..", "core", "streamlit_data")
-            os.makedirs(streamlit_dir, exist_ok=True)
-
-            parts_streamlit_path = os.path.join(streamlit_dir, "parts.csv")
-            articles_streamlit_path = os.path.join(streamlit_dir, "articles.csv")
-
-            parts_df.to_csv(parts_streamlit_path, index=False)
-            articles_df.to_csv(articles_streamlit_path, index=False)
 
             # Strip whitespace from column names
             parts_df.columns = parts_df.columns.str.strip()
