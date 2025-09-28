@@ -241,19 +241,11 @@ data_agent = subgraph.compile()
 if __name__ == "__main__":
     import asyncio
 
-    # Save graph visualization as Mermaid source code
+    # Save graph as Mermaid source
     # graphs_dir = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs", "langgraph_graphs")
     # os.makedirs(graphs_dir, exist_ok=True)
-    #
-    # mermaid_source_path = os.path.join(graphs_dir, GRAPH_OUTPUT_FILENAME.replace('.png', '_source.md'))
-    # try:
-    #     with open(mermaid_source_path, "w") as f:
-    #         f.write("```mermaid\n")
-    #         f.write(data_agent.get_graph().draw_mermaid())
-    #         f.write("\n```")
-    #     print(f"Mermaid source saved to: {mermaid_source_path}")
-    # except Exception as e:
-    #     print(f"Warning: Could not save Mermaid source: {e}")
+    # with open(os.path.join(graphs_dir, "data_agent_langgraph_source.md"), "w") as f:
+    #     f.write("```mermaid\n" + data_agent.get_graph().draw_mermaid() + "\n```")
 
     async def run_test() -> None:
         """Run a test of the database agent with sample data."""
