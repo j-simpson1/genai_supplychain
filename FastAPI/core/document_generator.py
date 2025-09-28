@@ -182,11 +182,11 @@ def create_graph() -> StateGraph:
 
     # Add all nodes
     builder.add_node("planner", plan_node)
-    builder.add_node("db_agent", data_agent)
+    builder.add_node("data_agent", data_agent)
     builder.add_node("chart_planning_node", chart_planning_node)
     builder.add_node("generate_charts", code_editor_agent)
     builder.add_node("simulation", simulation_agent)
-    builder.add_node("generate", generation_node)
+    builder.add_node("writer", generation_node)
     builder.add_node("reflect", reflection_node)
     builder.add_node("research_agent", research_agent)
     builder.add_node("research_critique", research_critique_agent)
@@ -196,8 +196,8 @@ def create_graph() -> StateGraph:
     builder.set_entry_point("planner")
 
     # Add edges
-    builder.add_edge("planner", "db_agent")
-    builder.add_edge("db_agent", "chart_planning_node")
+    builder.add_edge("planner", "data_agent")
+    builder.add_edge("data_agent", "chart_planning_node")
     builder.add_edge("chart_planning_node", "generate_charts")
 
     # Sequential research agents (avoids concurrent state updates)
@@ -205,13 +205,13 @@ def create_graph() -> StateGraph:
     builder.add_edge("research_agent", "deep_research_agent")
     builder.add_edge("deep_research_agent", "simulation")
 
-    builder.add_edge("simulation", "generate")
+    builder.add_edge("simulation", "writer")
     builder.add_edge("reflect", "research_critique")
-    builder.add_edge("research_critique", "generate")
+    builder.add_edge("research_critique", "writer")
 
     # Add conditional edge
     builder.add_conditional_edges(
-        "generate",
+        "writer",
         should_continue,
         {END: END, "reflect": "reflect"}
     )
@@ -351,7 +351,7 @@ async def target(inputs: Dict[str, Any]) -> Dict[str, str]:
         print(f"Temporary CSV file created: {articles_tmp_file.name}")
 
     final_state = await run_agent(prompt, parts_tmp_file.name, articles_tmp_file.name)
-    draft = final_state.get("generate", {}).get("draft", "")
+    draft = final_state.get("writer", {}).get("draft", "")
 
     return {"draft": draft}
 
