@@ -264,6 +264,13 @@ class PDFReportGenerator:
             content_elements = self._process_content(content_text, chart_metadata)
             story.extend(content_elements)
 
+        # Process figures field if it exists
+        figures = section.get("figures", [])
+        if figures:
+            for figure in figures:
+                figure_elements = self._process_content(figure, chart_metadata)
+                story.extend(figure_elements)
+
         # Handle bullet points
         bullets = section.get("bullet_points", [])
         if bullets:

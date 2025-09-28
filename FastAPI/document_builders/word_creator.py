@@ -49,10 +49,23 @@ def save_to_word(content, filename, chart_metadata=None):
     for section in content.get("sections", []):
         doc.add_heading(section.get("heading", "No Heading"), level=1)
         insert_text_with_figures(section.get("content", ""))
+
+        # Process figures field if it exists
+        figures = section.get("figures", [])
+        if figures:
+            for figure in figures:
+                insert_text_with_figures(figure)
+
         insert_bullets(doc, section.get("bullet_points", []))
         for subsection in section.get("subsections", []):
             doc.add_heading(subsection.get("heading", "No Subheading"), level=2)
             insert_text_with_figures(subsection.get("content", ""))
+
+            # Process figures field for subsections if it exists
+            subsection_figures = subsection.get("figures", [])
+            if subsection_figures:
+                for figure in subsection_figures:
+                    insert_text_with_figures(figure)
 
     doc.save(filename)
     return filename

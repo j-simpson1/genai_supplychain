@@ -89,7 +89,7 @@ Here are reasoning examples to guide your thought process: \"\"\"{CoT_Examples}\
 
 
 
-db_call_model_prompt = """You are an expert database assistant for an automotive supply chain report generator.
+data_call_model_prompt = """You are an expert data assistant for an automotive supply chain report generator.
 
 ## Available Tools
 {tools}
@@ -112,7 +112,7 @@ db_call_model_prompt = """You are an expert database assistant for an automotive
 - When you have gathered sufficient data, you may output: DB_DATA_EXTRACTED
 """
 
-db_summary_prompt = """You are an expert data analyst.
+data_summary_prompt = """You are an expert data analyst.
 
 Analyse the data from the database agent and produce a concise executive summary.
 
@@ -306,7 +306,8 @@ Before writing, think step-by-step:
   "sections": [
     {{{{
       "heading": "<Section Heading>",
-      "content": "<Plain text or markdown content (optional). Additionally include figures where applicable [[FIGURE:chart1]]>",
+      "content": "<Plain text or markdown content>",
+      "figures": ["[[FIGURE:chart1]]", "[[FIGURE:chart2]]"],
       "bullet_points": [
         "<First bullet point>",
         "<Second bullet point>"
@@ -314,7 +315,7 @@ Before writing, think step-by-step:
     }}}}
   ]
 }}}}
-- **Charts must be included in the `content` field using placeholders like [[FIGURE:chart_id]]. Never put charts in bullet points or any other fields. These placeholders will be replaced with the actual figures in the final report. Don't include any charts in bullet points.
+- **Charts must be included in the `figures` field as an array of placeholders like [[FIGURE:chart_id]]. Never put charts in the content field or bullet points. The figures array should contain chart placeholders that will be replaced with actual charts in the final report.
 - List of All Relevant Sources (with citations in the report)
 - **Bold text**: Wrap important text in double asterisks **like this** (use sparingly)
 - Don't include any subsections in the report.
