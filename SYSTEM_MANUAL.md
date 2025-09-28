@@ -2,20 +2,6 @@
 
 **MSc Computer Science Project by James Simpson**
 
-## Table of Contents
-1. [System Overview](#system-overview)
-2. [Architecture](#architecture)
-3. [Code Organization](#code-organization)
-4. [Development Environment Setup](#development-environment-setup)
-5. [Build & Deployment](#build--deployment)
-6. [API Documentation](#api-documentation)
-7. [Database Schema](#database-schema)
-8. [Configuration Management](#configuration-management)
-9. [Development Workflow](#development-workflow)
-10. [Troubleshooting](#troubleshooting)
-11. [Testing](#testing)
-12. [Maintenance](#maintenance)
-
 ## System Overview
 
 The GenAI Supply Chain Platform is a comprehensive AI-powered solution for automotive industry supply chain analysis and research. It combines multiple specialized AI agents built on LangGraph with a modern React frontend and FastAPI backend.
@@ -103,7 +89,6 @@ genai_supplychain/
 - **Simulation Agent** (`simulation_agent.py`): Runs economic and supply chain simulations
 - **Data Agent** (`data_agent.py`): Processes and analyzes uploaded data files
 - **Document Generator** (`document_generator.py`): Creates reports and documentation
-- **Database Agent** (`database_agent_react.py`): Handles database queries and operations
 - **Deep Research Agent** (`deep_research_agent.py`): Advanced research capabilities
 - **Code Editor Agent** (`code_editor_agent.py`): Code analysis and modification
 
@@ -260,24 +245,6 @@ docker compose up -d --build
 - `DELETE /files/{filename}` - Delete file
 - `GET /download/{filename}` - Download file
 
-## Database Schema
-
-### SQLite (Development)
-Local SQLite database for development and testing.
-
-### PostgreSQL (Production)
-Configured for production deployments with:
-- User: `devuser`
-- Database: `devdb`
-- Port: `5432`
-
-### Key Tables
-- **Manufacturers**: Automotive manufacturers data
-- **Models**: Vehicle models and specifications
-- **Parts**: Parts catalog and compatibility
-- **Simulations**: Simulation results and parameters
-- **Reports**: Generated report metadata
-
 ## Configuration Management
 
 ### Environment Variables
@@ -288,7 +255,6 @@ Configured for production deployments with:
 | `LANGCHAIN_API_KEY` | LangSmith observability | Optional |
 | `TAVILY_API_KEY` | Web search API | Optional |
 | `RAPIDAPI_KEY` | TecDoc automotive data | Optional |
-| `DATABASE_URL` | Database connection string | No |
 | `ENVIRONMENT` | Deployment environment | No |
 | `DEBUG` | Debug mode flag | No |
 
@@ -300,19 +266,6 @@ Configured for production deployments with:
 - `frontend/package.json`: Node.js dependencies
 
 ## Development Workflow
-
-### Git Workflow
-```bash
-# Create feature branch
-git checkout -b feature/new-feature
-
-# Make changes and commit
-git add .
-git commit -m "Add new feature"
-
-# Push and create pull request
-git push origin feature/new-feature
-```
 
 ### Code Style
 - **Python**: Follow PEP 8 standards
@@ -406,7 +359,6 @@ Test the full stack by:
 - Update Docker images: `docker compose pull`
 
 ### Backup Procedures
-- Database: Regular SQLite/PostgreSQL backups
 - Generated reports: Backup `reports_and_graphs/` directory
 - Configuration: Version control `.env.example` updates
 
