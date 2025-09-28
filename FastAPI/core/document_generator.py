@@ -118,7 +118,7 @@ def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
 
     return {"chart_plan": chart_plan}
 
-def generation_node(state: AgentState) -> Dict[str, Any]:
+def writer_node(state: AgentState) -> Dict[str, Any]:
     """Generate the report draft based on collected data."""
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
@@ -193,22 +193,22 @@ def create_graph() -> StateGraph:
     builder = StateGraph(AgentState)
 
     # Add all nodes
-    builder.add_node("planner", plan_node)
+    builder.add_node("planning_agent", plan_node)
     builder.add_node("data_agent", data_agent)
     builder.add_node("chart_planning_node", chart_planning_node)
     builder.add_node("generate_charts", code_editor_agent)
     builder.add_node("simulation", simulation_agent)
-    builder.add_node("writer", generation_node)
+    builder.add_node("writer", writer_node)
     builder.add_node("reflect", reflection_node)
     builder.add_node("research_agent", research_agent)
     builder.add_node("research_critique", research_critique_agent)
     builder.add_node("deep_research_agent", deep_research_agent)
 
     # Set entry point
-    builder.set_entry_point("planner")
+    builder.set_entry_point("planning_agent")
 
     # Add edges
-    builder.add_edge("planner", "data_agent")
+    builder.add_edge("planning_agent", "data_agent")
     builder.add_edge("data_agent", "chart_planning_node")
     builder.add_edge("chart_planning_node", "generate_charts")
 
