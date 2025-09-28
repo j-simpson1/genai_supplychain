@@ -288,38 +288,6 @@ The `/run_report_generator` endpoint handles:
 3. Add TypeScript types
 4. Integrate with existing layouts
 
-## Testing
-
-### Backend Testing
-```bash
-# Install test dependencies
-pip install pytest pytest-asyncio
-
-# Run tests
-pytest FastAPI/
-
-# Run with coverage
-pytest --cov=FastAPI FastAPI/
-```
-
-### Frontend Testing
-```bash
-cd frontend
-
-# Run linting
-npm run lint
-
-# Type checking
-npx tsc --noEmit
-```
-
-### Integration Testing
-Test the full stack by:
-1. Starting backend: `uvicorn FastAPI.main:app --reload`
-2. Starting frontend: `npm run dev`
-3. Testing API endpoints via frontend UI
-4. Verifying agent workflows
-
 ## Troubleshooting
 
 ### Common Issues
@@ -352,7 +320,6 @@ Test the full stack by:
 ### Performance
 - **Memory usage**: Monitor Python processes during AI agent execution
 - **Response times**: Check API response times in browser dev tools
-- **Database**: Use query profiling for slow operations
 
 ## Maintenance
 
