@@ -1,19 +1,18 @@
 version: "3.8"
 
 services:
-  document-generator:
+  fastapi-backend:
     build:
       context: .
       dockerfile: ./Dockerfile
-    container_name: document-generator
+    container_name: fastapi-backend
     restart: unless-stopped
     env_file:
       - .env
     volumes:
       - ./FastAPI:/app/FastAPI
-      - ./tmp_uploads:/app/tmp_uploads
-      - ./charts:/app/charts
-      - ./exports:/app/exports
+      - ./output:/app/output
+      - ./test-data:/app/test-data
     working_dir: /app
     environment:
       - PYTHONPATH=/app

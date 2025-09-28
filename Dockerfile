@@ -20,13 +20,11 @@ COPY . /app/
 ENV PYTHONPATH=/app
 ENV MATPLOTLIB_BACKEND=Agg
 
-# Create necessary directories
-RUN mkdir -p /app/FastAPI/core/charts
-RUN mkdir -p /app/FastAPI/reports_and_graphs
-RUN mkdir -p /app/FastAPI/core/streamlit_data
+# Create necessary directories for runtime outputs
+RUN mkdir -p /app/output
 
 # Expose port for FastAPI
 EXPOSE 8000
 
-# Command to run the document generator
-CMD ["python", "FastAPI/core/document_generator.py"]
+# Command to run the FastAPI application
+CMD ["python", "-m", "uvicorn", "FastAPI.main:app", "--host", "0.0.0.0", "--port", "8000"]

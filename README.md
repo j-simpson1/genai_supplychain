@@ -21,21 +21,24 @@ A comprehensive platform for AI-powered supply chain analysis and automotive ind
 │   │   ├── research_agent.py        # Research and analysis agent
 │   │   ├── simulation_agent.py      # Market simulation agent
 │   │   ├── data_agent.py            # Data processing agent
-│   │   └── database_agent_react.py  # Database interaction agent
+│   │   ├── database_agent_react.py  # Database interaction agent
+│   │   ├── deep_research_agent.py   # Advanced research capabilities
+│   │   └── code_editor_agent.py     # Code analysis and editing
 │   ├── automotive_simulation/  # Market simulation models
 │   ├── routes/                # API route definitions
 │   ├── data/                  # Data handling and validation
+│   ├── document_builders/     # Document creation utilities
+│   ├── reports_and_graphs/    # Generated reports and visualizations
 │   └── main.py               # FastAPI application entry point
 ├── frontend/                  # React TypeScript frontend
 │   └── src/                  # Frontend source code
-├── charts/                   # Generated charts and visualizations
-├── exports/                  # Generated reports and exports
-└── tmp_uploads/             # Temporary file uploads
+├── output/                   # Generated outputs and exports
+└── test-data/               # Test datasets
 ```
 
-## Setup Environment
+## Quick Start Guide
 
-### Option 1: Conda Environment (Recommended)
+### Step 1: Environment Setup
 ```bash
 # Create conda environment from environment.yml
 conda env create -f environment.yml
@@ -53,37 +56,38 @@ npm install
 cd ..
 ```
 
-### Option 2: Manual Setup
-If you prefer not to use conda, install dependencies manually:
-```bash
-pip install -r requirements.txt
-cd frontend && npm install && cd ..
-```
-
-## Environment Variables
-Copy the example environment file and add your API keys:
+### Step 2: Configure Environment Variables
 ```bash
 cp .env.example .env
 # Edit .env with your actual API keys (OpenAI, LangSmith, etc.)
 ```
 
-## Running the Application
+### Step 3: Start the Application
 
-### 1) Start FastAPI Backend
+**Start Backend (Terminal 1):**
 ```bash
 python -m uvicorn FastAPI.main:app --reload
 ```
 - API available at: http://127.0.0.1:8000
 - Swagger UI: http://127.0.0.1:8000/docs
 
-### 2) Start React Frontend
+**Start Frontend (Terminal 2):**
 ```bash
 cd frontend
 npm run dev
 ```
 - Application available at: http://localhost:5173
 
-### 3) Docker Deployment
+## Alternative Setup Options
+
+### Manual Setup (without Conda)
+If you prefer not to use conda:
+```bash
+pip install -r requirements.txt
+cd frontend && npm install && cd ..
+```
+
+### Docker Deployment
 ```bash
 # Start containerized service
 docker compose up -d
