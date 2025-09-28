@@ -28,7 +28,7 @@ from FastAPI.core.prompts import data_call_model_prompt, data_summary_prompt
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 MODEL_NAME = "o4-mini"
-GRAPH_OUTPUT_FILENAME = "database_agent_langgraph.png"
+GRAPH_OUTPUT_FILENAME = "data_agent_langgraph.png"
 
 model = ChatOpenAI(model=MODEL_NAME)
 
@@ -237,12 +237,23 @@ subgraph.add_conditional_edges(
 
 data_agent = subgraph.compile()
 
-# output_graph_path = os.path.join(REPORTS_DIR, GRAPH_OUTPUT_FILENAME)
-# with open(output_graph_path, "wb") as f:
-#     f.write(database_agent.get_graph().draw_mermaid_png())
 
 if __name__ == "__main__":
     import asyncio
+
+    # Save graph visualization as Mermaid source code
+    # graphs_dir = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs", "langgraph_graphs")
+    # os.makedirs(graphs_dir, exist_ok=True)
+    #
+    # mermaid_source_path = os.path.join(graphs_dir, GRAPH_OUTPUT_FILENAME.replace('.png', '_source.md'))
+    # try:
+    #     with open(mermaid_source_path, "w") as f:
+    #         f.write("```mermaid\n")
+    #         f.write(data_agent.get_graph().draw_mermaid())
+    #         f.write("\n```")
+    #     print(f"Mermaid source saved to: {mermaid_source_path}")
+    # except Exception as e:
+    #     print(f"Warning: Could not save Mermaid source: {e}")
 
     async def run_test() -> None:
         """Run a test of the database agent with sample data."""

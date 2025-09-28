@@ -239,7 +239,7 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
         # Save graph visualization
         graphs_dir = os.path.join(PROJECT_ROOT, "FastAPI", "reports_and_graphs", "langgraph_graphs")
         os.makedirs(graphs_dir, exist_ok=True)
-        output_graph_path = os.path.join(graphs_dir, "langgraph.png")
+        output_graph_path = os.path.join(graphs_dir, "main_langgraph.png")
         with open(output_graph_path, "wb") as f:
             f.write(graph.get_graph().draw_mermaid_png())
 
