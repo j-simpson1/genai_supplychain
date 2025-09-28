@@ -16,7 +16,7 @@ from tavily import TavilyClient
 from FastAPI.core.prompts import research_plan_prompt
 from FastAPI.core.state import AgentState
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])

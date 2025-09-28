@@ -20,7 +20,7 @@ from FastAPI.core.prompts import simulation_clean_prompt
 from FastAPI.core.utils import convert_numpy
 from FastAPI.automotive_simulation.simulation import analyze_tariff_impact
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 
 class SimulationResultsInput(BaseModel):

@@ -25,7 +25,7 @@ from FastAPI.core.data_tools import (
 from FastAPI.core.utils import _json_dump_safe
 from FastAPI.core.prompts import data_call_model_prompt, data_summary_prompt
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 MODEL_NAME = "o4-mini"
 GRAPH_OUTPUT_FILENAME = "database_agent_langgraph.png"
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     async def run_test() -> None:
         """Run a test of the database agent with sample data."""
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         parts_path = os.path.join(base_dir, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
         articles_path = os.path.join(base_dir, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
