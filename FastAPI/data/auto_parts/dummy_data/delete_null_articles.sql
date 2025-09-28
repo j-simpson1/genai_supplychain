@@ -1,2 +1,0 @@
-DELETE FROM articles
-WHERE price IS NULL;
