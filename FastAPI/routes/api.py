@@ -108,8 +108,8 @@ async def find_countries(
         raise HTTPException(status_code=500, detail=f"find_countries failed: {e}")
 
 
-@router.post("/run_simulation")
-async def run_simulation(
+@router.post("/run_report_generator")
+async def run_report_generator(
         vehicle_details: str = Form(..., description="JSON string containing vehicle details"),
         category_filter: str = Form(..., description="Parts category filter"),
         category_name: str = Form(..., description="Parts category name"),
@@ -392,7 +392,7 @@ async def run_simulation(
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in run_simulation: {str(e)}")
+        logger.error(f"Unexpected error in run_report_generator: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 

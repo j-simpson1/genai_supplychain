@@ -402,8 +402,8 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         formDataToSend.append('tariff_data_file', tariffDataFile);
       }
 
-      // Make POST request to run_simulation endpoint
-      const response = await fetch(`${API_BASE_URL}/run_simulation`, {
+      // Make POST request to run_report_generator endpoint
+      const response = await fetch(`${API_BASE_URL}/run_report_generator`, {
         method: 'POST',
         body: formDataToSend,
       });
