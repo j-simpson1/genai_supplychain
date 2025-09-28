@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 import json
 import traceback
 import re
-import uuid
+import tempfile
+import shutil
+from contextlib import contextmanager
 
 
 # Set up logging
@@ -24,6 +26,36 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+@contextmanager
+def temporary_csv_files(*dataframes_with_names):
+    """
+    Context manager for temporary CSV files with automatic cleanup.
+    Args: tuples of (dataframe, filename) or just dataframes
+    """
+    temp_files = []
+    temp_dir = None
+    try:
+        temp_dir = Path(tempfile.mkdtemp(prefix="genai_supply_"))
+
+        for i, item in enumerate(dataframes_with_names):
+            if item is None:  # Skip None entries
+                temp_files.append(None)
+                continue
+
+            if isinstance(item, tuple):
+                df, name = item
+            else:
+                df, name = item, f"data_{i}.csv"
+
+            temp_path = temp_dir / name
+            df.to_csv(temp_path, index=False)
+            temp_files.append(str(temp_path))
+
+        yield temp_files
+    finally:
+        if temp_dir and temp_dir.exists():
+            shutil.rmtree(temp_dir)
 
 @router.get("/manufacturers")
 def retrieve_manufacturers():
@@ -51,9 +83,6 @@ def retrieve_countries():
     return fetch_countries()
 
 
-# One-time temp dir for intermediate storage
-TMP_DIR = Path("tmp_uploads")
-TMP_DIR.mkdir(exist_ok=True)
 
 @router.post("/find_countries")
 async def find_countries(
@@ -85,16 +114,8 @@ async def find_countries(
         countries_series = articles_df["countryOfOrigin"].astype(str).str.strip()
         unique_countries = sorted({c for c in countries_series if c})
 
-        temp_id = str(uuid.uuid4())
-        temp_dir = TMP_DIR / temp_id
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        parts_df.to_csv(temp_dir / "parts.csv", index=False)
-        articles_df.to_csv(temp_dir / "articles.csv", index=False)
-
         return {
-            "temp_id": temp_id,
-            "countries": unique_countries,   # <--- just labels
+            "countries": unique_countries,
             "counts": {
                 "parts_rows": int(len(parts_df)),
                 "articles_rows": int(len(articles_df)),
@@ -345,35 +366,25 @@ async def run_report_generator(
             vat_rate=vat_rate_float  # Pass VAT rate to prompt template
         )
 
-        import tempfile
+        # Prepare temporary files for agent
+        temp_data = [
+            (parts_df, "parts.csv"),
+            (articles_df, "articles.csv")
+        ]
 
-        # Save uploaded CSVs temporarily
-        parts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
-        articles_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
-
-        parts_df.to_csv(parts_path, index=False)
-        articles_df.to_csv(articles_path, index=False)
-
-        # Save tariff data as temporary file if provided
+        # Add tariff data if provided
         tariff_path = None
         if parsed_tariff_data:
-            tariff_path = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
             tariff_df = pd.DataFrame(parsed_tariff_data)
-            tariff_df.to_csv(tariff_path, index=False)
-            logger.info(f"Saved tariff data to temporary file: {tariff_path}")
+            temp_data.append((tariff_df, "tariff.csv"))
+            logger.info(f"Including tariff data with {len(parsed_tariff_data)} entries")
 
-        # Call agent using file paths
-        result = await run_agent(prompt, parts_path, articles_path, tariff_path)
-
-        # Clean up temporary files
-        try:
-            import os
-            os.unlink(parts_path)
-            os.unlink(articles_path)
-            if tariff_path:
-                os.unlink(tariff_path)
-        except Exception as cleanup_error:
-            logger.warning(f"Could not clean up temporary files: {cleanup_error}")
+        # Use context manager for temporary files
+        with temporary_csv_files(*temp_data) as temp_paths:
+            parts_path, articles_path = temp_paths[0], temp_paths[1]
+            if len(temp_paths) > 2:
+                tariff_path = temp_paths[2]
+            result = await run_agent(prompt, parts_path, articles_path, tariff_path)
 
         # Return successful response with summary
         return {
