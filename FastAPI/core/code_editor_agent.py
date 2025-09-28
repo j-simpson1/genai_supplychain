@@ -193,7 +193,7 @@ def execute_chart_next_node(state: AgentState) -> str:
         current_index = state.get("current_chart_index", 0)
         chart_plan = state.get("chart_plan", [])
         has_more_charts = current_index < len(chart_plan)
-        return "generate_chart_code" if has_more_charts else "research_plan"
+        return "generate_chart_code" if has_more_charts else "end"
     else:
         return "reflect_chart"
 
@@ -222,7 +222,7 @@ def create_code_editor_agent():
         execute_chart_next_node,
         {
             "reflect_chart": "reflect_chart",
-            "research_plan": END,
+            "end": END,
             "generate_chart_code": "generate_chart_code",
         }
     )

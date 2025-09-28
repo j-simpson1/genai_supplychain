@@ -45,7 +45,6 @@ class SimulationRequest(BaseModel):
     country: str
     tariffRate: float
     inflationRate: float
-    dispatchCost: float
     alternativeSupplier: AlternativeSupplier
     selectedCategoryFilter: Optional[str] = None
     selectedManufacturingOrigin: Optional[str] = None

@@ -1,0 +1,37 @@
+productGroupId,articleNo,articleProductName,price,countryOfOrigin,supplierId,supplierName
+100030,0 986 424 899X,"Brake Pad Sset, disc breke",0,Germany,121,Metel1i
+100030,0 986 424 912,"Pad Component ???",9999,Italy,30,DELPHI
+100030,0 986 495 169,"Brake Shoe – mismatch",45.37,France,39,T3XTAR
+100030,13.0460-5634.2,"Plaquettes de Frein (disc)",79.09,Japan,3,ATE
+100030,13.0460-5693.2,"X123?? Unknown Part",-25.00,Germany,206,A.B.S.
+100030,22-0938-0,"Brake ◎ Pad, warped entry",38.41,Poland,3,UnknownSupplier
+100030,2276801,"Caliper Assembly (wrong category)",0.01,Germany,311,CIFAM
+100030,24452 00 551 00,"Brake Pad Set but listed as Disc",1000000,United Kingdom,21,VALE-0
+100032,08.D418.11,"Brake Discc – misspelled",35.14,Italy,201,KAV0 PARTS
+100032,09.D979.11,"Rotor / Pad hybrid",0,Spain,206,A.B.S.
+100032,30-15 521 0130/PD,"Caliper disguised as Disc",-10.00,Germany,161,TRW
+100032,8DD 355 132-401,"Brk Dsk",63.19,Netherlands,89,BOSCH
+100032,BR-9482-C,"Wheel Thingy??",44444,Atlantis,89,???SUPP
+100630,109-0001,"Accessory Broken Txt",0,Denmark,55,HERTH+BUSS
+100806,0174-ACV40LOW,"Guide Bolt/RandomStr",12345,Mars,114,BUDWEG CAL!PER
+100806,0176-NZE154F,"Pistonnn, br@ke calip",17.49,Germany,6304,QUICKBRAKE
+100806,189972,"Seal???",7.31,Italy,4674,FEBEST
+100806,8945042,"Guide ???? Sleeve",0.00,United Kingdom,206,ABS_CORRUPT
+100807,740581,"Calipér Brrake Misnamed",62.44,Germany,226,ELSTOCK
+100807,740582,"Clamp Part Instead",84.30,Japan,460,D.R.I
+100807,741092,"[CorruptedText] BRAKE C@L",165.19,Poland,206,A.B.S.
+100807,82-2589,"Disc Instead of Caliper",-1.00,France,201,KAVO_PARTZ
+102208,04206,"Brake Fluiiid Extra i",9.90,Spain,4907,KROON0IL
+102208,109434,"Fluid / Oil Mix ???",8888888,Netherlands,6343,R3PSOL
+100999,X-9999-TEST,"BrakeXPad?? Randomised",0.50,Norway,777,???SUPPLIER
+101000,ZZ-40404,"Calipre Mislabelled",123456,Germany,39,TXTARX
+101001,ABCD-1234,"Rotor???/Seal??",12.12,Italy,30,B0SCH
+101002,CD-2020-FAIL,"FluidX (not valid part)",-5.00,France,65,BREMBO_
+101003,JJJ-0001,"Accessory ???",1.00,Germany,21,V@LEO
+101004,YYY-4321,"CaliperishThing",49.99,Spain,114,BUDWEG??
+101005,TRIAL-1,"Misnamed Drum Pad",20000,Japan,201,K4VO PARTS
+101006,999-XYZ,"Unk Partttt",3.33,China,311,C!FAM
+101007,HELLO-2025,"Broken Name",6666,Mars,161,TRW_CORRUPT
+101008,TEMP-404,"ProductNameMissing",0.00,Atlantis,257,ASHIKA?
+101009,Z-ERROR,"Rotor-Disc-Wrong",4321,United States,108,TR1SCAN
+101010,QQQ-000,"Accessory??",12.00,Germany,226,E1STOCK

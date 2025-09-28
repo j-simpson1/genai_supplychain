@@ -94,7 +94,7 @@ db_call_model_prompt = """You are an expert database assistant for an automotive
 ## Available Tools
 {tools}
 
-## Goal: decide which database tools to call to best support the implementation of the plan and charts below:
+## Goal: call database tools to gather data for the implementation of the plan and charts below:
 
 \"\"\"
 {plan}
@@ -104,12 +104,12 @@ db_call_model_prompt = """You are an expert database assistant for an automotive
 - Bar chart showing the distribution of articles by country of origin.
 - Parts Summary Table.
 
-## Guidelines
-- Call a maximum of one tool per turn.
-- Stop as soon as you have all the data to support all parts of the plan.
-- If a tool errors or returns empty, note it briefly and try an alternative tool.
+## Instructions
+- You MUST call exactly one tool per turn. Do not provide explanations or reasoning.
+- Make tool calls to gather the required data step by step.
+- Start by calling the most relevant tool for the first data requirement.
 - Note: all prices are in GBP
-- In the final turn, output exactly: DB_DATA_EXTRACTED
+- When you have gathered sufficient data, you may output: DB_DATA_EXTRACTED
 """
 
 db_summary_prompt = """You are an expert data analyst.
@@ -335,32 +335,32 @@ Utilise all the information below as needed:
 ------
 
 Task: \"\"\"
-{{task}}
+{task}
 \"\"\"
 
 Plan: **important - please follow** \"\"\"
-{{plan}}
+{plan}
 \"\"\"
 
 Database Insights: \"\"\"
-{{db}}
+{db}
 \"\"\"
 
 Web Research: \"\"\"
-{{web}}
+{web}
 
 \"\"\"
 
 Deep Research: \"\"\"
-{{deep_research}}
+{deep_research}
 \"\"\"
 
 Simulation Results: \"\"\"
-{{simulation}}
+{simulation}
 \"\"\"
 
 Charts **include ALL in the report**: \"\"\"
-{{charts}}
+{charts}
 \"\"\"
 """
 

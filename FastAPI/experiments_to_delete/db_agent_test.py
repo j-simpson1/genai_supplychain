@@ -16,7 +16,7 @@ from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 
 # --- Import custom tools ---
-from FastAPI.core.database_agent_3 import (
+from FastAPI.core.database_tools import (
     parts_summary,
     top_5_parts_by_price,
     top_5_part_distribution_by_country,

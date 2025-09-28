@@ -247,9 +247,9 @@ if __name__ == "__main__":
     async def run_test() -> None:
         """Run a test of the database agent with sample data."""
 
-        # Paths to dummy data
-        articles_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
-        parts_path = os.path.join(os.getcwd(), "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        parts_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_parts_data.csv")
+        articles_path = os.path.join(base_dir, "Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
 
         # Create initial state
         initial_state: AgentState = {

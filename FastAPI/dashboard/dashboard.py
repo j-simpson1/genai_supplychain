@@ -6,9 +6,9 @@ import json
 
 # --- File paths ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-articles_path = os.path.join(BASE_DIR, "streamlit_data", "articles.csv")
-parts_path = os.path.join(BASE_DIR, "streamlit_data", "parts.csv")
-json_path = os.path.join(BASE_DIR, "streamlit_data", "ai_supplychain_state.json")
+articles_path = os.path.join(BASE_DIR, "..", "core", "streamlit_data", "articles.csv")
+parts_path = os.path.join(BASE_DIR, "..", "core", "streamlit_data", "parts.csv")
+json_path = os.path.join(BASE_DIR, "..", "core", "streamlit_data", "ai_supplychain_state.json")
 
 # Load JSON
 with open(json_path) as f:
