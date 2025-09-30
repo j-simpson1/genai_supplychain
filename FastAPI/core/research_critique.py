@@ -6,7 +6,7 @@ import os
 import traceback
 from typing import List, Literal, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langsmith import traceable
@@ -94,8 +94,7 @@ async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
     try:
         plan: TavilyPlan = planner.invoke([
-            SystemMessage(content=research_critique_prompt),
-            HumanMessage(content=state['critique'])
+            HumanMessage(content=research_critique_prompt.format(critique=state['critique']))
         ])
 
         # Validate that we got valid jobs

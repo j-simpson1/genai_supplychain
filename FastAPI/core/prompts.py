@@ -224,6 +224,10 @@ import
 
 research_plan_prompt = """You are an expert automotive supply chain researcher conducting business analysis. Your task is to generate search queries (each under 400 characters) for publicly available information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy.
 
+Task: \"\"\"
+{task}
+\"\"\"
+
 Generate 3-4 search queries covering:
 1. Tariff news concerning the manufacturing country
 2. Tariff news concerning the automotive sector
@@ -236,13 +240,13 @@ Guidelines:
 - All research is for analytical purposes using only public domain information
 
 You must respond with a valid JSON object matching this exact structure:
-{
+{{
   "jobs": [
-    {
+    {{
       "query": "your search query here (max 400 chars)"
-    }
+    }}
   ]
-}
+}}
 
 Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
 """
@@ -703,6 +707,10 @@ Be honest and rigorous in your assessment. If sections are well-written, acknowl
 
 research_critique_prompt = """You are an expert automotive supply chain researcher conducting business analysis, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for publicly available information that will help gather data for an analytical report.
 
+Manager Feedback: \"\"\"
+{critique}
+\"\"\"
+
 Guidelines:
 - Focus only on publicly available information from legitimate news sources and government publications
 - Keep queries focused and specific (avoid multi-topic queries)
@@ -711,13 +719,13 @@ Guidelines:
 - All research is for analytical purposes using only public domain information
 
 You must respond with a valid JSON object matching this exact structure:
-{
+{{
   "jobs": [
-    {
+    {{
       "query": "your search query here (max 400 chars)"
-    }
+    }}
   ]
-}
+}}
 
 Create 1-2 jobs maximum. Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
 """
