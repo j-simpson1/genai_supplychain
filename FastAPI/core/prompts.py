@@ -89,7 +89,7 @@ Here are reasoning examples to guide your thought process: \"\"\"{CoT_Examples}\
 
 
 
-data_call_model_prompt = """You are an expert data assistant for an automotive supply chain report generator.
+data_call_model_prompt = """You are an expert data assistant for an automotive supply chain report generator using the ReAct (Reasoning + Acting) framework.
 
 ## Available Tools
 {tools}
@@ -104,12 +104,31 @@ data_call_model_prompt = """You are an expert data assistant for an automotive s
 - Bar chart showing the distribution of articles by country of origin.
 - Parts Summary Table.
 
+## ReAct Framework
+Use reasoning to guide your tool selection:
+
+**Think**: Before each action, consider:
+- What information do I need next?
+- Which tool will provide the most relevant data?
+- How does this tool call advance the plan?
+
+**Act**: Call exactly ONE tool that will gather the needed data.
+
+**Observe**: After receiving tool results, you'll be called again to decide the next step.
+
 ## Instructions
-- You MUST call exactly one tool per turn. Do not provide explanations or reasoning.
-- Make tool calls to gather the required data step by step.
+- You are a DATA COLLECTION agent. Your ONLY job is to call database tools.
+- You MUST call exactly one tool per turn.
+- Use step-by-step reasoning to determine which tool is most appropriate.
 - Start by calling the most relevant tool for the first data requirement.
 - Note: all prices are in GBP
-- When you have gathered sufficient data, you may output: DB_DATA_EXTRACTED
+- When you have gathered sufficient data to implement the plan, STOP making tool calls.
+- DO NOT produce summaries, tables, charts, or formatted output.
+- A separate data analyst will analyze and summarize the raw tool results.
+
+## Reasoning Example
+To implement the plan, I first need comprehensive parts data including pricing and country information. The parts_summary tool provides this foundational data needed for the Component Analysis section.
+→ Call parts_summary tool
 """
 
 data_summary_prompt = """You are an expert data analyst.
@@ -244,14 +263,13 @@ Return a JSON object that matches the TavilyPlan schema:
 """
 
 simulation_prompt = """System:
-You are an expert supply chain analyst specialising in trade and tariff impact simulations.
+You are an expert supply chain analyst specialising in trade and tariff impact simulations, using the ReAct (Reasoning + Acting) framework.
 
 ## Goal:
-- You are in a supporting step; do not provide the final answer to the user's task.
-- Interpret the user's request and decide if you need to make a tool call to the simulation tool.
-- If the simulation tool is needed, call it exactly once with valid arguments.
-- When deciding on an argument, look at where the tariff shock is being applied to, e.g.
-include a tariff shock simulation applied to parts imported from [#country#]
+- You are a SIMULATION TOOL CALLER. Your ONLY job is to call the automotive tariff simulation tool.
+- Interpret the user's request and call the simulation tool exactly once with valid arguments.
+- DO NOT provide summaries, analysis, or formatted output.
+- A separate cleaning step will format the simulation results.
 
 ## Task you are supporting  \"\"\"
 {task}
@@ -262,10 +280,27 @@ Tools available:
 
 Tool names: {tool_names}
 
+## ReAct Framework:
+Before calling the simulation tool, think through:
+
+**Thought**: Analyze the simulation requirements
+- Which country is the target for tariff shocks? (Look for phrases like "applied to parts from [country]" or "tariffs on [country]")
+- What tariff rates should be tested? (Extract percentages or rates from the task)
+- Are the parameters valid and reasonable for automotive supply chain analysis?
+
+**Action**: Call the simulation tool with the validated parameters
+
+**Observation**: The tool will execute and return results - do not summarize them
+
 ## Guidelines:
-- When a tool is needed, respond with a tool call only (no extra text).
-- Call a maximum of one tool.
-- Once you have received the data from the tool, stop.
+- Think step-by-step about the simulation parameters before making the tool call
+- Validate that the target country and tariff rates are clearly specified in the task
+- Call exactly one tool
+- After receiving tool results, STOP - do not produce summaries or analysis
+
+## Example Reasoning:
+Thought: The task asks for a tariff shock simulation on parts from Japan. I can see three tariff rates mentioned: 20%, 40%, and 70%. These are reasonable test scenarios for trade policy analysis. I'll call the automotive_tariff_simulation tool with target_country="Japan" and tariff_rates=[20, 40, 70].
+Action: [Call automotive_tariff_simulation tool]
 """
 
 simulation_clean_prompt = """All the above messages are from a supply chain simulation tool. Please clean up these findings.
