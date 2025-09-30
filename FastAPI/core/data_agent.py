@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import ToolMessage, SystemMessage
+from langchain_core.messages import ToolMessage, SystemMessage, HumanMessage
 
 from FastAPI.core.state import AgentState
 from FastAPI.core.data_tools import (
@@ -162,7 +162,15 @@ def data_analyst_node(state: AgentState) -> Dict[str, str]:
     Returns:
         Dictionary with db_summary key containing the analysis summary
     """
-    db_content_text = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
+    # Extract only ToolMessage content (actual data results)
+    db_content = state.get("db_content", [])
+
+    tool_results = []
+    for msg in db_content:
+        if isinstance(msg, ToolMessage):
+            tool_results.append(f"Tool: {msg.name}\nResults: {msg.content}")
+
+    db_content_text = "\n\n".join(tool_results) if tool_results else "No data available from database agent."
 
     # Encourage calculator use without touching the global prompt template
     tool_hint = (
@@ -171,9 +179,12 @@ def data_analyst_node(state: AgentState) -> Dict[str, str]:
         "Return a concise executive summary at the end."
     )
 
-    prompt = data_summary_prompt.format(db_content=db_content_text) + "\n\n" + tool_hint
+    system_prompt = data_summary_prompt + "\n\n" + tool_hint
 
-    messages = [SystemMessage(content=prompt)]
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=f"Here is the data from the database agent:\n\n{db_content_text}")
+    ]
     response = data_analyst_model.invoke(messages)
 
     tool_messages = []
