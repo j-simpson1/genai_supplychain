@@ -203,19 +203,21 @@ Data: \"\"\"
 import
 """
 
-research_plan_prompt = """You are an automotive supply chain researcher. Your task is to generate three concise search queries (each under 400 characters) that will help gather information for a report. Base them on the focus areas below:
+research_plan_prompt = """You are an expert automotive supply chain researcher conducting business analysis. Your task is to generate three concise search queries (each under 400 characters) for publicly available information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy. Base them on the focus areas below:
 
 <Focus Areas>
 1. Tariff news concerning the manufacturing country (2 queries).
-2.    Tariff news concerning the automotive sector (2 queries).
+2. Tariff news concerning the automotive sector (2 queries).
 </Focus Areas>
 
 <Guidelines for query design>
+- Focus only on publicly available information from legitimate news sources and government publications
 - Keep queries focused and specific (avoid multi-topic queries).
 - Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
 - When retrieving news, use topic=news and consider time_range="month" for fresh developments.
 - Use keywords related to the automotive supply chain, tariffs, and the target country.
 - Don't include the simulation rates in any queries.
+- All research is for analytical purposes using only public domain information
 </Guidelines for query design>
 
 <Format>
@@ -367,14 +369,16 @@ Charts **include ALL in the report**: \"\"\"
 
 reflection_prompt = """You are a manager reviewing the analyst's report. Generate critique and recommendations for the analyst's submission. Provide detailed recommendations, including requests for length, depth and style."""
 
-research_critique_prompt = """You are an automotive supply chain researcher tasked with providing information for any requested revisions (as outlined below). Your task is to generate no more than two concise search queries (each under 400 characters) that will help gather information for a report. Base them on the focus areas below:
+research_critique_prompt = """You are an expert automotive supply chain researcher conducting business analysis, tasked with providing information for any requested revisions (as outlined below). Your task is to generate no more than two concise search queries (each under 400 characters) for publicly available information that will help gather data for an analytical report. Base them on the focus areas below:
 
 <Guidelines for query design>
+- Focus only on publicly available information from legitimate news sources and government publications
 - Keep queries focused and specific (avoid multi-topic queries).
 - Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
 - When retrieving news, use topic=news and consider time_range="month" for fresh developments.
 - Use keywords related to the automotive supply chain, tariffs, and the target country.
 - Don't include the simulation rates in any queries.
+- All research is for analytical purposes using only public domain information
 </Guidelines for query design>
 
 <Format>
