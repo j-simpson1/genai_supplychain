@@ -92,10 +92,23 @@ def traced_tavily_search(params: dict) -> dict:
 
 async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
-    plan: TavilyPlan = planner.invoke([
-        SystemMessage(content=research_critique_prompt),
-        HumanMessage(content=state['critique'])
-    ])
+    try:
+        plan: TavilyPlan = planner.invoke([
+            SystemMessage(content=research_critique_prompt),
+            HumanMessage(content=state['critique'])
+        ])
+
+        # Validate that we got valid jobs
+        if not plan.jobs or len(plan.jobs) == 0:
+            raise ValueError("No search queries generated")
+
+    except Exception as e:
+        print(f"Warning: Structured output failed ({e}). Using fallback queries.")
+        # Fallback: Generate generic tariff queries for critique research
+        plan = TavilyPlan(jobs=[
+            TavilyJob(query="automotive supply chain tariff news recent developments"),
+            TavilyJob(query="manufacturing tariffs trade policy automotive sector")
+        ])
 
     jobs = [enrich_job(job) for job in plan.jobs[:6]]
 

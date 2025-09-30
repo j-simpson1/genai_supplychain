@@ -35,13 +35,14 @@ from FastAPI.core.prompts import (
     plan_prompt,
     reflection_prompt,
     writers_prompt,
+    revision_writers_prompt,
     chart_planning_prompt
 )
 from FastAPI.core.research_agent import research_agent
 from FastAPI.core.research_critique import research_critique_agent
 from FastAPI.core.simulation_agent import simulation_agent
 from FastAPI.core.deep_research_agent import deep_research_agent
-from FastAPI.core.state import AgentState
+from FastAPI.core.state import AgentState, ReportCritique
 from FastAPI.core.utils import serialize_state
 from FastAPI.document_builders.pdf_creator import save_to_pdf
 from FastAPI.document_builders.word_creator import save_to_word
@@ -123,46 +124,144 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
-    deep_research = "\n\n".join(state.get("deep_research_content", []))
+    deep_research = state.get("deep_research_summary", "")  # Use summary instead of raw content
     chart_metadata = state.get("chart_metadata", [])
     simulation_messages = state.get("clean_simulation", [])
 
     charts = "\n\n".join(
         [f"\n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
-    formatted_writers_prompt = writers_prompt.format(
-        CoT_writing_examples=chain_of_thought_writing_examples,
-        task=state['task'],
-        plan=state['plan'],
-        db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
-        web=web,
-        deep_research=deep_research,
-        charts=charts,
-        simulation=simulation_messages
-    )
+    # Check if this is a revision (has previous draft and critique)
+    previous_draft = state.get("draft", "")
+    critique = state.get("critique", "")
 
-    initial_response = model.invoke([HumanMessage(content=formatted_writers_prompt)])
+    if previous_draft and critique:
+        # Revision mode - use revision prompt with feedback
+        formatted_writers_prompt = revision_writers_prompt.format(
+            CoT_writing_examples=chain_of_thought_writing_examples,
+            previous_draft=previous_draft,
+            critique=critique,
+            task=state['task'],
+            plan=state['plan'],
+            db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
+            web=web,
+            deep_research=deep_research,
+            charts=charts,
+            simulation=simulation_messages
+        )
+    else:
+        # Initial draft mode - use standard prompt
+        formatted_writers_prompt = writers_prompt.format(
+            CoT_writing_examples=chain_of_thought_writing_examples,
+            task=state['task'],
+            plan=state['plan'],
+            db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
+            web=web,
+            deep_research=deep_research,
+            charts=charts,
+            simulation=simulation_messages
+        )
+
+    response = model.invoke([HumanMessage(content=formatted_writers_prompt)])
 
     return {
-        "draft": initial_response.content,
+        "draft": response.content,
         "revision_number": state.get("revision_number", 1) + 1
     }
 
-def reflection_node(state: AgentState) -> Dict[str, str]:
-    """Generate critique of the current draft."""
-    messages = [
-        SystemMessage(content=reflection_prompt),
-        HumanMessage(content=state['draft'])
-    ]
-    response = model.invoke(messages)
-    return {"critique": response.content}
+def reflection_node(state: AgentState) -> Dict[str, Any]:
+    """Generate critique of the current draft with structured quality assessment."""
+    db_analyst = state.get("db_summary", "")
+    db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
+    web = "\n\n".join(state.get("web_content", []))
+    deep_research = state.get("deep_research_summary", "")  # Use summary instead of raw content
+    chart_metadata = state.get("chart_metadata", [])
+    simulation_messages = state.get("clean_simulation", [])
+
+    charts = "\n\n".join(
+        [f"\n[[FIGURE:{item['id']}]]" for item in chart_metadata])
+
+    formatted_reflection_prompt = reflection_prompt.format(
+        task=state['task'],
+        plan=state['plan'],
+        draft=state['draft'],
+        db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
+        web=web,
+        deep_research=deep_research,
+        simulation=simulation_messages,
+        charts=charts
+    )
+
+    # Use structured output for critique with fallback
+    try:
+        critique_model = model.with_structured_output(ReportCritique)
+        critique_obj = critique_model.invoke([HumanMessage(content=formatted_reflection_prompt)])
+
+        # Calculate average quality score
+        avg_score = (
+            critique_obj.quality_score +
+            critique_obj.completeness +
+            critique_obj.accuracy
+        ) / 3.0
+
+        # Format issues as bullet points for readability
+        issues_text = "\n".join([f"- {issue}" for issue in critique_obj.issues]) if critique_obj.issues else "None"
+
+        critique_text = f"""Quality Score: {critique_obj.quality_score}/10
+                            Completeness: {critique_obj.completeness}/10
+                            Accuracy: {critique_obj.accuracy}/10
+                            Average Score: {avg_score:.1f}/10
+                            
+                            Issues to Address:
+                            {issues_text}
+                            
+                            Recommendations:
+                            {critique_obj.recommendations}
+                            
+                            Ready for Final: {'Yes' if critique_obj.ready_for_final else 'No'}"""
+
+        return {
+            "critique": critique_text,
+            "critique_score": avg_score,
+            "ready_for_final": critique_obj.ready_for_final
+        }
+
+    except Exception as e:
+        print(f"Warning: Structured critique failed ({e}). Using text-based critique.")
+        # Fallback to original text-based critique
+        response = model.invoke([HumanMessage(content=formatted_reflection_prompt)])
+        return {
+            "critique": response.content,
+            "critique_score": 5.0,  # Neutral score
+            "ready_for_final": False  # Conservative default - continue revising
+        }
 
 
 def should_continue(state: AgentState) -> str:
-    """Determine whether to continue revising or finish the report."""
-    if state["revision_number"] > state["max_revisions"]:
+    """Determine whether to continue revising or finish the report based on quality metrics."""
+    revision_num = state["revision_number"]
+    max_revisions = state["max_revisions"]
+    critique_score = state.get("critique_score", 0.0)
+    ready_for_final = state.get("ready_for_final", False)
+
+    # Quality threshold for early stopping (7.5/10 average score)
+    QUALITY_THRESHOLD = 7.5
+
+    # Determine if we should stop
+    hit_max_revisions = revision_num > max_revisions
+    quality_satisfied = (ready_for_final and critique_score >= QUALITY_THRESHOLD and revision_num > 1)
+
+    if hit_max_revisions or quality_satisfied:
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Determine stop reason for logging
+        if quality_satisfied:
+            reason = f"quality threshold met (score: {critique_score:.1f}/10)"
+        else:
+            reason = f"max revisions reached (score: {critique_score:.1f}/10)"
+
+        print(f"\n✓ Report generation complete - {reason} after {revision_num} revision(s)\n")
 
         # Save final reports with timestamps
         print(save_to_pdf(
@@ -177,6 +276,7 @@ def should_continue(state: AgentState) -> str:
         ))
         return END
     else:
+        print(f"\n→ Continuing to revision {revision_num + 1} (score: {critique_score:.1f}/10, improvements needed)\n")
         return "reflect"
 
 def simulation_should_continue(state: AgentState) -> str:
@@ -251,14 +351,18 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
             'max_revisions': MAX_REVISIONS,
             'revision_number': 1,
             'db_content': [],
+            'db_summary': '',
             'web_content': [],
             'deep_research_content': [],
+            'deep_research_summary': '',
             'raw_simulation': [],
             'clean_simulation': '',
             'chart_metadata': [],
             'plan': '',
             'draft': '',
             'critique': '',
+            'critique_score': 0.0,
+            'ready_for_final': False,
             'chart_code': '',
             'chart_generation_success': False,
             'chart_generation_error': '',

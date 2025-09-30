@@ -222,37 +222,29 @@ Data: \"\"\"
 import
 """
 
-research_plan_prompt = """You are an expert automotive supply chain researcher conducting business analysis. Your task is to generate three concise search queries (each under 400 characters) for publicly available information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy. Base them on the focus areas below:
+research_plan_prompt = """You are an expert automotive supply chain researcher conducting business analysis. Your task is to generate search queries (each under 400 characters) for publicly available information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy.
 
-<Focus Areas>
-1. Tariff news concerning the manufacturing country (2 queries).
-2. Tariff news concerning the automotive sector (2 queries).
-</Focus Areas>
+Generate 3-4 search queries covering:
+1. Tariff news concerning the manufacturing country
+2. Tariff news concerning the automotive sector
 
-<Guidelines for query design>
+Guidelines:
 - Focus only on publicly available information from legitimate news sources and government publications
-- Keep queries focused and specific (avoid multi-topic queries).
-- Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
-- When retrieving news, use topic=news and consider time_range="month" for fresh developments.
-- Use keywords related to the automotive supply chain, tariffs, and the target country.
-- Don't include the simulation rates in any queries.
+- Keep queries focused and specific (avoid multi-topic queries)
+- Use keywords related to the automotive supply chain, tariffs, and the target country
+- Don't include the simulation rates in any queries
 - All research is for analytical purposes using only public domain information
-</Guidelines for query design>
 
-<Format>
-Return a JSON object that matches the TavilyPlan schema:
-{{
+You must respond with a valid JSON object matching this exact structure:
+{
   "jobs": [
-    {{
-      "query": "...",
-      "time_range": "month|week|day|year|null"
-    }}
+    {
+      "query": "your search query here (max 400 chars)"
+    }
   ]
-}}
-- Create three jobs.
-- Keep each query < 400 chars and single-topic.
-- Optional: You may specify "include_domains" if you want to target specific sources (e.g., ["trade.gov", "reuters.com"]).
-</Format>
+}
+
+Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
 """
 
 simulation_prompt = """System:
@@ -459,34 +451,274 @@ Charts **include ALL in the report**: \"\"\"
 \"\"\"
 """
 
-reflection_prompt = """You are a manager reviewing the analyst's report. Generate critique and recommendations for the analyst's submission. Provide detailed recommendations, including requests for length, depth and style."""
+revision_writers_prompt = """You are an expert research analyst working in the automotive supply chain sector tasked with revising a professional-level report based on manager feedback. The report MUST be between 600 and 800 words. Generate the best report possible using the feedback, previous draft, and data below. Prioritise addressing the feedback while following the instructions in the plan.
 
-research_critique_prompt = """You are an expert automotive supply chain researcher conducting business analysis, tasked with providing information for any requested revisions (as outlined below). Your task is to generate no more than two concise search queries (each under 400 characters) for publicly available information that will help gather data for an analytical report. Base them on the focus areas below:
+REVISION CONTEXT:
 
-<Guidelines for query design>
-- Focus only on publicly available information from legitimate news sources and government publications
-- Keep queries focused and specific (avoid multi-topic queries).
-- Where possible, restrict results to relevant, reputable domains (e.g., trade.gov, wsj.com, bloomberg.com, reuters.com) for tariff/industry news.
-- When retrieving news, use topic=news and consider time_range="month" for fresh developments.
-- Use keywords related to the automotive supply chain, tariffs, and the target country.
-- Don't include the simulation rates in any queries.
-- All research is for analytical purposes using only public domain information
-</Guidelines for query design>
+Previous Draft:
+\"\"\"
+{previous_draft}
+\"\"\"
 
-<Format>
-Return a JSON object that matches the TavilyPlan schema:
-{{
-  "jobs": [
-    {{
-      "query": "...",
-      "topic": "news|general",
-      "time_range": "month|week|day|year|null"
-    }}
+Manager Feedback:
+\"\"\"
+{critique}
+\"\"\"
+
+REVISION INSTRUCTIONS:
+1. Review the manager feedback carefully and identify what needs improvement
+2. Preserve sections that are working well (unless feedback specifically requests changes)
+3. Work through the full reasoning process below to ensure accuracy and completeness
+4. Address each point raised in the feedback
+5. If new research was requested and provided, incorporate it from the data below
+6. Maintain consistency with any preserved sections
+
+Here are reasoning examples you should follow: \"\"\"
+{CoT_writing_examples}
+\"\"\"
+
+Before writing, work through this reasoning process systematically:
+
+STEP 1 - Extract and Verify Critical Numbers:
+From Database Insights:
+- How many parts total? What's the combined cost (excl/incl VAT)?
+- Most expensive part and its price?
+- How many parts are taxable vs non-taxable?
+- Top 3 countries by article count with specific numbers?
+- Top 3 suppliers by article count?
+
+From Simulation Results:
+- What are the three tariff rates tested (extract exact percentages)?
+- What's the target country for tariffs?
+- What's the VAT rate and how many parts does it affect?
+- For EACH scenario: Initial cost, Final cost, Absolute increase, Percentage increase?
+- How many suppliers total vs affected?
+
+From Web Research:
+- What specific tariff news is mentioned (dates, countries, rates)?
+- Are there any policy changes or trade negotiations relevant to the target country?
+
+From Deep Research:
+- Which alternative suppliers are identified with pricing?
+- What regions/countries offer alternatives?
+
+Cross-check: Do simulation costs align with database totals? Any contradictions?
+
+STEP 2 - Classify Impact According to Plan:
+Calculate the highest percentage increase from simulation.
+Assign category:
+- Small: <5%
+- Moderate: 5-10%
+- Large: 10-20%
+- Severe: >20%
+
+STEP 3 - Map Data to Plan Sections:
+Review the plan section-by-section:
+- Executive Summary: What are the 2-3 most important findings?
+- Key Points: Extract the 4 required bullets with exact figures
+- Component Analysis: Which database stats belong here? Which charts support this?
+- Tariff Simulation: Which simulation results belong here? Which charts support this?
+- Tariff News: Which web sources are relevant? Plan citations.
+- Alternative Suppliers: Which deep research findings fit? Plan citations.
+- Impact Assessment: Use classification from Step 2
+- Recommendations: Based on impact level, what actions make sense?
+
+STEP 4 - Plan Chart Placement:
+You have multiple charts that MUST all be included:
+- Which charts go in Component Analysis section?
+- Which charts go in Tariff Simulation section?
+- Verify every chart ID from the charts list will be placed in a figures array
+
+STEP 5 - Plan Citations:
+List all Web Research and Deep Research sources.
+Assign sequential numbers (1, 2, 3, ...) with NO gaps.
+Map each citation to specific claims in your planned text.
+
+STEP 6 - Structure Check:
+- Does your planned structure follow the plan exactly?
+- Are all required elements present (bullet points, charts, citations)?
+- Will the word count fall between 600-800 words?
+- Have you avoided repeating figures between main text and bullet points?
+- Have you avoided speculation and stuck to provided data?
+- Have you addressed all points in the manager feedback?
+
+STEP 7 - Write the Revised Report:
+Now compose the revised report section-by-section in JSON format, using the reasoning above.
+Place charts only in "figures" arrays, never in "content" or "bullet_points".
+Include inline citations [1], [2], etc. in the content text.
+
+<Guidelines>
+- Don't include bullet points in the 'Executive Summary', 'Introduction', 'Conclusion and Recommendations' sections.
+- Use the plan to guide you on the structure of the report.
+- Prioritise quantitative analysis where possible.
+- Include ALL the charts in the report. However, use the charts as supplementary items to the points requested in the research plan to be included in the text.
+- All prices should be quoted in GBP (£).
+- In your report, you should return inline citations for each source cited.
+- All elements from Web Research should be cited
+- Only include references which are cited and include them in the References section.
+- Don't repeat figures in the main paragraphs and bullet points.
+- Don't speculate on figures; only use the information you are provided with.
+- Address all feedback points from the manager while maintaining report quality.
+</Guidelines>
+
+<Important Guidelines>
+**Please include ALL charts in the report
+**Address all points raised in the manager feedback
+</Important Guidelines>
+
+<Output Rules>
+- Important** Provide the output in a JSON format adhering to the structure below:
+{{{{
+  "title": "<Report Title>",
+  "sections": [
+    {{{{
+      "heading": "<Section Heading>",
+      "content": "<Plain text or markdown content>",
+      "figures": ["[[FIGURE:chart1]]", "[[FIGURE:chart2]]"],
+      "bullet_points": [
+        "<First bullet point>",
+        "<Second bullet point>"
+      ]
+    }}}}
   ]
-}}
-- Create at most two jobs.
-- Keep each query < 400 chars and single-topic.
-- Optional: You may specify "include_domains" if you want to target specific sources (e.g., ["trade.gov", "reuters.com"]).
-</Format>
+}}}}
+- **Charts must be included in the `figures` field as an array of placeholders like [[FIGURE:chart_id]]. Never put charts in the content field or bullet points. The figures array should contain chart placeholders that will be replaced with actual charts in the final report.
+- List of All Relevant Sources (with citations in the report)
+- **Bold text**: Wrap important text in double asterisks **like this** (use sparingly)
+- Don't include any subsections in the report.
+</Output Rules>
+
+<Citation Rules>
+- Assign each unique URL a single citation number in your text
+- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list, regardless of which sources you choose
+- Example format:
+  [1] Source Title: URL
+  [2] Source Title: URL
+- Only cite sources from Web Research and Deep Research
+</Citation Rules>
+
+Utilise all the information below as needed:
+
+
+------
+
+Task: \"\"\"
+{task}
+\"\"\"
+
+Plan: **important - please follow** \"\"\"
+{plan}
+\"\"\"
+
+Database Insights: \"\"\"
+{db}
+\"\"\"
+
+Web Research: \"\"\"
+{web}
+
+\"\"\"
+
+Deep Research: \"\"\"
+{deep_research}
+\"\"\"
+
+Simulation Results: \"\"\"
+{simulation}
+\"\"\"
+
+Charts **include ALL in the report**: \"\"\"
+{charts}
+\"\"\"
+"""
+
+reflection_prompt = """You are a manager reviewing the analyst's report against the original plan and available data. Provide a structured critique with quality scores and actionable recommendations.
+
+Original Task:
+\"\"\"
+{task}
+\"\"\"
+
+Research Plan:
+\"\"\"
+{plan}
+\"\"\"
+
+Current Draft:
+\"\"\"
+{draft}
+\"\"\"
+
+Available Data Sources:
+
+Database Insights:
+\"\"\"
+{db}
+\"\"\"
+
+Web Research:
+\"\"\"
+{web}
+\"\"\"
+
+Deep Research:
+\"\"\"
+{deep_research}
+\"\"\"
+
+Simulation Results:
+\"\"\"
+{simulation}
+\"\"\"
+
+Charts Available:
+\"\"\"
+{charts}
+\"\"\"
+
+Evaluate the draft against the plan and available data. You must provide a structured assessment with the following components:
+
+1. **Quality Score (1-10)**: Overall quality of writing, clarity, and professionalism
+2. **Completeness Score (1-10)**: Does the draft follow the plan structure? Are all required sections present?
+3. **Accuracy Score (1-10)**: Are the numbers and facts correctly extracted from the data sources?
+4. **Issues**: List specific issues that need to be addressed (be concrete)
+5. **Recommendations**: Detailed, actionable recommendations for improvement
+6. **Ready for Final**: Boolean - Is the report ready for finalization, or does it need another revision?
+
+Scoring Guidelines:
+- 9-10: Excellent, ready for finalization with minor or no changes
+- 7-8: Good quality, minor improvements needed
+- 5-6: Adequate but needs significant improvements
+- 3-4: Poor quality, major revisions required
+- 1-2: Unacceptable, complete rewrite needed
+
+When determining if the report is ready for final:
+- Consider if the report meets minimum quality standards (average score >= 7.5)
+- Check that all critical data points from the plan are included
+- Verify all charts are present and properly referenced
+- Ensure citations are complete and accurate
+- Confirm word count is within range (600-800 words)
+
+Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
+
+research_critique_prompt = """You are an expert automotive supply chain researcher conducting business analysis, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for publicly available information that will help gather data for an analytical report.
+
+Guidelines:
+- Focus only on publicly available information from legitimate news sources and government publications
+- Keep queries focused and specific (avoid multi-topic queries)
+- Use keywords related to the automotive supply chain, tariffs, and the target country
+- Don't include the simulation rates in any queries
+- All research is for analytical purposes using only public domain information
+
+You must respond with a valid JSON object matching this exact structure:
+{
+  "jobs": [
+    {
+      "query": "your search query here (max 400 chars)"
+    }
+  ]
+}
+
+Create 1-2 jobs maximum. Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
 """
 

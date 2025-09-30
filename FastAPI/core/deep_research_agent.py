@@ -59,22 +59,34 @@ Provide a concise, helpful answer based on typical supply chain analysis require
 """
 
 SUMMARY_PROMPT = """
-You are an expert research summarizer specializing in supply chain analysis.  
-Summarize the key deep research findings below into **no more than 200 words**.  
+You are an expert research summarizer specializing in supply chain analysis.
+Summarize the key deep research findings below into **300-400 words**.
 
-Prioritize:  
-1. Alternative suppliers and their locations  
-2. Pricing information and cost comparisons  
+Prioritize:
+1. Alternative suppliers and their locations (with company names)
+2. Pricing information and cost comparisons
+3. Export capabilities and certifications
 
 Deep Research Content:
 {research_content}
 
-<Citation Rules>
-- Assign each unique URL a single citation number in your text
-- IMPORTANT: Number sources sequentially without gaps (1,2,3,4...) in the final list, regardless of which sources you choose
-- Example format:
-  [1] Source Title: URL
-  [2] Source Title: URL
+<Citation Rules - CRITICAL>
+- The research content above already contains numbered citations with full URLs (e.g., [1] Title: https://example.com)
+- You MUST preserve these exact citations in your summary
+- When referencing information, use the same citation numbers from the source content
+- Include inline citations [1], [2], etc. throughout your summary when referencing specific information
+- At the end of your summary, include a "## References" section with ALL citations from the source content
+- Keep the exact format: [1] Source Title: Full URL
+- DO NOT create placeholder citations like "[1] Source Title: URL" - use the actual URLs from the research content
+- Number sources sequentially without gaps (1,2,3,4...)
+- Include at least 10-15 citations to ensure comprehensive coverage
+
+EXAMPLE FORMAT:
+The deep research identifies alternative suppliers for automotive braking components. In the UK, **Winnard** supplies ECE R90-approved brake discs and pads with 99% vehicle coverage [1], while **EBC Brakes** manufactures high-performance components with global distribution [2].
+
+## References
+[1] Winnard official site: https://winnard.co.uk/
+[2] EBC Brakes official website: https://www.ebcbrakes.com/
 </Citation Rules>
 """
 
@@ -110,7 +122,7 @@ async def generate_clarification(question: str, task: str) -> str:
 
 @traceable(name="deep_research.summary")
 async def generate_research_summary(research_content: str) -> str:
-    """Generate a 300-word summary of deep research findings with preserved citations."""
+    """Generate a 300-400 word summary of deep research findings with preserved citations."""
     response = await model.ainvoke([
         SystemMessage(content=SUMMARY_PROMPT.format(research_content=research_content))
     ])
@@ -133,12 +145,23 @@ async def execute_deep_research(query: str, task: str) -> str:
 
     try:
         conversation = [HumanMessage(content=query)]
-        max_iterations = 3
+        max_iterations = 2  # Reduced from 3 to 2
+
+        # Configuration to moderately reduce research depth
+        config = {
+            "configurable": {
+                "allow_clarification": False,  # Skip clarification questions for faster research
+                "max_concurrent_research_units": 3,  # Reduced from 5 to 3
+                "max_researcher_iterations": 2,  # Reduced from 3 to 2
+                "max_react_tool_calls": 4,  # Reduced from 5 to 4
+            }
+        }
 
         for i in range(max_iterations):
-            response = await deep_researcher.ainvoke({
-                "messages": conversation
-            })
+            response = await deep_researcher.ainvoke(
+                {"messages": conversation},
+                config=config
+            )
 
             content = response['messages'][-1].content
 
@@ -155,7 +178,7 @@ async def execute_deep_research(query: str, task: str) -> str:
         return f"[Deep research error: {str(e)}]"
 
 async def deep_research_summary_node(state: AgentState):
-    """Generate a 300-word summary of all deep research findings."""
+    """Generate a 300-400 word summary of all deep research findings with preserved citations."""
     try:
         deep_research_content = state.get('deep_research_content', [])
 
