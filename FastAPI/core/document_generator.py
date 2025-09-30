@@ -28,7 +28,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import StateGraph, END
 from langsmith import Client
 
-from FastAPI.core.CoT_prompting import chain_of_thought_examples
+from FastAPI.core.CoT_prompting import chain_of_thought_writing_examples
 from FastAPI.core.code_editor_agent import code_editor_agent
 from FastAPI.core.data_agent import data_agent
 from FastAPI.core.prompts import (
@@ -131,7 +131,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
         [f"\n[[FIGURE:{item['id']}]]" for item in chart_metadata])
 
     formatted_writers_prompt = writers_prompt.format(
-        CoT_examples=chain_of_thought_examples,
+        CoT_writing_examples=chain_of_thought_writing_examples,
         task=state['task'],
         plan=state['plan'],
         db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
@@ -305,10 +305,10 @@ prompt = auto_supplychain_prompt_template(
     manufacturer="Toyota",
     model="RAV4",
     component="braking system",
-    tariff_shock_country="United Kingdom",
+    tariff_shock_country="Japan",
     rates=[10, 30, 60],
-    vat_rate=7,
-    manufacturing_country="United States of America"
+    vat_rate=20,
+    manufacturing_country="United Kingdom"
 )
 
 async def target(inputs: Dict[str, Any]) -> Dict[str, str]:

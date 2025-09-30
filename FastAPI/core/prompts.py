@@ -3,7 +3,7 @@ load_dotenv()
 
 from langsmith import Client
 
-from FastAPI.core.CoT_prompting import chain_of_thought_examples
+from FastAPI.core.CoT_prompting import chain_of_thought_planning_examples, chain_of_thought_writing_examples
 
 client = Client()
 
@@ -85,7 +85,7 @@ plan_prompt = """You are an expert research analyst specialising in global autom
 </Guidelines>
 
 Here are reasoning examples to guide your thought process: \"\"\"{CoT_Examples}\"\"\"
-""".format(CoT_Examples=chain_of_thought_examples)
+""".format(CoT_Examples=chain_of_thought_planning_examples)
 
 
 
@@ -245,20 +245,13 @@ Return a JSON object that matches the TavilyPlan schema:
   "jobs": [
     {{
       "query": "...",
-      "topic": "news",
-      "search_depth": "advanced",
-      "max_results": 1,
-      "time_range": "month|week|day|year|null",
-      "include_domains": [],
-      "exclude_domains": [],
-      "chunks_per_source": 2,
-      "include_raw_content": true,
-      "include_answer": false
+      "time_range": "month|week|day|year|null"
     }}
   ]
 }}
 - Create three jobs.
 - Keep each query < 400 chars and single-topic.
+- Optional: You may specify "include_domains" if you want to target specific sources (e.g., ["trade.gov", "reuters.com"]).
 </Format>
 """
 
@@ -311,13 +304,77 @@ Make sure all relevant information is preserved - you can rewrite findings verba
 writers_prompt = """You are an expert research analyst working in the automotive supply chain sector tasked with writing a professional-level report. The report MUST be between 600 and 800 words. Generate the best report possible using the data and guidelines below. Prioritise following the instructions in the plan.
 
 Here are reasoning examples you should follow: \"\"\"
-{CoT_examples}
+{CoT_writing_examples}
 \"\"\"
 
-Before writing, think step-by-step:
-1. Summarise insights from each source (database, web, simulation).
-2. Plan the structure and flow of arguments.
-3. Write the full report based on your reasoning.
+Before writing, work through this reasoning process systematically:
+
+STEP 1 - Extract and Verify Critical Numbers:
+From Database Insights:
+- How many parts total? What's the combined cost (excl/incl VAT)?
+- Most expensive part and its price?
+- How many parts are taxable vs non-taxable?
+- Top 3 countries by article count with specific numbers?
+- Top 3 suppliers by article count?
+
+From Simulation Results:
+- What are the three tariff rates tested (extract exact percentages)?
+- What's the target country for tariffs?
+- What's the VAT rate and how many parts does it affect?
+- For EACH scenario: Initial cost, Final cost, Absolute increase, Percentage increase?
+- How many suppliers total vs affected?
+
+From Web Research:
+- What specific tariff news is mentioned (dates, countries, rates)?
+- Are there any policy changes or trade negotiations relevant to the target country?
+
+From Deep Research:
+- Which alternative suppliers are identified with pricing?
+- What regions/countries offer alternatives?
+
+Cross-check: Do simulation costs align with database totals? Any contradictions?
+
+STEP 2 - Classify Impact According to Plan:
+Calculate the highest percentage increase from simulation.
+Assign category:
+- Small: <5%
+- Moderate: 5-10%
+- Large: 10-20%
+- Severe: >20%
+
+STEP 3 - Map Data to Plan Sections:
+Review the plan section-by-section:
+- Executive Summary: What are the 2-3 most important findings?
+- Key Points: Extract the 4 required bullets with exact figures
+- Component Analysis: Which database stats belong here? Which charts support this?
+- Tariff Simulation: Which simulation results belong here? Which charts support this?
+- Tariff News: Which web sources are relevant? Plan citations.
+- Alternative Suppliers: Which deep research findings fit? Plan citations.
+- Impact Assessment: Use classification from Step 2
+- Recommendations: Based on impact level, what actions make sense?
+
+STEP 4 - Plan Chart Placement:
+You have multiple charts that MUST all be included:
+- Which charts go in Component Analysis section?
+- Which charts go in Tariff Simulation section?
+- Verify every chart ID from the charts list will be placed in a figures array
+
+STEP 5 - Plan Citations:
+List all Web Research and Deep Research sources.
+Assign sequential numbers (1, 2, 3, ...) with NO gaps.
+Map each citation to specific claims in your planned text.
+
+STEP 6 - Structure Check:
+- Does your planned structure follow the plan exactly?
+- Are all required elements present (bullet points, charts, citations)?
+- Will the word count fall between 600-800 words?
+- Have you avoided repeating figures between main text and bullet points?
+- Have you avoided speculation and stuck to provided data?
+
+STEP 7 - Write the Report:
+Now compose the report section-by-section in JSON format, using the reasoning above.
+Place charts only in "figures" arrays, never in "content" or "bullet_points".
+Include inline citations [1], [2], etc. in the content text.
 
 <Guidelines>
 - Don't include bullet points in the 'Executive Summary', 'Introduction', 'Conclusion and Recommendations' sections.
@@ -423,19 +480,13 @@ Return a JSON object that matches the TavilyPlan schema:
     {{
       "query": "...",
       "topic": "news|general",
-      "search_depth": "advanced",
-      "max_results": 1,
-      "time_range": "month|week|day|year|null",
-      "include_domains": [],
-      "exclude_domains": [],
-      "chunks_per_source": 2,
-      "include_raw_content": true,
-      "include_answer": false
+      "time_range": "month|week|day|year|null"
     }}
   ]
 }}
 - Create at most two jobs.
 - Keep each query < 400 chars and single-topic.
+- Optional: You may specify "include_domains" if you want to target specific sources (e.g., ["trade.gov", "reuters.com"]).
 </Format>
 """
 
