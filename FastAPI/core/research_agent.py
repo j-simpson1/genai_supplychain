@@ -89,10 +89,13 @@ def traced_tavily_search(params: dict):
 
 async def research_plan_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
+    print("\nStarting research_plan_node...")
     try:
+        print("  → Generating search queries with planner...")
         plan: TavilyPlan = planner.invoke([
             HumanMessage(content=research_plan_prompt.format(task=state['task']))
         ])
+        print(f"Generated {len(plan.jobs)} search queries")
 
         # Validate that we got valid jobs
         if not plan.jobs or len(plan.jobs) == 0:
@@ -100,6 +103,7 @@ async def research_plan_node(state: AgentState):
 
     except Exception as e:
         print(f"Warning: Structured output failed ({e}). Using fallback queries.")
+        traceback.print_exc()
         # Fallback: Generate generic tariff queries
         plan = TavilyPlan(jobs=[
             TavilyJob(query="automotive supply chain tariff news recent developments"),
@@ -108,10 +112,12 @@ async def research_plan_node(state: AgentState):
         ])
 
     jobs = [enrich_job(job) for job in plan.jobs[:6]]
+    print(f"  → Enriched {len(jobs)} jobs, starting Tavily searches...")
 
     content = state.get('web_content', [])
-    for job in jobs:
+    for idx, job in enumerate(jobs, 1):
         try:
+            print(f"  → [{idx}/{len(jobs)}] Searching: {job.query[:60]}...")
             params = {
                 "query": job.query,
                 "topic": job.topic,
@@ -126,6 +132,7 @@ async def research_plan_node(state: AgentState):
             }
 
             response = traced_tavily_search(params)
+            print(f"Got {len(response.get('results', []))} results")
 
             for result in response.get("results", []):
                 content.append(
@@ -135,8 +142,10 @@ async def research_plan_node(state: AgentState):
                 )
 
         except Exception as e:
+            print(f"Tavily error: {e}")
             content.append(f"[Tavily error on '{job.query}': {e}]")
 
+    print(f"Research complete - collected {len(content)} content items\n")
     return {"web_content": content}
 
 
