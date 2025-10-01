@@ -21,8 +21,8 @@ A comprehensive platform for AI-powered supply chain analysis and automotive ind
 │   │   ├── research_agent.py        # Research and analysis agent
 │   │   ├── simulation_agent.py      # Market simulation agent
 │   │   ├── data_agent.py            # Data processing agent
-│   │   ├── database_agent_react.py  # Database interaction agent
 │   │   ├── deep_research_agent.py   # Advanced research capabilities
+│   │   ├── research_critique.py     # Research refinement agent
 │   │   └── code_editor_agent.py     # Code analysis and editing
 │   ├── automotive_simulation/  # Market simulation models
 │   ├── routes/                # API route definitions
