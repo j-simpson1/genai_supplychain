@@ -198,6 +198,7 @@ async def deep_research_summary_node(state: AgentState):
 
 async def deep_research_node(state: AgentState):
     """Execute deep research analysis for supply chain insights."""
+    print('\nDeep Research Agent is running and finding alternative suppliers. Expect to wait at least 5 - 10 minutes.\n')
     try:
         db_content = state.get('db_content', [])
         query = await generate_deep_research_query(state['task'], db_content)
