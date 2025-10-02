@@ -23,7 +23,8 @@ plan_prompt = """You are an expert research analyst specialising in global autom
 3. Component Analysis
   - Use only Database Insights content.
   - Write a main paragraph (150–250 words) including:
-    - Number of parts and their combined price (including and excluding VAT). Note Q1 applied to base prices.
+    - Include this methodology explanation: "Bottom quartile (Q1) prices are calculated on base prices (before tariffs and VAT), selecting suppliers at or below the 25th percentile and averaging those prices for cost-effective sourcing."
+    - Number of parts and their combined price (including and excluding VAT).
     - Most expensive part (£price).
     - Number of taxable parts.
     - Top 3 countries of origin for articles, e.g. [Country1] ([No. articles] articles), [Country2] ([No. articles] articles), [Country3] ([No. articles] articles).
@@ -37,11 +38,12 @@ plan_prompt = """You are an expert research analyst specialising in global autom
 4. Tariff Simulation
   - Use only Simulation Results content.
   - Write a paragraph (150–250 words) including:
+    - Include this methodology explanation: "Bottom quartile (Q1) suppliers are recalculated using final prices (after tariffs and VAT), meaning the optimal supplier set can change under different tariff scenarios."
     - The three tariff rates tested in the simulation and the target country applying the tariffs.
     - Share of impacted articles by the tariffs (i.e. impacted/total).
     - VAT rate being applied by the manufacturing country
   - Bullet Points:
-    - Cost breakdown before the tariff shock, e.g. Base Cost (£cost), Tariff Cost (£cost), VAT Cost (£cost) and Total Cost (£cost). Note Q1 applied to final prices.
+    - Cost breakdown before the tariff shock, e.g. Base Cost (£cost), Tariff Cost (£cost), VAT Cost (£cost) and Total Cost (£cost).
     - Cost impact for each of the simulated tariff shocks, e.g. [tariffRate1]: initial (£cost), final (£cost), increase (£increase) and % increase
   - Introduce both:
     - Cost Progression Chart: Tariff applied to a fixed Q1 supplier set.
@@ -673,6 +675,9 @@ Charts Available:
 \"\"\"
 {charts}
 \"\"\"
+
+Q1 Methodology:
+Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional - the simulation models how optimal suppliers change when tariffs affect relative costs. Both sections should explain their specific Q1 application. If these explanations are missing from the draft, add them to your recommendations. Do NOT flag this as inconsistent.
 
 Evaluate the draft against the plan and available data. You must provide a structured assessment with the following components:
 
