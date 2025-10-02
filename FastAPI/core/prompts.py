@@ -694,12 +694,14 @@ Focus your critique primarily on:
 2. **Missing charts**: Are all charts specified in the plan present in the appropriate figures arrays?
 3. **Missing critical data**: Are key data points explicitly required by the plan included?
 4. **Citations and references**: Are all sources properly cited with inline citations [1], [2], etc.? Are all cited sources included in the References section with correct formatting?
+5. **Research quality**: Is there insightful web research on tariff news or deep research on alternative suppliers not already included? Flag if important available research is missing.
 
 Important Context:
 - Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders, never in content or bullet_points. Verify all required charts from the plan appear in figures arrays. Empty figures arrays are acceptable for sections without charts.
 - Parts vs Articles: "Parts" refers to distinct component types. "Articles" refers to individual supplier offerings. The report may correctly reference both - this is not an error.
 - Word count flexibility: Target ranges (150-250 words per section, 600-800 total) are guidelines, not strict limits. Do not penalize reports that are 10-20% outside these ranges if the content is complete and well-written.
 - Q1 Methodology: Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Do NOT flag this as inconsistent.
+- Internal references: The report does NOT need reference the internal parts database or simulation tools.
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
