@@ -183,7 +183,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
     return {
         "draft": response.content,
-        "revision_number": state.get("revision_number", 1) + 1
+        "revision_number": state.get("revision_number", 0) + 1
     }
 
 def reflection_node(state: AgentState) -> Dict[str, Any]:
@@ -375,7 +375,7 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
         initial_state = {
             'task': messages,
             'max_revisions': MAX_REVISIONS,
-            'revision_number': 1,
+            'revision_number': 0,
             'db_content': [],
             'db_summary': '',
             'web_content': [],
