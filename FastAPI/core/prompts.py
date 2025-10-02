@@ -179,7 +179,7 @@ Create a table summarising all parts with the following columns:
 - Most Common Country of Origin
 - Line Item Total Excl VAT
 - Percentage of Total Cost
-Important: Enable text wrapping for all table cells to ensure long text content is displayed properly.
+- For long column headers, split them across multiple lines using \n to fit the table width.
 </Chart3>
 
 Database summary: \"\"\"
@@ -208,7 +208,11 @@ generate_chart_prompt = """You are a data visualisation expert. Generate a Pytho
 - Use Matplotlib only. Do NOT import seaborn.
 - Always save the chart with the same name as the chart_id.
 - When designing the chart, use professional styling, ideally using Hex colours #4E82B2, #0B2447 or similar.
-- For table visualizations: Enable text wrapping in table cells by setting the cell text with appropriate properties (e.g., wrap=True or by adjusting cell dimensions to accommodate longer text).
+- For table visualizations:
+  * Set figure size to scale with number of rows: figsize=(12, 0.6 * num_rows + 2)
+  * Split long column headers across multiple lines using \n (e.g., "Most Common\nCountry of Origin")
+  * Use appropriate font size (9-11pt) to ensure all content is visible
+  * Adjust column widths if needed to accommodate text
 </Guidelines>
 
 Chart requirement: \"\"\"
@@ -229,8 +233,8 @@ Task: \"\"\"
 \"\"\"
 
 Generate 3-4 search queries covering:
-1. Tariff news concerning the manufacturing country
-2. Tariff news concerning the automotive sector
+1. Tariff news and policy changes concerning the manufacturing country
+2. Automotive sector-specific tariff impacts and trade developments
 
 Guidelines:
 - Keep queries focused and specific (avoid multi-topic queries)
