@@ -152,8 +152,8 @@ async def execute_deep_research(query: str, task: str) -> str:
             "configurable": {
                 "allow_clarification": False,  # Skip clarification questions for faster research
                 "max_concurrent_research_units": 2,  # Reduced from 5 to 2
-                "max_researcher_iterations": 2,  # Reduced from 3 to 2
-                "max_react_tool_calls": 3,  # Reduced from 5 to 3
+                "max_researcher_iterations": 1,  # Reduced from 3 to 1 (single-pass, no follow-ups)
+                "max_react_tool_calls": 2,  # Reduced from 5 to 2 (fewer searches per topic)
             }
         }
 
