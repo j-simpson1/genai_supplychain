@@ -277,7 +277,7 @@ def should_continue(state: AgentState) -> str:
         return END
     else:
         print(f"\n→ Continuing to revision {revision_num + 1} (score: {critique_score:.1f}/10, improvements needed)\n")
-        return "reflect"
+        return "continue"
 
 def simulation_should_continue(state: AgentState) -> str:
     """Determine whether simulation should continue based on tool calls."""
@@ -318,14 +318,14 @@ def create_graph() -> StateGraph:
     builder.add_edge("deep_research_agent", "simulation")
 
     builder.add_edge("simulation", "writer")
-    builder.add_edge("reflect", "research_critique")
+    builder.add_edge("writer", "reflect")
     builder.add_edge("research_critique", "writer")
 
-    # Add conditional edge
+    # Add conditional edge after reflection
     builder.add_conditional_edges(
-        "writer",
+        "reflect",
         should_continue,
-        {END: END, "reflect": "reflect"}
+        {END: END, "continue": "research_critique"}
     )
 
     return builder
