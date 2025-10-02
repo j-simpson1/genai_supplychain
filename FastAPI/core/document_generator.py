@@ -206,10 +206,6 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
         task=state['task'],
         plan=state['plan'],
         draft=state['draft'],
-        db=f"Analyst:\n{db_analyst}\n\nFull Content:\n{db_content}",
-        web=web,
-        deep_research=deep_research,
-        simulation=simulation_messages,
         charts=charts
     )
 
@@ -228,11 +224,10 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
         # Calculate average quality score
         avg_score = (
             critique_obj.quality_score +
-            critique_obj.completeness +
-            critique_obj.accuracy
-        ) / 3.0
+            critique_obj.completeness
+        ) / 2.0
 
-        print(f"Scores - Quality: {critique_obj.quality_score}/10, Completeness: {critique_obj.completeness}/10, Accuracy: {critique_obj.accuracy}/10")
+        print(f"Scores - Quality: {critique_obj.quality_score}/10, Completeness: {critique_obj.completeness}/10")
         print(f"Average score: {avg_score:.1f}/10")
 
         # Format issues as bullet points for readability
@@ -240,7 +235,6 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
 
         critique_text = f"""Quality Score: {critique_obj.quality_score}/10
                             Completeness: {critique_obj.completeness}/10
-                            Accuracy: {critique_obj.accuracy}/10
                             Average Score: {avg_score:.1f}/10
 
                             Issues to Address:
@@ -391,7 +385,6 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
             'draft': '',
             'critique': '',
             'critique_score': 0.0,
-            'ready_for_final': False,
             'chart_code': '',
             'chart_generation_success': False,
             'chart_generation_error': '',

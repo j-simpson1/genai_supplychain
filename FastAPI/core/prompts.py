@@ -646,41 +646,17 @@ Current Draft:
 {draft}
 \"\"\"
 
-Available Data Sources:
-
-Database Insights:
-\"\"\"
-{db}
-\"\"\"
-
-Web Research:
-\"\"\"
-{web}
-\"\"\"
-
-Deep Research:
-\"\"\"
-{deep_research}
-\"\"\"
-
-Simulation Results:
-\"\"\"
-{simulation}
-\"\"\"
-
 Charts Available:
 \"\"\"
 {charts}
 \"\"\"
 
-Evaluate the draft against the plan and available data. You must provide a structured assessment with the following components:
+Evaluate the draft against the plan. You must provide a structured assessment with the following components:
 
 1. **Quality Score (1-10)**: Overall quality of writing, clarity, and professionalism
 2. **Completeness Score (1-10)**: Does the draft follow the plan structure? Are all required sections present?
-3. **Accuracy Score (1-10)**: Are the numbers and facts correctly extracted from the data sources?
-4. **Issues**: List specific issues that need to be addressed (be concrete)
-5. **Recommendations**: Detailed, actionable recommendations for improvement
-6. **Ready for Final**: Boolean - Is the report ready for finalization, or does it need another revision?
+3. **Issues**: List specific issues that need to be addressed (be concrete)
+4. **Recommendations**: Detailed, actionable recommendations for improvement
 
 Scoring Guidelines:
 - 9-10: Excellent, ready for finalization with minor or no changes
@@ -694,7 +670,6 @@ Focus your critique primarily on:
 2. **Missing charts**: Are all charts specified in the plan present in the appropriate figures arrays?
 3. **Missing critical data**: Are key data points explicitly required by the plan included?
 4. **Citations and references**: Are all sources properly cited with inline citations [1], [2], etc.? Are all cited sources included in the References section with correct formatting?
-5. **Research quality**: Is there insightful web research on tariff news or deep research on alternative suppliers not already included? Flag if important available research is missing.
 
 Important Context:
 - Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders, never in content or bullet_points. Verify all required charts from the plan appear in figures arrays. Empty figures arrays are acceptable for sections without charts.

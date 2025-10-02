@@ -15,7 +15,6 @@ class ReportCritique(BaseModel):
     """Structured critique of the report with quality metrics."""
     quality_score: int = Field(ge=1, le=10, description="Overall quality score (1-10)")
     completeness: int = Field(ge=1, le=10, description="Completeness score (1-10)")
-    accuracy: int = Field(ge=1, le=10, description="Data accuracy score (1-10)")
     issues: List[str] = Field(default_factory=list, description="Specific issues to address")
     recommendations: str = Field(description="Detailed recommendations for improvement")
 
