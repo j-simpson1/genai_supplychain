@@ -50,21 +50,54 @@ class TavilyPlan(BaseModel):
     jobs: List[TavilyJob] = Field(default_factory=list, max_items=6)
 
 TARIFF_NEWS_DOMAINS = [
+    # Major Financial & Business News
     "reuters.com",
     "bloomberg.com",
     "wsj.com",
     "ft.com",
+    "economist.com",
+    "cnbc.com",
+    "barrons.com",
+    "marketwatch.com",
+
+    # Government & International Organizations
     "trade.gov",
     "oecd.org",
     "wto.org",
     "imf.org",
     "worldbank.org",
+    "ustr.gov",
+    "census.gov",
+    "bea.gov",
+
+    # Asia-Pacific News
     "japantimes.co.jp",
     "nikkei.com",
     "asia.nikkei.com",
+    "scmp.com",
     "business-standard.com",
-    "economist.com",
+    "economictimes.indiatimes.com",
+    "straitstimes.com",
+    "channelnewsasia.com",
+
+    # European News
+    "euractiv.com",
+    "ec.europa.eu",
+
+    # Trade & Supply Chain Focused
+    "joc.com",
+    "freightwaves.com",
+    "supplychaindive.com",
+    "logistics-manager.com",
+    "americanshipper.com",
+    "inboundlogistics.com",
+
+    # Business & Policy
     "politico.com",
+    "forbes.com",
+    "fortune.com",
+    "businessinsider.com",
+    "axios.com",
 ]
 
 
