@@ -24,6 +24,14 @@ REPORTS_DIR = os.path.join(PROJECT_ROOT, "output", "reports")
 tavily = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 model = ChatOpenAI(model="o4-mini")
 
+class SimpleTavilyJob(BaseModel):
+    """Simple job schema for query generation - only contains the search query."""
+    query: str = Field(max_length=400, description="Search query (≤400 chars)")
+
+class SimpleTavilyPlan(BaseModel):
+    """A simple research plan containing only search queries."""
+    jobs: List[SimpleTavilyJob] = Field(default_factory=list, max_items=6)
+
 class TavilyJob(BaseModel):
     """Configuration for a single Tavily search job."""
     query: str = Field(max_length=400, description="Search query (≤400 chars)")
@@ -82,7 +90,7 @@ def enrich_job(job: TavilyJob) -> TavilyJob:
 
     return enriched_job
 
-planner = model.with_structured_output(TavilyPlan)
+planner = model.with_structured_output(SimpleTavilyPlan)
 
 
 @traceable(name="tavily.search")
@@ -92,28 +100,37 @@ def traced_tavily_search(params: dict) -> dict:
 
 async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
+    print("\n🔍 Starting research_critique_node...")
     try:
-        plan: TavilyPlan = planner.invoke([
+        print("  → Generating search queries with planner...")
+        simple_plan: SimpleTavilyPlan = planner.invoke([
             HumanMessage(content=research_critique_prompt.format(critique=state['critique']))
         ])
+        print(f"  ✓ Generated {len(simple_plan.jobs)} search queries")
 
         # Validate that we got valid jobs
-        if not plan.jobs or len(plan.jobs) == 0:
+        if not simple_plan.jobs or len(simple_plan.jobs) == 0:
             raise ValueError("No search queries generated")
+
+        # Convert SimpleTavilyJob to TavilyJob with default parameters
+        jobs = [TavilyJob(query=job.query) for job in simple_plan.jobs]
 
     except Exception as e:
         print(f"Warning: Structured output failed ({e}). Using fallback queries.")
+        traceback.print_exc()
         # Fallback: Generate generic tariff queries for critique research
-        plan = TavilyPlan(jobs=[
+        jobs = [
             TavilyJob(query="automotive supply chain tariff news recent developments"),
             TavilyJob(query="manufacturing tariffs trade policy automotive sector")
-        ])
+        ]
 
-    jobs = [enrich_job(job) for job in plan.jobs[:6]]
+    jobs = [enrich_job(job) for job in jobs[:6]]
+    print(f"  → Enriched {len(jobs)} jobs, starting Tavily searches...")
 
     content = state.get('web_content', [])
-    for job in jobs:
+    for idx, job in enumerate(jobs, 1):
         try:
+            print(f"  → [{idx}/{len(jobs)}] Searching: {job.query[:60]}...")
             params = {
                 "query": job.query,
                 "topic": job.topic,
@@ -128,6 +145,7 @@ async def research_critique_node(state: AgentState):
             }
 
             response = traced_tavily_search(params)
+            print(f"  ✓ Got {len(response.get('results', []))} results")
 
             for result in response.get("results", []):
                 content.append(
@@ -137,8 +155,10 @@ async def research_critique_node(state: AgentState):
                 )
 
         except Exception as e:
+            print(f"  ✗ Tavily error: {e}")
             content.append(f"[Tavily error on '{job.query}': {e}]")
 
+    print(f"✓ Research critique complete - collected {len(content)} content items\n")
     return {"web_content": content}
 
 

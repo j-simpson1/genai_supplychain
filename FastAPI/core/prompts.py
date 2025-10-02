@@ -31,6 +31,7 @@ plan_prompt = """You are an expert research analyst specialising in global autom
     - Top 3 parts by average price, e.g. [Part1] (£lineItemTotalExclVAT, % of total cost), [Part2] (£lineItemTotalExclVAT, % of total cost), [Part3] (£lineItemTotalExclVAT, % of total cost).
     - Top 3 suppliers by article count, e.g. [Supplier1] ([No. articles] articles), [Supplier2] ([No. articles] articles), [Supplier3] ([No. articles] articles).
   - Include the combination chart showing number of articles per part (bars) with bottom quartile average price overlaid (line). As well as the bar chart showing distribution of articles by country of origin.
+  - Include the parts summary table.
 
 
 4. Tariff Simulation
@@ -72,9 +73,6 @@ plan_prompt = """You are an expert research analyst specialising in global autom
     - Implementing digital monitoring for tariff and supply-chain changes
 
 9. References
-
-10. Appendices
-- Include the parts summary table.
 </Structure>
 
 <Guidelines>
@@ -181,6 +179,7 @@ Create a table summarising all parts with the following columns:
 - Most Common Country of Origin
 - Line Item Total Excl VAT
 - Percentage of Total Cost
+Important: Enable text wrapping for all table cells to ensure long text content is displayed properly.
 </Chart3>
 
 Database summary: \"\"\"
@@ -209,6 +208,7 @@ generate_chart_prompt = """You are a data visualisation expert. Generate a Pytho
 - Use Matplotlib only. Do NOT import seaborn.
 - Always save the chart with the same name as the chart_id.
 - When designing the chart, use professional styling, ideally using Hex colours #4E82B2, #0B2447 or similar.
+- For table visualizations: Enable text wrapping in table cells by setting the cell text with appropriate properties (e.g., wrap=True or by adjusting cell dimensions to accommodate longer text).
 </Guidelines>
 
 Chart requirement: \"\"\"
@@ -237,18 +237,10 @@ Guidelines:
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
+- Each query should be under 400 characters
 - All research is for analytical purposes using only public domain information
 
-You must respond with a valid JSON object matching this exact structure:
-{{
-  "jobs": [
-    {{
-      "query": "your search query here (max 400 chars)"
-    }}
-  ]
-}}
-
-Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
+Provide a list of search jobs with only the query field populated for each.
 """
 
 simulation_prompt = """System:
@@ -716,17 +708,9 @@ Guidelines:
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
+- Each query should be under 400 characters
 - All research is for analytical purposes using only public domain information
 
-You must respond with a valid JSON object matching this exact structure:
-{{
-  "jobs": [
-    {{
-      "query": "your search query here (max 400 chars)"
-    }}
-  ]
-}}
-
-Create 1-2 jobs maximum. Each job object should contain only the "query" field. Keep each query under 400 characters and single-topic focused.
+Create 1-2 search jobs maximum with only the query field populated for each.
 """
 
