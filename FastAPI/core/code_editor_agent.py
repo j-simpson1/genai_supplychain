@@ -29,7 +29,7 @@ MAX_CHART_RETRIES = 2
 os.makedirs(CHARTS_DIR, exist_ok=True)
 
 # Initialize language model
-model = ChatOpenAI(model="o4-mini")
+model = ChatOpenAI(model="gpt-5")
 
 # Utilities
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
