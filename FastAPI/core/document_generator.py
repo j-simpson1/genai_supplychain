@@ -122,8 +122,8 @@ def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
 def writer_node(state: AgentState) -> Dict[str, Any]:
     """Generate the report draft based on collected data."""
     print("\n=== WRITER NODE STARTED ===")
-    revision_num = state.get("revision_number", 0)
-    print(f"Revision number: {revision_num}")
+    draft_num = state.get("draft_number", 0) + 1
+    print(f"Draft number: {draft_num}")
 
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
@@ -183,14 +183,14 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
     return {
         "draft": response.content,
-        "revision_number": state.get("revision_number", 0) + 1
+        "draft_number": draft_num
     }
 
 def reflection_node(state: AgentState) -> Dict[str, Any]:
     """Generate critique of the current draft with structured quality assessment."""
     print("\n=== REFLECTION NODE STARTED ===")
-    revision_num = state.get("revision_number", 0)
-    print(f"Reflection for revision: {revision_num}")
+    draft_num = state.get("draft_number", 0)
+    print(f"Reflection for draft: {draft_num}")
 
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
@@ -266,16 +266,19 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
 
 def should_continue(state: AgentState) -> str:
     """Determine whether to continue revising or finish the report based on quality metrics."""
-    revision_num = state["revision_number"]
+    draft_num = state.get("draft_number", 0)
     max_revisions = state["max_revisions"]
     critique_score = state.get("critique_score", 0.0)
 
     # Quality threshold for early stopping (7.5/10 average score)
     QUALITY_THRESHOLD = 7.5
 
+    # Calculate how many revisions we've done (drafts beyond the first)
+    revisions_completed = draft_num - 1
+
     # Determine if we should stop
-    hit_max_revisions = revision_num > max_revisions
-    quality_satisfied = (critique_score >= QUALITY_THRESHOLD and revision_num > 1)
+    hit_max_revisions = revisions_completed >= max_revisions
+    quality_satisfied = (critique_score >= QUALITY_THRESHOLD and draft_num > 1)
 
     if hit_max_revisions or quality_satisfied:
         # Generate timestamp for filenames
@@ -287,7 +290,7 @@ def should_continue(state: AgentState) -> str:
         else:
             reason = f"max revisions reached (score: {critique_score:.1f}/10)"
 
-        print(f"\n✓ Report generation complete - {reason} after {revision_num} revision(s)\n")
+        print(f"\n✓ Report generation complete - {reason} after {draft_num} draft(s)\n")
 
         # Save final reports with timestamps
         print(save_to_pdf(
@@ -302,7 +305,7 @@ def should_continue(state: AgentState) -> str:
         ))
         return END
     else:
-        print(f"\n→ Continuing to revision {revision_num + 1} (score: {critique_score:.1f}/10, improvements needed)\n")
+        print(f"\n→ Continuing to draft {draft_num + 1} (score: {critique_score:.1f}/10, improvements needed)\n")
         return "continue"
 
 def simulation_should_continue(state: AgentState) -> str:
@@ -375,7 +378,7 @@ async def run_agent(messages: str, parts_path: str, articles_path: str, tariff_p
         initial_state = {
             'task': messages,
             'max_revisions': MAX_REVISIONS,
-            'revision_number': 0,
+            'draft_number': 0,
             'db_content': [],
             'db_summary': '',
             'web_content': [],

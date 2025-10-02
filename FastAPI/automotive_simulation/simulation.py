@@ -1046,7 +1046,7 @@ def run_example_analysis() -> Dict[str, Any]:
     result = analyze_tariff_impact(
         suppliers_csv_path=suppliers_csv,
         parts_csv_path=parts_csv,
-        target_country='United Kingdom',
+        target_country='Japan',
         tariff_rates=[0.10, 0.30, 0.60],
         vat_rate=0.20,  # 20% VAT
         show_plots=True,

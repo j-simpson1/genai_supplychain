@@ -29,7 +29,7 @@ class AgentState(TypedDict):
 
     # Draft and revision control
     draft: str
-    revision_number: int
+    draft_number: int
     max_revisions: int
     critique: str
     critique_score: float  # Average quality score (1-10)

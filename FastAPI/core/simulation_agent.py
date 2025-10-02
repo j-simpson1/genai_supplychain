@@ -244,7 +244,7 @@ def create_test_state() -> AgentState:
     tariff_path = os.path.join(os.getcwd(), "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
 
     return {
-        "task": "Run a tariff shock simulation for Japan with 20%, 40%, and 70% rates.",
+        "task": "Run a tariff shock simulation for Japan with 10%, 30%, and 60% rates.",
         "plan": "",
         "draft": "",
         "critique": "",
@@ -254,7 +254,7 @@ def create_test_state() -> AgentState:
         "trajectory": [],
         "raw_simulation": [],
         "clean_simulation": "",
-        "revision_number": 0,
+        "draft_number": 0,
         "max_revisions": 1,
         "chart_plan": [],
         "chart_metadata": [],

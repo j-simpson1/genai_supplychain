@@ -228,7 +228,7 @@ if __name__ == "__main__":
             "trajectory": [],
             "raw_simulation": [],
             "clean_simulation": "",
-            "revision_number": 0,
+            "draft_number": 0,
             "max_revisions": 1,
             "chart_plan": [],
             "chart_metadata": [],
