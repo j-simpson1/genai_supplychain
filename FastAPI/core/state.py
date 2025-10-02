@@ -18,7 +18,6 @@ class ReportCritique(BaseModel):
     accuracy: int = Field(ge=1, le=10, description="Data accuracy score (1-10)")
     issues: List[str] = Field(default_factory=list, description="Specific issues to address")
     recommendations: str = Field(description="Detailed recommendations for improvement")
-    ready_for_final: bool = Field(description="Is the report ready for finalization?")
 
 
 class AgentState(TypedDict):
@@ -34,7 +33,6 @@ class AgentState(TypedDict):
     max_revisions: int
     critique: str
     critique_score: float  # Average quality score (1-10)
-    ready_for_final: bool  # Stops revision loop when quality threshold met
 
     # Research content
     web_content: List[str]

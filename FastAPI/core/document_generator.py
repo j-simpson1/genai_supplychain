@@ -234,7 +234,6 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
 
         print(f"Scores - Quality: {critique_obj.quality_score}/10, Completeness: {critique_obj.completeness}/10, Accuracy: {critique_obj.accuracy}/10")
         print(f"Average score: {avg_score:.1f}/10")
-        print(f"Ready for final: {critique_obj.ready_for_final}")
 
         # Format issues as bullet points for readability
         issues_text = "\n".join([f"- {issue}" for issue in critique_obj.issues]) if critique_obj.issues else "None"
@@ -243,19 +242,16 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
                             Completeness: {critique_obj.completeness}/10
                             Accuracy: {critique_obj.accuracy}/10
                             Average Score: {avg_score:.1f}/10
-                            
+
                             Issues to Address:
                             {issues_text}
-                            
+
                             Recommendations:
-                            {critique_obj.recommendations}
-                            
-                            Ready for Final: {'Yes' if critique_obj.ready_for_final else 'No'}"""
+                            {critique_obj.recommendations}"""
 
         return {
             "critique": critique_text,
-            "critique_score": avg_score,
-            "ready_for_final": critique_obj.ready_for_final
+            "critique_score": avg_score
         }
 
     except Exception as e:
@@ -264,8 +260,7 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
         response = model.invoke([HumanMessage(content=formatted_reflection_prompt)])
         return {
             "critique": response.content,
-            "critique_score": 5.0,  # Neutral score
-            "ready_for_final": False  # Conservative default - continue revising
+            "critique_score": 5.0  # Neutral score - continue revising
         }
 
 
@@ -274,14 +269,13 @@ def should_continue(state: AgentState) -> str:
     revision_num = state["revision_number"]
     max_revisions = state["max_revisions"]
     critique_score = state.get("critique_score", 0.0)
-    ready_for_final = state.get("ready_for_final", False)
 
     # Quality threshold for early stopping (7.5/10 average score)
     QUALITY_THRESHOLD = 7.5
 
     # Determine if we should stop
     hit_max_revisions = revision_num > max_revisions
-    quality_satisfied = (ready_for_final and critique_score >= QUALITY_THRESHOLD and revision_num > 1)
+    quality_satisfied = (critique_score >= QUALITY_THRESHOLD and revision_num > 1)
 
     if hit_max_revisions or quality_satisfied:
         # Generate timestamp for filenames
