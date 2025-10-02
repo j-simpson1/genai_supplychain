@@ -100,13 +100,10 @@ def traced_tavily_search(params: dict) -> dict:
 
 async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
-    print("\n🔍 Starting research_critique_node...")
     try:
-        print("  → Generating search queries with planner...")
         simple_plan: SimpleTavilyPlan = planner.invoke([
             HumanMessage(content=research_critique_prompt.format(critique=state['critique']))
         ])
-        print(f"  ✓ Generated {len(simple_plan.jobs)} search queries")
 
         # Validate that we got valid jobs
         if not simple_plan.jobs or len(simple_plan.jobs) == 0:
@@ -116,7 +113,7 @@ async def research_critique_node(state: AgentState):
         jobs = [TavilyJob(query=job.query) for job in simple_plan.jobs]
 
     except Exception as e:
-        print(f"Warning: Structured output failed ({e}). Using fallback queries.")
+        print(f"Warning: Research critique query generation failed ({e}). Using fallback queries.")
         traceback.print_exc()
         # Fallback: Generate generic tariff queries for critique research
         jobs = [
@@ -125,12 +122,10 @@ async def research_critique_node(state: AgentState):
         ]
 
     jobs = [enrich_job(job) for job in jobs[:6]]
-    print(f"  → Enriched {len(jobs)} jobs, starting Tavily searches...")
 
     content = state.get('web_content', [])
-    for idx, job in enumerate(jobs, 1):
+    for job in jobs:
         try:
-            print(f"  → [{idx}/{len(jobs)}] Searching: {job.query[:60]}...")
             params = {
                 "query": job.query,
                 "topic": job.topic,
@@ -145,7 +140,6 @@ async def research_critique_node(state: AgentState):
             }
 
             response = traced_tavily_search(params)
-            print(f"  ✓ Got {len(response.get('results', []))} results")
 
             for result in response.get("results", []):
                 content.append(
@@ -155,10 +149,9 @@ async def research_critique_node(state: AgentState):
                 )
 
         except Exception as e:
-            print(f"  ✗ Tavily error: {e}")
+            print(f"Warning: Tavily search error on '{job.query}': {e}")
             content.append(f"[Tavily error on '{job.query}': {e}]")
 
-    print(f"✓ Research critique complete - collected {len(content)} content items\n")
     return {"web_content": content}
 
 
