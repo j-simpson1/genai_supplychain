@@ -23,8 +23,8 @@ plan_prompt = """You are an expert research analyst specialising in global autom
 3. Component Analysis
   - Use only Database Insights content.
   - Write a main paragraph (150–250 words) including:
-    - Include this methodology explanation: "Bottom quartile (Q1) prices are calculated on base prices (before tariffs and VAT), selecting suppliers at or below the 25th percentile and averaging those prices for cost-effective sourcing."
     - Number of parts and their combined price (including and excluding VAT).
+    - Explain the Q1 methodology (average of lowest 25% of supplier prices before tariffs and VAT).
     - Most expensive part (£price).
     - Number of taxable parts.
     - Top 3 countries of origin for articles, e.g. [Country1] ([No. articles] articles), [Country2] ([No. articles] articles), [Country3] ([No. articles] articles).
@@ -38,8 +38,8 @@ plan_prompt = """You are an expert research analyst specialising in global autom
 4. Tariff Simulation
   - Use only Simulation Results content.
   - Write a paragraph (150–250 words) including:
-    - Include this methodology explanation: "Bottom quartile (Q1) suppliers are recalculated using final prices (after tariffs and VAT), meaning the optimal supplier set can change under different tariff scenarios."
     - The three tariff rates tested in the simulation and the target country applying the tariffs.
+    - Explain the Q1 methodology (suppliers recalculated after tariffs and VAT, so optimal set may change per scenario).
     - Share of impacted articles by the tariffs (i.e. impacted/total).
     - VAT rate being applied by the manufacturing country
   - Bullet Points:
@@ -674,9 +674,6 @@ Charts Available:
 {charts}
 \"\"\"
 
-Q1 Methodology:
-Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional - the simulation models how optimal suppliers change when tariffs affect relative costs. Both sections should explain their specific Q1 application. If these explanations are missing from the draft, add them to your recommendations. Do NOT flag this as inconsistent.
-
 Evaluate the draft against the plan and available data. You must provide a structured assessment with the following components:
 
 1. **Quality Score (1-10)**: Overall quality of writing, clarity, and professionalism
@@ -699,6 +696,9 @@ When determining if the report is ready for final:
 - Verify all charts are present and properly referenced
 - Ensure citations are complete and accurate
 - Confirm word count is within range (600-800 words)
+
+Q1 Methodology:
+Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Both sections should explain their Q1 methodology. Do NOT flag this as inconsistent.
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
