@@ -24,7 +24,6 @@ plan_prompt = """You are an expert research analyst specialising in global autom
   - Use only Database Insights content.
   - Write a main paragraph (150–250 words) including:
     - Number of parts and their combined price (including and excluding VAT).
-    - Explain the Q1 methodology (average of lowest 25% of supplier prices before tariffs and VAT).
     - Most expensive part (£price).
     - Number of taxable parts.
     - Top 3 countries of origin for articles, e.g. [Country1] ([No. articles] articles), [Country2] ([No. articles] articles), [Country3] ([No. articles] articles).
@@ -39,7 +38,6 @@ plan_prompt = """You are an expert research analyst specialising in global autom
   - Use only Simulation Results content.
   - Write a paragraph (150–250 words) including:
     - The three tariff rates tested in the simulation and the target country applying the tariffs.
-    - Explain the Q1 methodology (suppliers recalculated after tariffs and VAT, so optimal set may change per scenario).
     - Share of impacted articles by the tariffs (i.e. impacted/total).
     - VAT rate being applied by the manufacturing country
   - Bullet Points:
@@ -698,7 +696,7 @@ When determining if the report is ready for final:
 - Confirm word count is within range (600-800 words)
 
 Q1 Methodology:
-Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Both sections should explain their Q1 methodology. Do NOT flag this as inconsistent.
+Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Do NOT flag this as inconsistent.
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
