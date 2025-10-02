@@ -222,7 +222,7 @@ Data: \"\"\"
 import
 """
 
-research_plan_prompt = """You are an expert automotive supply chain researcher conducting business analysis. Your task is to generate search queries (each under 400 characters) for publicly available information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy.
+research_plan_prompt = """You are an expert automotive supply chain researcher. Your task is to generate search queries (each under 400 characters) for information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy.
 
 Task: \"\"\"
 {task}
@@ -233,12 +233,10 @@ Generate 3-4 search queries covering:
 2. Tariff news concerning the automotive sector
 
 Guidelines:
-- Focus only on publicly available information from legitimate news sources and government publications
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
 - Each query should be under 400 characters
-- All research is for analytical purposes using only public domain information
 
 Provide a list of search jobs with only the query field populated for each.
 """
@@ -697,19 +695,17 @@ When determining if the report is ready for final:
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
-research_critique_prompt = """You are an expert automotive supply chain researcher conducting business analysis, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for publicly available information that will help gather data for an analytical report.
+research_critique_prompt = """You are an expert automotive supply chain researcher, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for information that will help gather data for an analytical report.
 
 Manager Feedback: \"\"\"
 {critique}
 \"\"\"
 
 Guidelines:
-- Focus only on publicly available information from legitimate news sources and government publications
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
 - Each query should be under 400 characters
-- All research is for analytical purposes using only public domain information
 
 Create 1-2 search jobs maximum with only the query field populated for each.
 """
