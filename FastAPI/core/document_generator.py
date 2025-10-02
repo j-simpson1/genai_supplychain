@@ -121,6 +121,10 @@ def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
 
 def writer_node(state: AgentState) -> Dict[str, Any]:
     """Generate the report draft based on collected data."""
+    print("\n=== WRITER NODE STARTED ===")
+    revision_num = state.get("revision_number", 0)
+    print(f"Revision number: {revision_num}")
+
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
@@ -135,8 +139,11 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
     previous_draft = state.get("draft", "")
     critique = state.get("critique", "")
 
+    print(f"Is revision: {bool(previous_draft and critique)}")
+
     if previous_draft and critique:
         # Revision mode - use revision prompt with feedback
+        print("Using revision prompt...")
         formatted_writers_prompt = revision_writers_prompt.format(
             CoT_writing_examples=chain_of_thought_writing_examples,
             previous_draft=previous_draft,
@@ -151,6 +158,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
         )
     else:
         # Initial draft mode - use standard prompt
+        print("Using initial draft prompt...")
         formatted_writers_prompt = writers_prompt.format(
             CoT_writing_examples=chain_of_thought_writing_examples,
             task=state['task'],
@@ -162,7 +170,16 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
             simulation=simulation_messages
         )
 
+    print(f"Prompt length: {len(formatted_writers_prompt)} characters")
+    print("Invoking model (this may take a while with o4-mini reasoning)...")
+
+    import time
+    start_time = time.time()
     response = model.invoke([HumanMessage(content=formatted_writers_prompt)])
+    elapsed = time.time() - start_time
+
+    print(f"✓ Model response received in {elapsed:.1f}s")
+    print(f"Response length: {len(response.content)} characters")
 
     return {
         "draft": response.content,
@@ -171,6 +188,10 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
 def reflection_node(state: AgentState) -> Dict[str, Any]:
     """Generate critique of the current draft with structured quality assessment."""
+    print("\n=== REFLECTION NODE STARTED ===")
+    revision_num = state.get("revision_number", 0)
+    print(f"Reflection for revision: {revision_num}")
+
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
     web = "\n\n".join(state.get("web_content", []))
@@ -193,9 +214,16 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
     )
 
     # Use structured output for critique with fallback
+    print("Invoking critique model with structured output...")
     try:
+        import time
+        start_time = time.time()
+
         critique_model = model.with_structured_output(ReportCritique)
         critique_obj = critique_model.invoke([HumanMessage(content=formatted_reflection_prompt)])
+
+        elapsed = time.time() - start_time
+        print(f"✓ Critique received in {elapsed:.1f}s")
 
         # Calculate average quality score
         avg_score = (
@@ -203,6 +231,10 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
             critique_obj.completeness +
             critique_obj.accuracy
         ) / 3.0
+
+        print(f"Scores - Quality: {critique_obj.quality_score}/10, Completeness: {critique_obj.completeness}/10, Accuracy: {critique_obj.accuracy}/10")
+        print(f"Average score: {avg_score:.1f}/10")
+        print(f"Ready for final: {critique_obj.ready_for_final}")
 
         # Format issues as bullet points for readability
         issues_text = "\n".join([f"- {issue}" for issue in critique_obj.issues]) if critique_obj.issues else "None"
