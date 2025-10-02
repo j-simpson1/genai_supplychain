@@ -629,14 +629,14 @@ Charts **include ALL in the report**: \"\"\"
 \"\"\"
 """
 
-reflection_prompt = """You are a manager reviewing the analyst's report against the original plan and available data. Provide a structured critique with quality scores and actionable recommendations.
+reflection_prompt = """You are a manager reviewing the analyst's report against the original plan. Your PRIMARY task is to identify which elements from the plan are missing from the draft.
 
 Original Task:
 \"\"\"
 {task}
 \"\"\"
 
-Research Plan:
+Research Plan (contains placeholder data and structure guidelines):
 \"\"\"
 {plan}
 \"\"\"
@@ -651,34 +651,46 @@ Charts Available:
 {charts}
 \"\"\"
 
-Evaluate the draft against the plan. You must provide a structured assessment with the following components:
+IMPORTANT CONTEXT ABOUT THE PLAN:
+- The plan contains placeholder examples (e.g., "Part1", "Supplier1", "Country1", "£price") to illustrate the structure
+- The plan does NOT contain actual data - the draft should replace placeholders with real data
+- When comparing the plan to the draft, focus on STRUCTURE and REQUIRED ELEMENTS, not on whether specific placeholder values appear
+
+YOUR TASK:
+Compare the draft against the plan to identify missing elements. You must provide a structured assessment with:
 
 1. **Quality Score (1-10)**: Overall quality of writing, clarity, and professionalism
-2. **Completeness Score (1-10)**: Does the draft follow the plan structure? Are all required sections present?
-3. **Issues**: List specific issues that need to be addressed (be concrete)
-4. **Recommendations**: Detailed, actionable recommendations for improvement
+2. **Completeness Score (1-10)**: Does the draft include all required sections and elements from the plan?
+3. **Issues**: List ONLY the specific plan elements that are missing from the draft (empty list if everything is included)
+4. **Recommendations**: Actionable recommendations for adding missing elements (empty string if nothing is missing)
+
+CRITICAL INSTRUCTIONS:
+- If ALL plan elements are present in the draft, set Issues to an empty list [] and Recommendations to an empty string ""
+- ONLY flag missing elements - do NOT critique writing quality, style, or data accuracy in the Issues field
+- Focus on structural completeness: Are all required sections, bullet points, charts, and data points present?
+- Remember: placeholder data in the plan (e.g., "Part1", "£price") should appear as real data in the draft
 
 Scoring Guidelines:
-- 9-10: Excellent, ready for finalization with minor or no changes
-- 7-8: Good quality, minor improvements needed
-- 5-6: Adequate but needs significant improvements
-- 3-4: Poor quality, major revisions required
-- 1-2: Unacceptable, complete rewrite needed
+- 9-10: All plan elements present, excellent quality
+- 7-8: All or nearly all plan elements present, good quality
+- 5-6: Some plan elements missing
+- 3-4: Many plan elements missing
+- 1-2: Most plan elements missing
 
-Focus your critique primarily on:
-1. **Plan adherence**: Does the report follow the structure and requirements outlined in the plan? Flag any deviations.
-2. **Missing charts**: Are all charts specified in the plan present in the appropriate figures arrays?
-3. **Missing critical data**: Are key data points explicitly required by the plan included?
-4. **Citations and references**: Are all sources properly cited with inline citations [1], [2], etc.? Are all cited sources included in the References section with correct formatting?
+Check for these specific plan elements:
+1. **Required sections**: Are all sections from the plan structure present?
+2. **Required bullet points**: Does each section have the specific bullet points requested in the plan?
+3. **Required charts**: Are all charts from the plan included in the appropriate figures arrays?
+4. **Required data points**: Are key metrics explicitly requested by the plan included (e.g., number of parts, combined price, top 3 countries, tariff rates, cost breakdowns)?
+5. **Required citations**: Are sources properly cited with inline citations [1], [2], etc.?
 
 Important Context:
-- Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders, never in content or bullet_points. Verify all required charts from the plan appear in figures arrays. Empty figures arrays are acceptable for sections without charts.
-- Parts vs Articles: "Parts" refers to distinct component types. "Articles" refers to individual supplier offerings. The report may correctly reference both - this is not an error.
-- Word count flexibility: Target ranges (150-250 words per section, 600-800 total) are guidelines, not strict limits. Do not penalize reports that are 10-20% outside these ranges if the content is complete and well-written.
-- Q1 Methodology: Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Do NOT flag this as inconsistent.
-- Internal references: The report does NOT need reference the internal parts database or simulation tools.
+- Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders. Verify all required charts from the plan appear in figures arrays.
+- Parts vs Articles: "Parts" are component types; "Articles" are supplier offerings. Both terms should appear correctly.
+- Q1 Methodology: Different Q1 calculations in different sections is intentional methodology.
+- Word count ranges are guidelines, not strict limits.
 
-Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
+If everything from the plan is included in the draft, your Issues list should be empty and Recommendations should be empty. Only raise feedback if actual plan elements are missing."""
 
 research_critique_prompt = """You are an expert automotive supply chain researcher, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for information that will help gather data for an analytical report.
 
