@@ -238,6 +238,7 @@ Guidelines:
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
+- Don't include specific news source names (e.g., Reuters, Bloomberg) in queries
 - Each query should be under 400 characters
 
 Provide a list of search jobs with only the query field populated for each.
@@ -695,8 +696,21 @@ When determining if the report is ready for final:
 - Ensure citations are complete and accurate
 - Confirm word count is within range (600-800 words)
 
+Important Context:
+- Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders, never in content or bullet_points. Verify all required charts from the plan appear in figures arrays. Empty figures arrays are acceptable for sections without charts.
+- Parts vs Articles: "Parts" refers to distinct component types (SKUs). "Articles" refers to individual supplier offerings. The report may correctly reference both - this is not an error.
+- Word count flexibility: Target ranges (150-250 words per section, 600-800 total) are guidelines, not strict limits. Do not penalize reports that are 10-20% outside these ranges if the content is complete and well-written.
+
 Q1 Methodology:
-Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Do NOT flag this as inconsistent.
+Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Both sections should explain their Q1 methodology. Do NOT flag this as inconsistent.
+
+Focus your critique on substantive issues:
+- Missing critical data points explicitly required by the plan
+- Unclear or unprofessional writing
+- Incomplete analysis or missing sections
+- Citation errors or missing sources
+
+Do NOT flag minor formatting preferences, reasonable interpretation of guidelines, or stylistic choices unless they significantly impact clarity or professionalism.
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
@@ -710,6 +724,7 @@ Guidelines:
 - Keep queries focused and specific (avoid multi-topic queries)
 - Use keywords related to the automotive supply chain, tariffs, and the target country
 - Don't include the simulation rates in any queries
+- Don't include specific news source names (e.g., Reuters, Bloomberg) in queries
 - Each query should be under 400 characters
 
 Create 1-2 search jobs maximum with only the query field populated for each.
