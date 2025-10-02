@@ -224,8 +224,6 @@ Chart requirement: \"\"\"
 Data: \"\"\"
 {tool_data}
 \"\"\"
-
-import
 """
 
 research_plan_prompt = """You are an expert automotive supply chain researcher. Your task is to generate search queries (each under 400 characters) for information to help gather data for an analytical report. This research aims to help understand market dynamics and the impacts of trade policy.
