@@ -689,6 +689,7 @@ Important Context:
 - Parts vs Articles: "Parts" are component types; "Articles" are supplier offerings. Both terms should appear correctly.
 - Q1 Methodology: Different Q1 calculations in different sections is intentional methodology.
 - Word count ranges are guidelines, not strict limits.
+- Internal tools: The draft does NOT need to reference or cite the internal database or simulation tools. These are internal systems and should not appear in citations.
 
 If everything from the plan is included in the draft, your Issues list should be empty and Recommendations should be empty. Only raise feedback if actual plan elements are missing."""
 
