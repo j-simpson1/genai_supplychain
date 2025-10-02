@@ -689,28 +689,17 @@ Scoring Guidelines:
 - 3-4: Poor quality, major revisions required
 - 1-2: Unacceptable, complete rewrite needed
 
-When determining if the report is ready for final:
-- Consider if the report meets minimum quality standards (average score >= 7.5)
-- Check that all critical data points from the plan are included
-- Verify all charts are present and properly referenced
-- Ensure citations are complete and accurate
-- Confirm word count is within range (600-800 words)
+Focus your critique primarily on:
+1. **Plan adherence**: Does the report follow the structure and requirements outlined in the plan? Flag any deviations.
+2. **Missing charts**: Are all charts specified in the plan present in the appropriate figures arrays?
+3. **Missing critical data**: Are key data points explicitly required by the plan included?
+4. **Citations and references**: Are all sources properly cited with inline citations [1], [2], etc.? Are all cited sources included in the References section with correct formatting?
 
 Important Context:
 - Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders, never in content or bullet_points. Verify all required charts from the plan appear in figures arrays. Empty figures arrays are acceptable for sections without charts.
-- Parts vs Articles: "Parts" refers to distinct component types (SKUs). "Articles" refers to individual supplier offerings. The report may correctly reference both - this is not an error.
+- Parts vs Articles: "Parts" refers to distinct component types. "Articles" refers to individual supplier offerings. The report may correctly reference both - this is not an error.
 - Word count flexibility: Target ranges (150-250 words per section, 600-800 total) are guidelines, not strict limits. Do not penalize reports that are 10-20% outside these ranges if the content is complete and well-written.
-
-Q1 Methodology:
-Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Both sections should explain their Q1 methodology. Do NOT flag this as inconsistent.
-
-Focus your critique on substantive issues:
-- Missing critical data points explicitly required by the plan
-- Unclear or unprofessional writing
-- Incomplete analysis or missing sections
-- Citation errors or missing sources
-
-Do NOT flag minor formatting preferences, reasonable interpretation of guidelines, or stylistic choices unless they significantly impact clarity or professionalism.
+- Q1 Methodology: Component Analysis uses Q1 on base prices (pre-tariff). Tariff Simulation uses Q1 on final prices (post-tariff/VAT). This is intentional to model how optimal suppliers change under tariff scenarios. Do NOT flag this as inconsistent.
 
 Be honest and rigorous in your assessment. If sections are well-written, acknowledge them. Focus your critique on what needs to change."""
 
