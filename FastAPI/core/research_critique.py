@@ -28,7 +28,7 @@ class SimpleTavilyJob(BaseModel):
     """Simple job schema for query generation - only contains the search query."""
     query: str = Field(max_length=400, description="Search query (≤400 chars)")
 
-class SimpleTavilyPlan(BaseModel):
+class TavilyPlan(BaseModel):
     """A simple research plan containing only search queries."""
     jobs: List[SimpleTavilyJob] = Field(default_factory=list, max_items=6)
 
@@ -123,7 +123,7 @@ def enrich_job(job: TavilyJob) -> TavilyJob:
 
     return enriched_job
 
-planner = model.with_structured_output(SimpleTavilyPlan)
+planner = model.with_structured_output(TavilyPlan)
 
 
 @traceable(name="tavily.search")
@@ -134,7 +134,7 @@ def traced_tavily_search(params: dict) -> dict:
 async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
     try:
-        simple_plan: SimpleTavilyPlan = planner.invoke([
+        simple_plan: TavilyPlan = planner.invoke([
             HumanMessage(content=research_critique_prompt.format(critique=state['critique']))
         ])
 

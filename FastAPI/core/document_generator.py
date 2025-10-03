@@ -234,14 +234,14 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
         issues_text = "\n".join([f"- {issue}" for issue in critique_obj.issues]) if critique_obj.issues else "None"
 
         critique_text = f"""Quality Score: {critique_obj.quality_score}/10
-                            Completeness: {critique_obj.completeness}/10
-                            Average Score: {avg_score:.1f}/10
+Completeness: {critique_obj.completeness}/10
+Average Score: {avg_score:.1f}/10
 
-                            Issues to Address:
-                            {issues_text}
+Issues to Address:
+{issues_text}
 
-                            Recommendations:
-                            {critique_obj.recommendations}"""
+Recommendations:
+{critique_obj.recommendations}"""
 
         return {
             "critique": critique_text,

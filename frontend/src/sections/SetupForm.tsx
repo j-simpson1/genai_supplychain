@@ -374,20 +374,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       formDataToSend.append('category_name', categoryName);
 
       formDataToSend.append('manufacturing_location', formData.manufacturingLocation);
-
-      // Get manufacturing location name
-      const manufacturingLocationName = manufacturingLocations.find(
-        location => location.id === formData.manufacturingLocation
-      )?.name || 'Unknown Location';
-      formDataToSend.append('manufacturing_location_name', manufacturingLocationName);
+      formDataToSend.append('manufacturing_location_name', formData.manufacturingLocation);
 
       formDataToSend.append('tariff_shock_country', formData.tariffShockCountry);
-
-      // Get tariff shock country name
-      const tariffShockCountryName = manufacturingLocations.find(
-        location => location.id === formData.tariffShockCountry
-      )?.name || 'Unknown Country';
-      formDataToSend.append('tariff_shock_country_name', tariffShockCountryName);
+      formDataToSend.append('tariff_shock_country_name', formData.tariffShockCountry);
       formDataToSend.append('tariff_rate_1', formData.tariffRate1);
       formDataToSend.append('tariff_rate_2', formData.tariffRate2);
       formDataToSend.append('tariff_rate_3', formData.tariffRate3);
@@ -543,6 +533,10 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     ) {
       throw new Error('Tariff rate must be a non-negative number or blank.');
     }
+    // Update the tariffRows state with the new row
+    setTariffRows(prevRows =>
+      prevRows.map(row => row.id === newRow.id ? newRow as TariffRow : row)
+    );
     return newRow;
   };
 
@@ -802,46 +796,18 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           >
             {/* Manufacturing Location */}
             <StyledFormControl fullWidth required>
-              <Autocomplete
-                options={manufacturingLocations}
-                getOptionLabel={(option) => option.name}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                value={
-                  manufacturingLocations.find(
-                    (location) => location.id === formData.manufacturingLocation
-                  ) || null
-                }
-                onChange={(event, newValue) => {
+              <TextField
+                label="Manufacturing Location"
+                value={formData.manufacturingLocation}
+                onChange={(e) => {
                   setFormData((prev) => ({
                     ...prev,
-                    manufacturingLocation: newValue?.id || '',
+                    manufacturingLocation: e.target.value,
                   }));
                 }}
-                disabled={loading.countries}
-                loading={loading.countries}
-                disableClearable
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <Typography sx={{ flexGrow: 1 }}>{option.name}</Typography>
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Manufacturing Location"
-                    required
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
+                required
+                placeholder="e.g. United Kingdom"
+                type="text"
               />
             </StyledFormControl>
 
@@ -884,44 +850,18 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           </Box>
 
             <StyledFormControl fullWidth required>
-              <Autocomplete
-                options={manufacturingLocations}
-                getOptionLabel={(option) => option.name}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                value={manufacturingLocations.find(location => location.id === formData.tariffShockCountry) || null}
-                onChange={(event, newValue) => {
-                  setFormData(prev => ({
+              <TextField
+                label="Tariff Shock Simulation: Country"
+                value={formData.tariffShockCountry}
+                onChange={(e) => {
+                  setFormData((prev) => ({
                     ...prev,
-                    tariffShockCountry: newValue?.id || ''
+                    tariffShockCountry: e.target.value,
                   }));
                 }}
-                disabled={loading.countries}
-                loading={loading.countries}
-                disableClearable
-                renderOption={(props, option) => (
-                  <li {...props} key={`tariff-${option.id}`}>
-                    <Typography sx={{ flexGrow: 1 }}>
-                      {option.name}
-                    </Typography>
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Tariff Shock Simulation: Country"
-                    required
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {loading.countries ? <CircularProgress color="inherit" size={20} /> : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                noOptionsText={loading.countries ? 'Loading countries...' : 'No countries found'}
+                required
+                placeholder="e.g. Japan"
+                type="text"
               />
             </StyledFormControl>
 
@@ -1134,7 +1074,12 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
             <Button onClick={() => setOpenTariffGrid(false)}>Cancel</Button>
             <Button
               variant="contained"
-              disabled={!isFormValid() || loading.simulation}
+              disabled={
+                !isFormValid() ||
+                loading.simulation ||
+                tariffRows.length === 0 ||
+                tariffRows.some(row => row.tariffRate === '' || row.tariffRate === null || row.tariffRate === undefined)
+              }
               onClick={async () => {
                 // Convert tariff data to CSV file
                 if (tariffRows.length > 0) {
@@ -1219,7 +1164,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
                 fontSize: '0.9rem'
               }}>
                 • Please return to your <strong>terminal/console</strong> to monitor progress<br/>
-                • The process will take approximately <strong>5 minutes</strong> to complete<br/>
+                • The process will take approximately <strong>20 minutes</strong> to complete<br/>
                 • You can close this dialog and the processing will continue
               </Typography>
             </Box>
