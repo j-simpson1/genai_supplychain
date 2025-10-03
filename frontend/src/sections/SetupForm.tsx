@@ -20,7 +20,7 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
-import { DataGrid, GridToolbar } from '@mui/x-data-grid';
+import { DataGrid, GridToolbar, useGridApiRef } from '@mui/x-data-grid';
 import { styled } from '@mui/material/styles';
 import { getCodes, getNames } from 'country-list';
 
@@ -162,6 +162,7 @@ const fetchCountries = async () => {
 // Main component
 function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const navigate = useNavigate();
+  const apiRef = useGridApiRef();
 
   // Form state
   const [formData, setFormData] = useState<FormData>({
@@ -194,6 +195,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   // Rows for the spreadsheet popup (seed with your countries if you like)
   type TariffRow = { id: string; countryName: string; tariffRate: number | '' };
   const [tariffRows, setTariffRows] = useState<TariffRow[]>([]);
+  const [availableCountries, setAvailableCountries] = useState<string[]>([]);
 
   // Loading state
   const [loading, setLoading] = useState({
@@ -545,10 +547,34 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     alert((err as Error).message);
   };
 
+  // Handle Enter key to move to next row
+  const handleCellKeyDown = useCallback((
+    params: import('@mui/x-data-grid').GridCellParams,
+    event: React.KeyboardEvent
+  ) => {
+    if (event.key === 'Enter' && !event.shiftKey && params.field === 'tariffRate') {
+      const currentRowIndex = tariffRows.findIndex(row => row.id === params.id);
+      if (currentRowIndex < tariffRows.length - 1) {
+        const nextRow = tariffRows[currentRowIndex + 1];
+        // Move to next row after a small delay to allow the current edit to commit
+        setTimeout(() => {
+          if (apiRef.current) {
+            apiRef.current.setCellFocus(nextRow.id, 'tariffRate');
+            apiRef.current.startCellEditMode({ id: nextRow.id, field: 'tariffRate' });
+          }
+        }, 100);
+      }
+    }
+  }, [tariffRows, apiRef]);
+
   // add a loader + temp id state
   const [loadingFindCountries, setLoadingFindCountries] = useState(false);
   const [countriesTempId, setCountriesTempId] = useState<string | null>(null);
   const [tariffDataFile, setTariffDataFile] = useState<File | null>(null);
+  const [showCountryErrorDialog, setShowCountryErrorDialog] = useState(false);
+  const [countryErrorMessage, setCountryErrorMessage] = useState({ enteredCountry: '', availableCountries: [] as string[] });
+  const [showProductIdErrorDialog, setShowProductIdErrorDialog] = useState(false);
+  const [productIdErrors, setProductIdErrors] = useState<string[]>([]);
 
   // Function to convert tariff data to CSV file
   const createTariffCsvFile = (tariffData: TariffRow[]): File => {
@@ -571,6 +597,50 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   const loadTariffRowsFromFindCountries = async () => {
     if (!partsDataFile || !articlesDataFile) {
       alert("Please upload both Parts and Articles CSVs first.");
+      return;
+    }
+
+    if (!formData.tariffShockCountry) {
+      alert("Please enter a Tariff Shock Simulation Country first.");
+      return;
+    }
+
+    // Validate productIds before sending to backend
+    try {
+      const partsText = await partsDataFile.text();
+      const articlesText = await articlesDataFile.text();
+
+      // Parse CSV files
+      const partsLines = partsText.split('\n').filter(line => line.trim());
+      const articlesLines = articlesText.split('\n').filter(line => line.trim());
+
+      // Get productIds from parts data (skip header)
+      const partsProductIds = new Set<string>();
+      for (let i = 1; i < partsLines.length; i++) {
+        const columns = partsLines[i].split(',');
+        if (columns[0]) {
+          partsProductIds.add(columns[0].trim());
+        }
+      }
+
+      // Check all productIds in articles data exist in parts data
+      const missingProductIds = new Set<string>();
+      for (let i = 1; i < articlesLines.length; i++) {
+        const columns = articlesLines[i].split(',');
+        const productId = columns[0]?.trim();
+        if (productId && !partsProductIds.has(productId)) {
+          missingProductIds.add(productId);
+        }
+      }
+
+      if (missingProductIds.size > 0) {
+        setProductIdErrors(Array.from(missingProductIds));
+        setShowProductIdErrorDialog(true);
+        return;
+      }
+    } catch (error) {
+      console.error('Error validating productIds:', error);
+      alert('Failed to validate product IDs. Please check your CSV files.');
       return;
     }
 
@@ -599,6 +669,23 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
       setCountriesTempId(data.temp_id);
       setTariffRows(rows);
+      setAvailableCountries(data.countries);
+
+      // Validate that the tariff shock country exists in the articles data
+      const tariffCountryLower = formData.tariffShockCountry.toLowerCase().trim();
+      const countryExists = data.countries.some(
+        (country: string) => country.toLowerCase().trim() === tariffCountryLower
+      );
+
+      if (!countryExists) {
+        setCountryErrorMessage({
+          enteredCountry: formData.tariffShockCountry,
+          availableCountries: data.countries
+        });
+        setShowCountryErrorDialog(true);
+        return;
+      }
+
       setOpenTariffGrid(true); // open the dialog after loading
     } catch (e: any) {
       console.error(e);
@@ -1031,47 +1118,75 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
               maxWidth: 'none',
               display: 'flex',
               flexDirection: 'column',
+              borderRadius: 3,
+              p: 1
             },
           }}
         >
-          <DialogTitle sx={{ textAlign: 'center', px: 3 }}>Add Tariff Rates</DialogTitle>
-          <DialogContent dividers sx={{ height: 520 }}>
-          <DataGrid
-            rows={tariffRows}
-            columns={tariffColumns}
-            // Demo-style UX niceties
-            disableRowSelectionOnClick
-
-            // Pagination like the demo
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10 } },
-            }}
-            pageSizeOptions={[5, 10, 25, 50]}
-
-            // Keep your existing toolbar + edit handlers
-            slots={{ toolbar: GridToolbar }}
-            processRowUpdate={handleProcessRowUpdate}
-            onProcessRowUpdateError={handleRowUpdateError}
-
-            // Nice compact look + subtle header background
-            density="compact"
-            sx={{
-              border: 0,
-              '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: 'rgba(0,0,0,0.04)',
-                fontWeight: 600,
-              },
-              '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
-                outline: 'none',
-              },
-              '& .MuiDataGrid-row:hover': {
-                backgroundColor: 'rgba(0,0,0,0.02)',
-              },
-            }}
-          />
+          <DialogTitle sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            pb: 2,
+            fontSize: '1.5rem',
+            fontWeight: 600
+          }}>
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              color: '#1976d2'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#1976d2', fontSize: '1.25rem' }}>
+                Add Tariff Rates
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent dividers sx={{ height: 520, pb: 3 }}>
+            <DataGrid
+              apiRef={apiRef}
+              rows={tariffRows}
+              columns={tariffColumns}
+              disableRowSelectionOnClick
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10 } },
+              }}
+              pageSizeOptions={[5, 10, 25, 50]}
+              slots={{ toolbar: GridToolbar }}
+              processRowUpdate={handleProcessRowUpdate}
+              onProcessRowUpdateError={handleRowUpdateError}
+              onCellKeyDown={handleCellKeyDown}
+              density="compact"
+              sx={{
+                border: 0,
+                '& .MuiDataGrid-columnHeaders': {
+                  backgroundColor: 'rgba(0,0,0,0.04)',
+                  fontWeight: 600,
+                },
+                '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+                  outline: 'none',
+                },
+                '& .MuiDataGrid-row:hover': {
+                  backgroundColor: 'rgba(0,0,0,0.02)',
+                },
+              }}
+            />
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setOpenTariffGrid(false)}>Cancel</Button>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button
+              onClick={() => setOpenTariffGrid(false)}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem'
+              }}
+            >
+              Cancel
+            </Button>
             <Button
               variant="contained"
               disabled={
@@ -1090,6 +1205,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
                 // Trigger the full simulation
                 await handleSubmit();
+              }}
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem'
               }}
             >
               {loading.simulation ? (
@@ -1181,6 +1304,210 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button
               onClick={() => setShowProcessingDialog(false)}
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem'
+              }}
+            >
+              Got it
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Country Validation Error Dialog */}
+        <Dialog
+          open={showCountryErrorDialog}
+          onClose={() => setShowCountryErrorDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              p: 1
+            }
+          }}
+        >
+          <DialogTitle sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            pb: 2,
+            fontSize: '1.5rem',
+            fontWeight: 600
+          }}>
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              color: '#d32f2f'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#d32f2f', fontSize: '1.25rem' }}>
+                Country Not Found
+              </Typography>
+            </Box>
+          </DialogTitle>
+
+          <DialogContent sx={{ pb: 3 }}>
+            <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem', lineHeight: 1.6 }}>
+              The tariff shock country <strong>"{countryErrorMessage.enteredCountry}"</strong> was not found in the articles data.
+            </Typography>
+
+            <Box sx={{
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e9ecef',
+              borderRadius: 2,
+              p: 2.5,
+              mb: 2
+            }}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+                color: '#495057',
+                mb: 1,
+                fontSize: '0.95rem'
+              }}>
+                Available countries in your data:
+              </Typography>
+              <Box sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                mt: 1.5
+              }}>
+                {countryErrorMessage.availableCountries.map((country) => (
+                  <Chip
+                    key={country}
+                    label={country}
+                    size="small"
+                    sx={{
+                      backgroundColor: '#e3f2fd',
+                      color: '#1976d2',
+                      fontWeight: 500
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Typography variant="body2" sx={{
+              color: '#6c757d',
+              fontStyle: 'italic',
+              textAlign: 'center'
+            }}>
+              Please update the country name to match one from the list above.
+            </Typography>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button
+              onClick={() => setShowCountryErrorDialog(false)}
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem'
+              }}
+            >
+              Got it
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Product ID Validation Error Dialog */}
+        <Dialog
+          open={showProductIdErrorDialog}
+          onClose={() => setShowProductIdErrorDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              p: 1
+            }
+          }}
+        >
+          <DialogTitle sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            pb: 2,
+            fontSize: '1.5rem',
+            fontWeight: 600
+          }}>
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              color: '#d32f2f'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#d32f2f', fontSize: '1.25rem' }}>
+                Product ID Mismatch
+              </Typography>
+            </Box>
+          </DialogTitle>
+
+          <DialogContent sx={{ pb: 3 }}>
+            <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem', lineHeight: 1.6 }}>
+              The following product IDs from the articles data were not found in the parts data:
+            </Typography>
+
+            <Box sx={{
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #e9ecef',
+              borderRadius: 2,
+              p: 2.5,
+              mb: 2,
+              maxHeight: '300px',
+              overflowY: 'auto'
+            }}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600,
+                color: '#495057',
+                mb: 1,
+                fontSize: '0.95rem'
+              }}>
+                Missing Product IDs ({productIdErrors.length}):
+              </Typography>
+              <Box sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                mt: 1.5
+              }}>
+                {productIdErrors.map((productId) => (
+                  <Chip
+                    key={productId}
+                    label={productId}
+                    size="small"
+                    sx={{
+                      backgroundColor: '#ffebee',
+                      color: '#c62828',
+                      fontWeight: 500
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <Typography variant="body2" sx={{
+              color: '#6c757d',
+              fontStyle: 'italic',
+              textAlign: 'center'
+            }}>
+              Please ensure all product IDs in the articles data exist in the parts data.
+            </Typography>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button
+              onClick={() => setShowProductIdErrorDialog(false)}
               variant="contained"
               sx={{
                 borderRadius: 2,
