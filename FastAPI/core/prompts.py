@@ -669,6 +669,8 @@ CRITICAL INSTRUCTIONS:
 - ONLY flag missing elements - do NOT critique writing quality, style, or data accuracy in the Issues field
 - Focus on structural completeness: Are all required sections, bullet points, charts, and data points present?
 - Remember: placeholder data in the plan (e.g., "Part1", "£price") should appear as real data in the draft
+- **HIGH BAR FOR MISSING ELEMENTS**: Only flag an element as missing if you are absolutely certain it is not present in the draft. When in doubt, do NOT raise an issue. Verify thoroughly before flagging anything as missing.
+- **EXPECT MINIMAL ISSUES**: In most cases, expect to raise only 2-3 issues maximum, if any. The draft should typically be quite complete. Be highly selective and only flag the most critical missing elements.
 
 Scoring Guidelines:
 - 9-10: All plan elements present, excellent quality
@@ -683,6 +685,7 @@ Check for these specific plan elements:
 3. **Required charts**: Are all charts from the plan included in the appropriate figures arrays?
 4. **Required data points**: Are key metrics explicitly requested by the plan included (e.g., number of parts, combined price, top 3 countries, tariff rates, cost breakdowns)?
 5. **Required citations**: Check that citations are included in Tariff News and Alternative Suppliers sections. You do NOT need to verify the accuracy of the citations - only that citations are present.
+6. **Tariff News feedback**: Evaluate the Tariff News section and suggest further areas of research that could enhance the analysis of tariff or trade policy impacts on the automotive sector and manufacturing country.
 
 Important Context:
 - Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders. Verify all required charts from the plan appear in figures arrays.
@@ -695,6 +698,10 @@ If everything from the plan is included in the draft, your Issues list should be
 
 research_critique_prompt = """You are an expert automotive supply chain researcher, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for information that will help gather data for an analytical report.
 
+Task: \"\"\"
+{task}
+\"\"\"
+
 Manager Feedback: \"\"\"
 {critique}
 \"\"\"
@@ -705,6 +712,7 @@ Guidelines:
 - Don't include the simulation rates in any queries
 - Don't include specific news source names (e.g., Reuters, Bloomberg) in queries
 - Each query should be under 400 characters
+- If there aren't any issues in the feedback that require further web research, find additional tariff news for the automotive sector in the manufacturing country
 
 Create 1-2 search jobs maximum with only the query field populated for each.
 """
