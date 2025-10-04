@@ -684,7 +684,7 @@ Check for these specific plan elements:
 2. **Required bullet points**: Does each section have the specific bullet points requested in the plan?
 3. **Required charts**: Are all charts from the plan included in the appropriate figures arrays?
 4. **Required data points**: Are key metrics explicitly requested by the plan included (e.g., number of parts, combined price, top 3 countries, tariff rates, cost breakdowns)?
-5. **Required citations**: Check that citations are included in Tariff News and Alternative Suppliers sections. You do NOT need to verify the accuracy of the citations - only that citations are present.
+5. **Required citations**: ONLY flag as an issue if there are NO citations at all in the Tariff News and Alternative Suppliers sections. If any citations are present, do not comment on them. You do NOT need to verify the accuracy or completeness of citations.
 6. **Tariff News feedback**: Evaluate the Tariff News section and suggest further areas of research that could enhance the analysis of tariff or trade policy impacts on the automotive sector and manufacturing country.
 
 Important Context:
