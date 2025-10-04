@@ -38,7 +38,7 @@ plan_prompt = """You are an expert research analyst specialising in global autom
   - Use only Simulation Results content.
   - Write a paragraph (150–250 words) including:
     - The three tariff rates tested in the simulation and the target country applying the tariffs.
-    - Share of impacted articles by the tariffs (i.e. impacted/total).
+    - Number of articles imported from the target country.
     - VAT rate being applied by the manufacturing country
   - Bullet Points:
     - Cost breakdown before the tariff shock, e.g. Base Cost (£cost), Tariff Cost (£cost), VAT Cost (£cost) and Total Cost (£cost).
@@ -636,7 +636,7 @@ Original Task:
 {task}
 \"\"\"
 
-Research Plan (contains placeholder data and structure guidelines):
+Plan (contains placeholder data and structure guidelines):
 \"\"\"
 {plan}
 \"\"\"
