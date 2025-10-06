@@ -1,11 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from langsmith import Client
-
 from FastAPI.core.CoT_prompting import chain_of_thought_planning_examples, chain_of_thought_writing_examples
-
-client = Client()
 
 # prompt for the planning node
 plan_prompt = """You are an expert research analyst specialising in global automotive supply chains. Your task is to write a high-level outline of an automotive supply chain report. Write the report outline for the user-provided topic using the sections below. Give an outline of the report along with any relevant notes or instructions for each section. The plan should be at least 550 words but no more than 750 words.
