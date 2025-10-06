@@ -696,7 +696,7 @@ Important Context:
 
 If everything from the plan is included in the draft, your Issues list should be empty and Recommendations should be empty. Only raise feedback if actual plan elements are missing."""
 
-research_critique_prompt = """You are an expert automotive supply chain researcher, tasked with providing information for any requested revisions. Generate 1-2 concise search queries (each under 400 characters) for information that will help gather data for an analytical report.
+research_critique_prompt = """You are an expert automotive supply chain researcher. Generate 1-2 concise search queries (under 400 characters each) to support report revisions.
 
 Task: \"\"\"
 {task}
@@ -706,14 +706,15 @@ Manager Feedback: \"\"\"
 {critique}
 \"\"\"
 
-Guidelines:
-- Keep queries focused and specific (avoid multi-topic queries)
-- Use keywords related to the automotive supply chain, tariffs, and the target country
-- Don't include the simulation rates in any queries
-- Don't include specific news source names (e.g., Reuters, Bloomberg) in queries
-- Each query should be under 400 characters
-- If there aren't any issues in the feedback that require further web research, find additional tariff news for the automotive sector in the manufacturing country
+Instructions:
+1. Extract from task: manufacturing country, component/vehicle, and tariff-affected country
+2. If feedback requests specific information for tariff or trade news → create targeted queries for those gaps
+3. If feedback has no specific research requests on tariff or trade news → generate queries for recent tariff/trade news affecting the manufacturing country and automotive sector
 
-Create 1-2 search jobs maximum with only the query field populated for each.
+Guidelines:
+- Keep queries focused and specific
+- Don't include simulation rates or news source names
+- Each query under 400 characters
+- Create 1-2 search jobs maximum with only the query field populated
 """
 
