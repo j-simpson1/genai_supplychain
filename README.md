@@ -133,3 +133,7 @@ Access the interactive API documentation at `/docs` when running the server.
 - LangSmith for observability
 - Custom prompt engineering
 - Multi-agent coordination with LangGraph
+
+## AI Usage Statement
+
+This research project uses AI technologies both as its subject matter and as development tools. LLMs (Claude, ChatGPT, GitHub Copilot) were used in development for debugging, learning frameworks, and code generation. All design decisions, architecture, and problem-solving approaches were developed independently, with AI-generated code critically evaluated and refined to meet project requirements.
