@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Divider,
@@ -79,7 +78,6 @@ const StyledButton = styled(Button)(({ theme }) => ({
 
 // Main component
 function VehicleForm({}: VehicleFormProps) {
-  const navigate = useNavigate();
   const apiRef = useGridApiRef();
 
   // Form state
@@ -107,7 +105,7 @@ function VehicleForm({}: VehicleFormProps) {
   // Rows for the spreadsheet popup
   type TariffRow = { id: string; countryName: string; tariffRate: number | '' };
   const [tariffRows, setTariffRows] = useState<TariffRow[]>([]);
-  const [availableCountries, setAvailableCountries] = useState<string[]>([]);
+  const [_availableCountries, setAvailableCountries] = useState<string[]>([]);
 
   // Loading state
   const [loading, setLoading] = useState({
@@ -116,7 +114,7 @@ function VehicleForm({}: VehicleFormProps) {
 
   // Additional state for error handling
   const [loadingFindCountries, setLoadingFindCountries] = useState(false);
-  const [countriesTempId, setCountriesTempId] = useState<string | null>(null);
+  const [_countriesTempId, setCountriesTempId] = useState<string | null>(null);
   const [showCountryErrorDialog, setShowCountryErrorDialog] = useState(false);
   const [countryErrorMessage, setCountryErrorMessage] = useState({ enteredCountry: '', availableCountries: [] as string[] });
   const [showProductIdErrorDialog, setShowProductIdErrorDialog] = useState(false);
