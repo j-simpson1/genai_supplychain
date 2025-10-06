@@ -629,7 +629,7 @@ Charts **include ALL in the report**: \"\"\"
 \"\"\"
 """
 
-reflection_prompt = """You are a manager reviewing the analyst's report against the original plan. Your PRIMARY task is to identify which elements from the plan are missing from the draft.
+reflection_prompt = """You are a manager reviewing the analyst's report against the original plan to identify missing elements.
 
 Original Task:
 \"\"\"
@@ -651,50 +651,39 @@ Charts Available:
 {charts}
 \"\"\"
 
-IMPORTANT CONTEXT ABOUT THE PLAN:
-- The plan contains placeholder examples (e.g., "Part1", "Supplier1", "Country1", "£price") to illustrate the structure
-- The plan does NOT contain actual data - the draft should replace placeholders with real data
-- When comparing the plan to the draft, focus on STRUCTURE and REQUIRED ELEMENTS, not on whether specific placeholder values appear
+Context: The plan uses placeholders (e.g., "Part1", "£price") to illustrate structure. Compare STRUCTURE and REQUIRED ELEMENTS, not placeholder values.
 
-YOUR TASK:
-Compare the draft against the plan to identify missing elements. You must provide a structured assessment with:
+Your Assessment (4 components):
+1. **Quality Score (1-10)**: Writing quality, clarity, professionalism
+2. **Completeness Score (1-10)**: All required sections/elements present?
+3. **Issues**: Specific missing plan elements (empty list [] if complete)
+4. **Recommendations**: How to add missing elements (empty string "" if complete)
 
-1. **Quality Score (1-10)**: Overall quality of writing, clarity, and professionalism
-2. **Completeness Score (1-10)**: Does the draft include all required sections and elements from the plan?
-3. **Issues**: List ONLY the specific plan elements that are missing from the draft (empty list if everything is included)
-4. **Recommendations**: Actionable recommendations for adding missing elements (empty string if nothing is missing)
+Scoring Guide:
+- 9-10: All elements present, excellent quality
+- 7-8: Nearly all elements present, good quality
+- 5-6: Some elements missing
+- 3-4: Many elements missing
+- 1-2: Most elements missing
 
-CRITICAL INSTRUCTIONS:
-- If ALL plan elements are present in the draft, set Issues to an empty list [] and Recommendations to an empty string ""
-- ONLY flag missing elements - do NOT critique writing quality, style, or data accuracy in the Issues field
-- Focus on structural completeness: Are all required sections, bullet points, charts, and data points present?
-- Remember: placeholder data in the plan (e.g., "Part1", "£price") should appear as real data in the draft
-- **HIGH BAR FOR MISSING ELEMENTS**: Only flag an element as missing if you are absolutely certain it is not present in the draft. When in doubt, do NOT raise an issue. Verify thoroughly before flagging anything as missing.
-- **EXPECT MINIMAL ISSUES**: In most cases, expect to raise only 2-3 issues maximum, if any. The draft should typically be quite complete. Be highly selective and only flag the most critical missing elements.
+Critical Instructions:
+- ONLY flag if absolutely certain an element is missing - when in doubt, do NOT flag
+- Expect minimal issues (0-3 maximum) - be highly selective
+- Flag missing STRUCTURE only, not writing quality/style
+- If all plan elements present: Issues = [], Recommendations = ""
 
-Scoring Guidelines:
-- 9-10: All plan elements present, excellent quality
-- 7-8: All or nearly all plan elements present, good quality
-- 5-6: Some plan elements missing
-- 3-4: Many plan elements missing
-- 1-2: Most plan elements missing
+Check These Elements:
+1. Required sections from plan structure
+2. Required bullet points per section
+3. Required charts in figures arrays as [[FIGURE:chart_id]]
+4. Required data points (part counts, prices, top 3 countries, tariff rates, cost breakdowns)
+5. Citations in Tariff News/Alternative Suppliers (only flag if NONE present)
+6. Tariff News recommendations: Always suggest 1-2 additional research areas for tariff/trade policy impacts
 
-Check for these specific plan elements:
-1. **Required sections**: Are all sections from the plan structure present?
-2. **Required bullet points**: Does each section have the specific bullet points requested in the plan?
-3. **Required charts**: Are all charts from the plan included in the appropriate figures arrays?
-4. **Required data points**: Are key metrics explicitly requested by the plan included (e.g., number of parts, combined price, top 3 countries, tariff rates, cost breakdowns)?
-5. **Required citations**: ONLY flag as an issue if there are NO citations at all in the Tariff News and Alternative Suppliers sections. If any citations are present, do not comment on them. You do NOT need to verify the accuracy or completeness of citations.
-6. **Tariff News feedback**: Evaluate the Tariff News section and suggest further areas of research that could enhance the analysis of tariff or trade policy impacts on the automotive sector and manufacturing country.
-
-Important Context:
-- Chart placement: Charts must be in the "figures" array as [[FIGURE:chart_id]] placeholders. Verify all required charts from the plan appear in figures arrays.
-- Parts vs Articles: "Parts" are component types; "Articles" are supplier offerings. Both terms should appear correctly.
-- Q1 Methodology: Different Q1 calculations in different sections is intentional methodology.
-- Word count ranges are guidelines, not strict limits.
-- Internal tools: The draft does NOT need to reference or cite the internal database or simulation tools. These are internal systems and should not appear in citations.
-
-If everything from the plan is included in the draft, your Issues list should be empty and Recommendations should be empty. Only raise feedback if actual plan elements are missing."""
+Notes:
+- Charts must be in "figures" arrays, not content
+- Word counts are guidelines, not strict limits
+- Database and simulation data are internally generated - no citations needed for these sources"""
 
 research_critique_prompt = """You are an expert automotive supply chain researcher. Generate 1-2 concise search queries (under 400 characters each) to support report revisions.
 
