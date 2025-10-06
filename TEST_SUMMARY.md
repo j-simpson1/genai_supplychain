@@ -20,29 +20,29 @@ tests/
 
 ## Test Coverage
 
-### Overall Project Coverage: **30%**
+### Overall Project Coverage: **31%**
 ### Key Module Coverage:
 - **FastAPI/routes/api.py**: **84%** ✅
-- **FastAPI/utils/data_validation.py**: **78%** ✅
+- **FastAPI/utils/data_validation.py**: **86%** ✅
 - **FastAPI/main.py**: **100%** ✅
 
 ## Test Results
 
-### Total Tests: **13**
-- **Passed**: 13 ✅
+### Total Tests: **15**
+- **Passed**: 15 ✅
 - **Failed**: 0
-- **Execution Time**: 0.07s
+- **Execution Time**: 0.06s
 
 ## Test Categories
 
-### 1. Find Countries Endpoint Tests (5 tests)
+### 1. Find Countries Endpoint Tests (5 integration tests)
 - ✅ `test_find_countries_success` - Valid CSV file processing
 - ✅ `test_find_countries_invalid_parts_file` - Invalid parts CSV handling
 - ✅ `test_find_countries_invalid_articles_file` - Invalid articles CSV handling
 - ✅ `test_find_countries_non_csv_file` - Non-CSV file rejection
 - ✅ `test_find_countries_row_counts` - Correct row count validation
 
-### 2. Report Generator Endpoint Tests (6 tests)
+### 2. Report Generator Endpoint Tests (6 integration tests)
 - ✅ `test_run_report_generator_success` - Successful report generation
 - ✅ `test_run_report_generator_invalid_json` - Invalid JSON handling
 - ✅ `test_run_report_generator_invalid_tariff_rate` - Invalid tariff rate validation
@@ -50,9 +50,15 @@ tests/
 - ✅ `test_run_report_generator_invalid_vat_rate` - VAT rate boundary validation
 - ✅ `test_run_report_generator_non_csv_parts` - File type validation
 
-### 3. Data Validation Tests (2 tests)
+### 3. Data Validation Tests (4 tests: 2 integration + 2 unit)
+
+**Integration Tests (2):**
 - ✅ `test_csv_validation_success` - Valid CSV acceptance
 - ✅ `test_csv_validation_missing_columns` - Missing column detection
+
+**Unit Tests (2):**
+- ✅ `test_validate_csv_with_empty_required_columns` - Empty field detection
+- ✅ `test_validate_numeric_columns` - Numeric type validation
 
 ## Test Fixtures
 
@@ -108,8 +114,8 @@ open htmlcov/index.html
 
 ## Report Benefits
 
-1. **Demonstrates Software Engineering Rigor**: Professional testing methodology
-2. **Quantifiable Metrics**: 84% coverage on critical API routes
+1. **Demonstrates Software Engineering Rigor**: Professional testing methodology with test pyramid approach
+2. **Quantifiable Metrics**: 84% coverage on critical API routes, 86% on data validation
 3. **Validation Confidence**: Comprehensive input validation testing
 4. **Documentation**: Clear test categorization and naming
 5. **Reproducibility**: Automated testing ensures consistent behavior
@@ -130,9 +136,9 @@ open htmlcov/index.html
 - Coverage goals and achievement
 
 **Quantitative Results**
-- 13 test cases implemented
+- 15 test cases implemented (13 integration + 2 unit)
 - 84% coverage on API routes
-- 78% coverage on data validation
+- 86% coverage on data validation
 - 100% pass rate
 
 **Validation Strategy**

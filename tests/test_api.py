@@ -301,3 +301,44 @@ class TestDataValidation:
         )
 
         assert response.status_code == 400
+
+    def test_validate_csv_with_empty_required_columns(self):
+        """Unit test: Validation catches empty values in required columns"""
+        from FastAPI.utils.data_validation import validate_uploaded_csvs
+
+        # CSV with empty productId value (required field)
+        parts_csv = """productId,partDescription,quantity,taxable
+,Engine Oil Filter,10,True
+2,Brake Pad Set,5,True
+3,Air Filter,15,True"""
+
+        articles_csv = """productId,articleNo,price,countryOfOrigin,supplierId,supplierName
+1,ART001,25.99,Japan,101,Japan Parts Co
+2,ART002,89.99,Germany,102,German Auto GmbH"""
+
+        is_valid, errors = validate_uploaded_csvs(parts_csv, articles_csv)
+
+        assert is_valid is False
+        assert len(errors) > 0
+        assert any("empty values" in error.lower() for error in errors)
+        assert any("productId" in error for error in errors)
+
+    def test_validate_numeric_columns(self):
+        """Unit test: Numeric validation for price and quantity columns"""
+        from FastAPI.utils.data_validation import validate_uploaded_csvs
+
+        # CSV with invalid numeric values
+        parts_csv = """productId,partDescription,quantity,taxable
+1,Engine Oil Filter,invalid_quantity,True
+2,Brake Pad Set,10,True"""
+
+        articles_csv = """productId,articleNo,price,countryOfOrigin,supplierId,supplierName
+1,ART001,not_a_price,Japan,101,Japan Parts Co
+2,ART002,89.99,Germany,102,German Auto GmbH"""
+
+        is_valid, errors = validate_uploaded_csvs(parts_csv, articles_csv)
+
+        assert is_valid is False
+        assert len(errors) > 0
+        # Should detect non-numeric values in quantity or price columns
+        assert any("non-numeric" in error.lower() for error in errors)
