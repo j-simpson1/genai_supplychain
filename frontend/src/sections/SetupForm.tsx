@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -6,12 +6,8 @@ import {
   Paper,
   Typography,
   FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Button,
   Container,
-  Autocomplete,
   TextField,
   CircularProgress,
   Chip,
@@ -22,59 +18,24 @@ import {
 } from '@mui/material';
 import { DataGrid, GridToolbar, useGridApiRef } from '@mui/x-data-grid';
 import { styled } from '@mui/material/styles';
-import { getCodes, getNames } from 'country-list';
 
 // Types
-interface VehicleFormProps {
-  vehicleBrands: { label: string; id: number }[];
-}
+interface VehicleFormProps {}
 
 interface FormData {
   vehicle: string;
-  vehicleId: string;
   model: string;
-  modelId: string;
-  type: string;
   categoryFilter: string;
   manufacturingLocation: string;
   tariffShockCountry: string;
   tariffRate1: string;
   tariffRate2: string;
   tariffRate3: string;
-  vatRate: string; // New VAT rate field
-}
-
-interface EngineOption {
-  vehicleId: string;
-  typeEngineName: string;
-  powerPs: string;
-  fuelType: string;
-  bodyType: string;
-  manufacturerName: string;
-  modelName: string;
-}
-
-interface CategoryOption {
-  id: string;
-  name: string;
+  vatRate: string;
 }
 
 // Constants
 const API_BASE_URL = 'http://127.0.0.1:8000';
-
-// Default fallback locations if API fails
-const DEFAULT_MANUFACTURING_LOCATIONS = [
-  { id: 'germany', name: 'Germany' },
-  { id: 'japan', name: 'Japan' },
-  { id: 'china', name: 'China' },
-  { id: 'south_korea', name: 'South Korea' },
-  { id: 'usa', name: 'United States' },
-  { id: 'italy', name: 'Italy' },
-  { id: 'france', name: 'France' },
-  { id: 'uk', name: 'United Kingdom' },
-  { id: 'india', name: 'India' },
-  { id: 'mexico', name: 'Mexico' },
-];
 
 // Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -114,200 +75,54 @@ const StyledButton = styled(Button)(({ theme }) => ({
   transition: 'all 0.2s ease',
 }));
 
-// API functions
-const fetchModels = async (vehicleId: string) => {
-  const response = await fetch(`${API_BASE_URL}/manufacturers/models?id=${vehicleId}`);
-  const data = await response.json();
-  return data.models || [];
-};
-
-const fetchEngineTypes = async (vehicleId: string, modelId: string) => {
-  const response = await fetch(
-    `${API_BASE_URL}/manufacturers/models/engine_type?manufacturerId=${vehicleId}&modelSeriesId=${modelId}`
-  );
-  const data = await response.json();
-  return data.modelTypes || [];
-};
-
-const fetchCategories = async (vehicleId: string, manufacturerId: string) => {
-  const response = await fetch(
-    `${API_BASE_URL}/manufacturers/models/engine_type/category_v3?vehicleId=${vehicleId}&manufacturerId=${manufacturerId}`
-  );
-  const data = await response.json();
-  return data.categories || data;
-};
-
-const fetchCountries = async () => {
-  try {
-    // Get all country names and codes from country-list
-    const countryCodes = getCodes();
-    const countryNames = getNames();
-
-    // Transform into our required format
-    const transformedCountries = countryCodes.map((code, index) => ({
-      id: code.toLowerCase(),
-      name: countryNames[index]
-    }));
-
-    // Sort alphabetically by name
-    transformedCountries.sort((a, b) => a.name.localeCompare(b.name));
-
-    return transformedCountries;
-  } catch (error) {
-    console.error('Error creating countries list:', error);
-    return DEFAULT_MANUFACTURING_LOCATIONS;
-  }
-};
+// API functions - removed fetchModels, fetchEngineTypes, fetchCategories since we're using text inputs now
 
 // Main component
-function VehicleForm({ vehicleBrands }: VehicleFormProps) {
+function VehicleForm({}: VehicleFormProps) {
   const navigate = useNavigate();
   const apiRef = useGridApiRef();
 
   // Form state
   const [formData, setFormData] = useState<FormData>({
     vehicle: '',
-    vehicleId: '',
     model: '',
-    modelId: '',
-    type: '',
-    categoryFilter: 'all',
+    categoryFilter: '',
     manufacturingLocation: '',
     tariffShockCountry: '',
     tariffRate1: '',
     tariffRate2: '',
     tariffRate3: '',
-    vatRate: '', // Initialize VAT rate
+    vatRate: '',
   });
 
   // Data state
-  const [models, setModels] = useState<{ modelId: number, modelName: string }[]>([]);
-  const [engineOptions, setEngineOptions] = useState<EngineOption[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<CategoryOption[]>([]);
-  const [manufacturingLocations, setManufacturingLocations] = useState<{ id: string, name: string }[]>([]);
   const [partsDataFile, setPartsDataFile] = useState<File | null>(null);
   const [articlesDataFile, setArticlesDataFile] = useState<File | null>(null);
+  const [tariffDataFile, setTariffDataFile] = useState<File | null>(null);
   const [showProcessingDialog, setShowProcessingDialog] = useState(false);
 
   // Spreadsheet popup state
   const [openTariffGrid, setOpenTariffGrid] = useState(false);
 
-  // Rows for the spreadsheet popup (seed with your countries if you like)
+  // Rows for the spreadsheet popup
   type TariffRow = { id: string; countryName: string; tariffRate: number | '' };
   const [tariffRows, setTariffRows] = useState<TariffRow[]>([]);
   const [availableCountries, setAvailableCountries] = useState<string[]>([]);
 
   // Loading state
   const [loading, setLoading] = useState({
-    models: false,
-    engines: false,
-    categories: false,
-    countries: false,
     simulation: false,
   });
 
-  // Error state
-  const [errors, setErrors] = useState({
-    models: null as string | null,
-    engines: null as string | null,
-  });
+  // Additional state for error handling
+  const [loadingFindCountries, setLoadingFindCountries] = useState(false);
+  const [countriesTempId, setCountriesTempId] = useState<string | null>(null);
+  const [showCountryErrorDialog, setShowCountryErrorDialog] = useState(false);
+  const [countryErrorMessage, setCountryErrorMessage] = useState({ enteredCountry: '', availableCountries: [] as string[] });
+  const [showProductIdErrorDialog, setShowProductIdErrorDialog] = useState(false);
+  const [productIdErrors, setProductIdErrors] = useState<string[]>([]);
 
-  // Load countries on component mount
-  useEffect(() => {
-    const loadCountries = async () => {
-      setLoading(prev => ({ ...prev, countries: true }));
-      try {
-        const countries = await fetchCountries();
-        setManufacturingLocations(countries);
-      } catch (error) {
-        console.error('Error loading countries:', error);
-        const fallbackCountries = DEFAULT_MANUFACTURING_LOCATIONS;
-        setManufacturingLocations(fallbackCountries);
-      } finally {
-        setLoading(prev => ({ ...prev, countries: false }));
-      }
-    };
-
-    loadCountries();
-  }, []);
-
-  // Load models when vehicle changes
-  useEffect(() => {
-    if (!formData.vehicleId) return;
-
-    const loadModels = async () => {
-      setLoading(prev => ({ ...prev, models: true }));
-      setErrors(prev => ({ ...prev, models: null }));
-      setModels([]);
-
-      try {
-        const data = await fetchModels(formData.vehicleId);
-        setModels(data);
-        if (data.length === 0) {
-          setErrors(prev => ({ ...prev, models: "No models found." }));
-        }
-      } catch (error) {
-        setErrors(prev => ({ ...prev, models: "Failed to load models." }));
-      } finally {
-        setLoading(prev => ({ ...prev, models: false }));
-      }
-    };
-
-    loadModels();
-  }, [formData.vehicleId]);
-
-  // Load engine types when model changes
-  useEffect(() => {
-    if (!formData.vehicleId || !formData.modelId) return;
-
-    const loadEngines = async () => {
-      setLoading(prev => ({ ...prev, engines: true }));
-      setErrors(prev => ({ ...prev, engines: null }));
-      setEngineOptions([]);
-
-      try {
-        const data = await fetchEngineTypes(formData.vehicleId, formData.modelId);
-        setEngineOptions(data);
-        if (data.length === 0) {
-          setErrors(prev => ({ ...prev, engines: "No engine types found." }));
-        }
-      } catch (error) {
-        setErrors(prev => ({ ...prev, engines: "Failed to load engine types." }));
-      } finally {
-        setLoading(prev => ({ ...prev, engines: false }));
-      }
-    };
-
-    loadEngines();
-  }, [formData.vehicleId, formData.modelId]);
-
-  // Load categories when engine type is selected
-  useEffect(() => {
-    if (!formData.vehicleId || !formData.type) return;
-
-    const selectedEngine = engineOptions.find(engine => engine.typeEngineName === formData.type);
-    if (!selectedEngine) return;
-
-    const loadCategories = async () => {
-      setLoading(prev => ({ ...prev, categories: true }));
-
-      try {
-        const categories = await fetchCategories(selectedEngine.vehicleId, formData.vehicleId);
-        const level1Categories: CategoryOption[] = Object.entries(categories).map(([id, category]: [string, any]) => ({
-          id: id,
-          name: category.text
-        }));
-        setAvailableCategories(level1Categories);
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        setAvailableCategories([]);
-      } finally {
-        setLoading(prev => ({ ...prev, categories: false }));
-      }
-    };
-
-    loadCategories();
-  }, [formData.vehicleId, formData.type, engineOptions]);
+  // No need to load data from API anymore - all fields are text inputs
 
   // Handlers
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>, fileType: 'parts' | 'articles') => {
@@ -326,10 +141,11 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
   // Function to check if the form is ready for submission
   const isFormValid = useCallback(() => {
     return !!(
-      formData.type &&
+      formData.vehicle &&
+      formData.model &&
+      formData.categoryFilter &&
       formData.manufacturingLocation &&
       formData.tariffShockCountry &&
-      formData.categoryFilter &&
       formData.tariffRate1 &&
       formData.tariffRate2 &&
       formData.tariffRate3 &&
@@ -341,11 +157,6 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
   const handleSubmit = useCallback(async (event?: React.FormEvent) => {
     if (event) event.preventDefault();
-
-    const selectedEngine = engineOptions.find(engine => engine.typeEngineName === formData.type);
-    if (!selectedEngine) {
-      return;
-    }
 
     if (!partsDataFile) {
       return;
@@ -365,15 +176,18 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       // Create FormData for file upload
       const formDataToSend = new FormData();
 
+      // Create vehicle details object from text inputs
+      const vehicleDetails = {
+        manufacturerName: formData.vehicle,
+        modelName: formData.model,
+      };
+
       // Add vehicle details
-      formDataToSend.append('vehicle_details', JSON.stringify(selectedEngine));
+      formDataToSend.append('vehicle_details', JSON.stringify(vehicleDetails));
       formDataToSend.append('category_filter', formData.categoryFilter);
 
-      // Get category name
-      const categoryName = formData.categoryFilter === 'all'
-        ? 'Complete Vehicle'
-        : availableCategories.find(cat => cat.id === formData.categoryFilter)?.name || 'Unknown Category';
-      formDataToSend.append('category_name', categoryName);
+      // Use the category filter text as the category name
+      formDataToSend.append('category_name', formData.categoryFilter);
 
       formDataToSend.append('manufacturing_location', formData.manufacturingLocation);
       formDataToSend.append('manufacturing_location_name', formData.manufacturingLocation);
@@ -383,7 +197,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       formDataToSend.append('tariff_rate_1', formData.tariffRate1);
       formDataToSend.append('tariff_rate_2', formData.tariffRate2);
       formDataToSend.append('tariff_rate_3', formData.tariffRate3);
-      formDataToSend.append('vat_rate', formData.vatRate); // Add VAT rate to form data
+      formDataToSend.append('vat_rate', formData.vatRate);
 
       // Add files
       formDataToSend.append('parts_data_file', partsDataFile);
@@ -406,14 +220,14 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
         const result = await response.json();
         console.log('Simulation completed:', result);
         console.log('Form data submitted:', {
-          vehicleDetails: selectedEngine,
+          vehicleDetails: vehicleDetails,
           categoryFilter: formData.categoryFilter,
           manufacturingLocation: formData.manufacturingLocation,
           tariffShockCountry: formData.tariffShockCountry,
           tariffRate1: formData.tariffRate1,
           tariffRate2: formData.tariffRate2,
           tariffRate3: formData.tariffRate3,
-          vatRate: formData.vatRate, // Log VAT rate
+          vatRate: formData.vatRate,
           partsDataFile: partsDataFile?.name,
           articlesDataFile: articlesDataFile?.name,
           tariffDataFile: tariffDataFile?.name
@@ -433,26 +247,20 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
       // Re-enable the button once the process is complete (success or failure)
       setLoading(prev => ({ ...prev, simulation: false }));
     }
-  }, [engineOptions, formData, partsDataFile, articlesDataFile]);
+  }, [formData, partsDataFile, articlesDataFile, tariffDataFile]);
 
   const handleReset = useCallback(() => {
     setFormData({
       vehicle: '',
-      vehicleId: '',
       model: '',
-      modelId: '',
-      type: '',
-      categoryFilter: 'all',
+      categoryFilter: '',
       manufacturingLocation: '',
       tariffShockCountry: '',
       tariffRate1: '',
       tariffRate2: '',
       tariffRate3: '',
-      vatRate: '', // Reset VAT rate
+      vatRate: '',
     });
-    setModels([]);
-    setEngineOptions([]);
-    setAvailableCategories([]);
     setPartsDataFile(null);
     setArticlesDataFile(null);
     // Reset file inputs if they exist
@@ -462,18 +270,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     if (articlesInput) articlesInput.value = '';
   }, []);
 
-  const renderSelectMenuItems = useCallback((
-    loading: boolean,
-    error: string | null,
-    items: any[],
-    emptyMessage: string,
-    renderItem: (item: any, index: number) => React.ReactNode
-  ) => {
-    if (loading) return <MenuItem value="" disabled>Loading...</MenuItem>;
-    if (error) return <MenuItem value="" disabled>{error}</MenuItem>;
-    if (items.length === 0) return <MenuItem value="" disabled>{emptyMessage}</MenuItem>;
-    return items.map(renderItem);
-  }, []);
+  // Removed renderSelectMenuItems since we're using text inputs now
 
   const handleTariffRateChange = (field: 'tariffRate1' | 'tariffRate2' | 'tariffRate3') => (
     event: React.ChangeEvent<HTMLInputElement>
@@ -567,14 +364,7 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
     }
   }, [tariffRows, apiRef]);
 
-  // add a loader + temp id state
-  const [loadingFindCountries, setLoadingFindCountries] = useState(false);
-  const [countriesTempId, setCountriesTempId] = useState<string | null>(null);
-  const [tariffDataFile, setTariffDataFile] = useState<File | null>(null);
-  const [showCountryErrorDialog, setShowCountryErrorDialog] = useState(false);
-  const [countryErrorMessage, setCountryErrorMessage] = useState({ enteredCountry: '', availableCountries: [] as string[] });
-  const [showProductIdErrorDialog, setShowProductIdErrorDialog] = useState(false);
-  const [productIdErrors, setProductIdErrors] = useState<string[]>([]);
+  // State declarations moved to top of component
 
   // Function to convert tariff data to CSV file
   const createTariffCsvFile = (tariffData: TariffRow[]): File => {
@@ -729,142 +519,53 @@ function VehicleForm({ vehicleBrands }: VehicleFormProps) {
 
           {/* Vehicle Brand */}
           <StyledFormControl fullWidth required>
-            <Autocomplete
-              options={vehicleBrands}
-              getOptionLabel={(option) => option.label}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              value={vehicleBrands.find(b => b.id === parseInt(formData.vehicleId)) || null}
-              onChange={(event, newValue) => {
-                setFormData(prev => ({
+            <TextField
+              label="Vehicle Brand"
+              value={formData.vehicle}
+              onChange={(e) => {
+                setFormData((prev) => ({
                   ...prev,
-                  vehicleId: newValue?.id.toString() || '',
-                  vehicle: newValue?.label || '',
-                  model: '',
-                  modelId: '',
-                  type: '',
+                  vehicle: e.target.value,
                 }));
               }}
-              disableClearable
-              renderOption={(props, option) => <li {...props} key={option.id}>{option.label}</li>}
-              renderInput={(params) => <TextField {...params} label="Vehicle Brand" required />}
+              required
+              placeholder="e.g. Toyota"
+              type="text"
             />
           </StyledFormControl>
 
           {/* Model */}
           <StyledFormControl fullWidth required>
-            <Autocomplete
-              options={models}
-              getOptionLabel={(option) => option.modelName}
-              isOptionEqualToValue={(option, value) => option.modelId === value.modelId}
-              value={models.find(m => m.modelName === formData.model) || null}
-              onChange={(event, newValue) => {
-                setFormData(prev => ({
+            <TextField
+              label="Model"
+              value={formData.model}
+              onChange={(e) => {
+                setFormData((prev) => ({
                   ...prev,
-                  model: newValue?.modelName || '',
-                  modelId: newValue?.modelId.toString() || '',
-                  type: '',
-                  categoryFilter: 'all',
+                  model: e.target.value,
                 }));
               }}
-              disabled={!formData.vehicleId || loading.models}
-              loading={loading.models}
-              disableClearable
-              renderOption={(props, option) => <li {...props} key={option.modelId}>{option.modelName}</li>}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Model"
-                  required
-                  error={!!errors.models}
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loading.models ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
-              )}
-              noOptionsText={
-                !formData.vehicleId ? 'Select a brand to load models'
-                : loading.models ? 'Loading models...'
-                : errors.models ? errors.models
-                : 'No models found'
-              }
+              required
+              placeholder="e.g. RAV4"
+              type="text"
             />
           </StyledFormControl>
 
-          <StyledFormControl fullWidth required disabled={!formData.modelId || loading.engines}>
-            <InputLabel id="engine-type-label">Engine Type</InputLabel>
-            <Select
-              labelId="engine-type-label"
-              id="engine-type-select"
-              name="type"
-              value={formData.type}
-              label="Engine Type"
-              onChange={(e) => {
-                setFormData(prev => ({
-                  ...prev,
-                  type: e.target.value,
-                  categoryFilter: 'all',
-                }));
-                setAvailableCategories([]);
-              }}
-            >
-              {renderSelectMenuItems(
-                loading.engines,
-                errors.engines,
-                engineOptions,
-                'Select a model to load engine types',
-                (engine, index) => (
-                  <MenuItem key={index} value={engine.typeEngineName}>
-                    {engine.typeEngineName} — {engine.powerPs} PS, {engine.fuelType}, {engine.bodyType}
-                  </MenuItem>
-                )
-              )}
-            </Select>
-          </StyledFormControl>
-
-          <StyledFormControl fullWidth required disabled={!formData.type}>
-            <InputLabel id="category-filter-label">Parts Category</InputLabel>
-            <Select
-              labelId="category-filter-label"
-              id="category-filter-select"
-              name="categoryFilter"
-              value={formData.categoryFilter}
+          {/* Parts Category */}
+          <StyledFormControl fullWidth required>
+            <TextField
               label="Parts Category"
-              onChange={(e) => setFormData(prev => ({ ...prev, categoryFilter: e.target.value }))}
+              value={formData.categoryFilter}
+              onChange={(e) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  categoryFilter: e.target.value,
+                }));
+              }}
               required
-            >
-              <MenuItem value="all">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography sx={{ fontWeight: 600 }}>Complete Vehicle</Typography>
-                  <Chip label="All Parts" size="small" color="primary" variant="outlined" />
-                </Box>
-              </MenuItem>
-              {loading.categories ? (
-                <MenuItem value="" disabled>Loading categories...</MenuItem>
-              ) : availableCategories.length === 0 ? (
-                <MenuItem value="" disabled>Select an engine type to load categories</MenuItem>
-              ) : (
-                availableCategories.map((category) => (
-                  <MenuItem key={category.id} value={category.id}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography>{category.name}</Typography>
-                      <Chip
-                        label={category.id}
-                        size="small"
-                        variant="filled"
-                        color="default"
-                        sx={{ fontSize: '0.7rem', height: '20px' }}
-                      />
-                    </Box>
-                  </MenuItem>
-                ))
-              )}
-            </Select>
+              placeholder="e.g. Braking System or Complete Vehicle"
+              type="text"
+            />
           </StyledFormControl>
         </Box>
 
