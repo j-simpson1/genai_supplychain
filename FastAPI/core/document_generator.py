@@ -85,6 +85,7 @@ Generate a list of search queries that will gather any relevant information. Onl
 # then create a human message which is what we want system to do
 def plan_node(state: AgentState) -> Dict[str, str]:
     """Generate a plan based on the task."""
+    print("\nCreating report plan...")
     messages = [
         SystemMessage(content=plan_prompt),
         HumanMessage(content=state['task'])
@@ -94,6 +95,7 @@ def plan_node(state: AgentState) -> Dict[str, str]:
 
 def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
     """Decide what charts to generate based on DB summary and content."""
+    print("\nPlanning charts...")
     db_summary = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
 
@@ -121,9 +123,8 @@ def chart_planning_node(state: AgentState) -> Dict[str, List[Dict[str, str]]]:
 
 def writer_node(state: AgentState) -> Dict[str, Any]:
     """Generate the report draft based on collected data."""
-    print("\n=== WRITER NODE STARTED ===")
     draft_num = state.get("draft_number", 0) + 1
-    print(f"Draft number: {draft_num}")
+    print(f"\nGenerating draft {draft_num}...")
 
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
@@ -139,11 +140,8 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
     previous_draft = state.get("draft", "")
     critique = state.get("critique", "")
 
-    print(f"Is revision: {bool(previous_draft and critique)}")
-
     if previous_draft and critique:
         # Revision mode - use revision prompt with feedback
-        print("Using revision prompt...")
         formatted_writers_prompt = revision_writers_prompt.format(
             CoT_writing_examples=chain_of_thought_writing_examples,
             previous_draft=previous_draft,
@@ -158,7 +156,6 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
         )
     else:
         # Initial draft mode - use standard prompt
-        print("Using initial draft prompt...")
         formatted_writers_prompt = writers_prompt.format(
             CoT_writing_examples=chain_of_thought_writing_examples,
             task=state['task'],
@@ -170,16 +167,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
             simulation=simulation_messages
         )
 
-    print(f"Prompt length: {len(formatted_writers_prompt)} characters")
-    print("Invoking model (this may take a while with o4-mini reasoning)...")
-
-    import time
-    start_time = time.time()
     response = model.invoke([HumanMessage(content=formatted_writers_prompt)])
-    elapsed = time.time() - start_time
-
-    print(f"✓ Model response received in {elapsed:.1f}s")
-    print(f"Response length: {len(response.content)} characters")
 
     return {
         "draft": response.content,
@@ -188,9 +176,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
 def reflection_node(state: AgentState) -> Dict[str, Any]:
     """Generate critique of the current draft with structured quality assessment."""
-    print("\n=== REFLECTION NODE STARTED ===")
-    draft_num = state.get("draft_number", 0)
-    print(f"Reflection for draft: {draft_num}")
+    print("\nEvaluating draft quality...")
 
     db_analyst = state.get("db_summary", "")
     db_content = "\n\n".join(str(msg.content) for msg in state.get("db_content", []))
@@ -210,16 +196,9 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
     )
 
     # Use structured output for critique with fallback
-    print("Invoking critique model with structured output...")
     try:
-        import time
-        start_time = time.time()
-
         critique_model = model.with_structured_output(ReportCritique)
         critique_obj = critique_model.invoke([HumanMessage(content=formatted_reflection_prompt)])
-
-        elapsed = time.time() - start_time
-        print(f"✓ Critique received in {elapsed:.1f}s")
 
         # Calculate average quality score
         avg_score = (
@@ -227,8 +206,7 @@ def reflection_node(state: AgentState) -> Dict[str, Any]:
             critique_obj.completeness
         ) / 2.0
 
-        print(f"Scores - Quality: {critique_obj.quality_score}/10, Completeness: {critique_obj.completeness}/10")
-        print(f"Average score: {avg_score:.1f}/10")
+        print(f"Quality: {critique_obj.quality_score}/10 | Completeness: {critique_obj.completeness}/10 | Average: {avg_score:.1f}/10")
 
         # Format issues as bullet points for readability
         issues_text = "\n".join([f"- {issue}" for issue in critique_obj.issues]) if critique_obj.issues else "None"
@@ -284,22 +262,24 @@ def should_continue(state: AgentState) -> str:
         else:
             reason = f"max revisions reached (score: {critique_score:.1f}/10)"
 
-        print(f"\n✓ Report generation complete - {reason} after {draft_num} draft(s)\n")
+        print(f"\n✓ Report complete - {reason} after {draft_num} draft(s)")
 
         # Save final reports with timestamps
-        print(save_to_pdf(
+        print(f"Saving reports...")
+        save_to_pdf(
             content=state["draft"],
             filename=os.path.join(REPORTS_DIR, f"report_{timestamp}.pdf"),
             chart_metadata=state.get("chart_metadata", [])
-        ))
-        print(save_to_word(
+        )
+        save_to_word(
             content=state["draft"],
             filename=os.path.join(REPORTS_DIR, f"report_{timestamp}.docx"),
             chart_metadata=state.get("chart_metadata", [])
-        ))
+        )
+        print(f"✓ Reports saved to {REPORTS_DIR}\n")
         return END
     else:
-        print(f"\n→ Continuing to draft {draft_num + 1} (score: {critique_score:.1f}/10, improvements needed)\n")
+        print(f"→ Revising (score: {critique_score:.1f}/10)\n")
         return "continue"
 
 def simulation_should_continue(state: AgentState) -> str:
@@ -462,7 +442,6 @@ async def target(inputs: Dict[str, Any]) -> Dict[str, str]:
     # Create a temporary CSV file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as parts_tmp_file:
         parts_df.to_csv(parts_tmp_file.name, index=False)
-        print(f"Temporary CSV file created: {parts_tmp_file.name}")
 
     articles_order = [
         "productGroupId",
@@ -481,7 +460,6 @@ async def target(inputs: Dict[str, Any]) -> Dict[str, str]:
     # Create a temporary CSV file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as articles_tmp_file:
         articles_df.to_csv(articles_tmp_file.name, index=False)
-        print(f"Temporary CSV file created: {articles_tmp_file.name}")
 
     final_state = await run_agent(prompt, parts_tmp_file.name, articles_tmp_file.name)
     draft = final_state.get("writer", {}).get("draft", "")
@@ -505,7 +483,4 @@ if __name__ == "__main__":
     articles_path = os.path.join(base_dir, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_articles_data.csv")
     tariff_path = os.path.join(base_dir, "test-data/Toyota_RAV4_brake_dummy_data/RAV4_brake_tariff_data.csv")
 
-    print(prompt)
     asyncio.run(run_agent(prompt, parts_path, articles_path, tariff_path))
-
-    print("Done! Check results in LangSmith dashboard.")
