@@ -135,7 +135,6 @@ Configure these in your `.env` file:
 - `OPENAI_API_KEY`: OpenAI API access
 - `LANGCHAIN_API_KEY`: LangSmith observability
 - `TAVILY_API_KEY`: Web search capabilities
-- `RAPIDAPI_KEY`: TecDoc automotive data
 
 ## Build & Deployment
 
@@ -238,7 +237,6 @@ The `/run_report_generator` endpoint handles:
 | `OPENAI_API_KEY` | OpenAI API access | Yes |
 | `LANGCHAIN_API_KEY` | LangSmith observability | Optional |
 | `TAVILY_API_KEY` | Web search API | Optional |
-| `RAPIDAPI_KEY` | TecDoc automotive data | Optional |
 | `ENVIRONMENT` | Deployment environment | No |
 | `DEBUG` | Debug mode flag | No |
 

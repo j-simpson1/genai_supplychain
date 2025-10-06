@@ -1,4 +1,3 @@
-from FastAPI.data.auto_parts.tecdoc import fetch_manufacturers, fetch_models, fetch_engine_types, fetch_categories_data, get_article_list, fetch_countries
 from FastAPI.utils.data_validation import validate_uploaded_csvs
 
 from FastAPI.core.document_generator import auto_supplychain_prompt_template, run_agent
@@ -56,33 +55,6 @@ def temporary_csv_files(*dataframes_with_names):
     finally:
         if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir)
-
-@router.get("/manufacturers")
-def retrieve_manufacturers():
-    return fetch_manufacturers()
-
-@router.get("/manufacturers/models")
-def retrieve_models(id: int):
-    return fetch_models(id)
-
-@router.get("/manufacturers/models/engine_type")
-def retrieve_engine_types(manufacturerId: int, modelSeriesId: int):
-    return fetch_engine_types(manufacturerId, modelSeriesId)
-
-@router.get("/manufacturers/models/engine_type/category_v3")
-def retrieve_category_v3(vehicleId: int, manufacturerId: int):
-    return fetch_categories_data(vehicleId, manufacturerId)
-
-@router.get("/manufacturers/models/engine_type/category_v3/article_list")
-def retrieve_article_list(manufacturerId: int, vehicleId: int, productGroupId: int):
-    return get_article_list(manufacturerId, vehicleId, productGroupId)
-
-
-@router.get("/countries")
-def retrieve_countries():
-    return fetch_countries()
-
-
 
 @router.post("/find_countries")
 async def find_countries(
