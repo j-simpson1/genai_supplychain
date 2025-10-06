@@ -43,10 +43,6 @@ class TavilyJob(BaseModel):
     include_raw_content: bool = True
     include_answer: Literal[False, "basic", "advanced"] = False
 
-class TavilyPlan(BaseModel):
-    """A research plan containing multiple Tavily search jobs."""
-    jobs: List[TavilyJob] = Field(default_factory=list, max_items=6)
-
 TARIFF_NEWS_DOMAINS = [
     # Major Financial & Business News
     "reuters.com",

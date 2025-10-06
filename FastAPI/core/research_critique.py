@@ -45,10 +45,6 @@ class TavilyJob(BaseModel):
     include_raw_content: bool = True
     include_answer: Literal[False, "basic", "advanced"] = False
 
-class TavilyPlan(BaseModel):
-    """A research plan containing multiple Tavily search jobs."""
-    jobs: List[TavilyJob] = Field(default_factory=list, max_items=6)
-
 TARIFF_NEWS_DOMAINS = [
     # Major Financial & Business News
     "reuters.com",
@@ -135,7 +131,7 @@ async def research_critique_node(state: AgentState):
     """Execute research plan by generating and executing multiple Tavily searches."""
     try:
         simple_plan: TavilyPlan = planner.invoke([
-            HumanMessage(content=research_critique_prompt.format(critique=state['critique']))
+            HumanMessage(content=research_critique_prompt.format(task=state['task'], critique=state['critique']))
         ])
 
         # Validate that we got valid jobs
