@@ -26,7 +26,6 @@ import pandas as pd
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import StateGraph, END
-from langsmith import Client
 
 from FastAPI.core.CoT_prompting import chain_of_thought_writing_examples
 from FastAPI.core.code_editor_agent import code_editor_agent
@@ -62,8 +61,7 @@ RECURSION_LIMIT = 500
 os.makedirs(CHARTS_DIR, exist_ok=True)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
-# Initialize clients and model
-client = Client()
+# Initialize model
 from langchain_openai import ChatOpenAI
 model = ChatOpenAI(model="o4-mini")
 
