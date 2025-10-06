@@ -629,7 +629,7 @@ Charts **include ALL in the report**: \"\"\"
 \"\"\"
 """
 
-reflection_prompt = """You are a manager reviewing the analyst's report against the original plan to identify missing elements.
+reflection_prompt = """You are a manager identifying missing elements from the plan and providing feedback on the tariff news section.
 
 Original Task:
 \"\"\"
@@ -656,8 +656,8 @@ Context: The plan uses placeholders (e.g., "Part1", "£price") to illustrate str
 Your Assessment (4 components):
 1. **Quality Score (1-10)**: Writing quality, clarity, professionalism
 2. **Completeness Score (1-10)**: All required sections/elements present?
-3. **Issues**: Specific missing plan elements (empty list [] if complete)
-4. **Recommendations**: How to add missing elements (empty string "" if complete)
+3. **Issues**: Missing plan elements and tariff news section problems (empty list [] if no issues)
+4. **Recommendations**: How to address issues (empty string "" if no issues)
 
 Scoring Guide:
 - 9-10: All elements present, excellent quality
@@ -670,7 +670,7 @@ Critical Instructions:
 - ONLY flag if absolutely certain an element is missing - when in doubt, do NOT flag
 - Expect minimal issues (0-3 maximum) - be highly selective
 - Flag missing STRUCTURE only, not writing quality/style
-- If all plan elements present: Issues = [], Recommendations = ""
+- If no issues: Issues = [], Recommendations = ""
 
 Check These Elements:
 1. Required sections from plan structure
@@ -678,7 +678,7 @@ Check These Elements:
 3. Required charts in figures arrays as [[FIGURE:chart_id]]
 4. Required data points (part counts, prices, top 3 countries, tariff rates, cost breakdowns)
 5. Citations in Tariff News/Alternative Suppliers (only flag if NONE present)
-6. Tariff News recommendations: Always suggest 1-2 additional research areas for tariff/trade policy impacts
+6. Tariff News: Provide improvement points or feedback if required
 
 Notes:
 - Charts must be in "figures" arrays, not content
